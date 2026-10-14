@@ -1,0 +1,7 @@
+comfyui: stopped
+mlx: running (stop it before comfyui start)
+listen: http://0.0.0.0:8188
+models: /Volumes/Models/comfyui/models
+output: /Volumes/Models/comfyui/output
+log: /Volumes/Models/comfyui/logs/comfyui.log
+ffmpeg: /opt/homebrew/bin/ffmpeg

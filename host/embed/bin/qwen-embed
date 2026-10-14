@@ -1,0 +1,243 @@
+#!/bin/zsh
+# Start, stop, and status for the always-on embedding service (M8): Qwen3-Embedding-4B and
+# Qwen3-Reranker-0.6B in their own MLX-VLM server. Runs next to the MLX LLM server and any
+# sidecar, never next to ComfyUI. Listens on loopback only.
+# Does not touch /Volumes/Models/models, /Volumes/Models/bin, or the MLX venv.
+set -euo pipefail
+
+VOLUME="/Volumes/Models"
+ROOT="$VOLUME/embed"
+VENV="$ROOT/venv"
+EMBED_MODEL_DIR="$ROOT/models/Qwen3-Embedding-4B-8bit"
+RERANK_MODEL_DIR="$ROOT/models/Qwen3-Reranker-0.6B"
+ENV_FILE="$ROOT/etc/qwen-embed.env"
+LOG_FILE="$ROOT/logs/qwen-embed.log"
+PID_FILE="$ROOT/run/qwen-embed.pid"
+COMFY_PID_FILE="$VOLUME/comfyui/run/comfyui.pid"
+HOST="127.0.0.1"
+PORT=8084
+COMFY_PORT=8188
+MARKER="mlx_vlm.server"   # fallback B: "embed/app/server.py"
+MIN_WEIGHTS_BYTES=500000000  # the reranker alone is ~1.2 GB
+STOP_TRIES=80
+LOG_ROTATE_MAX=52428800
+LOG_ROTATE_KEEP=8
+# Phase 0 record (2026-10-10): both models preloaded, each in its own MLX-VLM cache group,
+# so neither is evicted by the other and /health reports both once they are loaded.
+SERVER_ARGS=(--host "$HOST" --port "$PORT" --embedding-model "$EMBED_MODEL_DIR" --reranker-model "$RERANK_MODEL_DIR")
+
+usage() {
+  cat <<'EOF'
+Usage:
+  /Volumes/Models/embed/bin/qwen-embed status
+  /Volumes/Models/embed/bin/qwen-embed start
+  /Volumes/Models/embed/bin/qwen-embed stop
+
+Serves POST /v1/embeddings and /v1/rerank on http://127.0.0.1:8084 (loopback only; the
+admin's gateway on :8082 is the LAN entry point).
+Stop ComfyUI before starting this. The MLX server and the sidecars may keep running.
+EOF
+}
+
+require_volume() {
+  if [[ ! -d "$VOLUME" ]]; then
+    echo "External volume is not mounted at $VOLUME" >&2
+    exit 1
+  fi
+}
+
+require_install() {
+  if [[ ! -x "$VENV/bin/mlx_vlm.server" ]]; then
+    echo "mlx-vlm is not installed in $VENV" >&2
+    exit 1
+  fi
+}
+
+port_listening() {
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+pid_running() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+# The pid file's process, only if it really is the service: a reused pid is never signalled.
+current_pid() {
+  local pid=""
+  [[ -f "$PID_FILE" ]] || return 1
+  pid="$(<"$PID_FILE")"
+  pid="${pid//$'\n'/}"
+  [[ "$pid" == <-> ]] || return 1
+  pid_running "$pid" || return 1
+  [[ "$(ps -o command= -p "$pid" 2>/dev/null)" == *"$MARKER"* ]] || return 1
+  print -r -- "$pid"
+}
+
+comfy_running() {
+  local pid=""
+  if [[ -f "$COMFY_PID_FILE" ]]; then
+    pid="$(<"$COMFY_PID_FILE")"
+    pid="${pid//$'\n'/}"
+    pid_running "$pid" && return 0
+  fi
+  port_listening "$COMFY_PORT"
+}
+
+# Bytes of safetensors in one model dir, or a reason on stderr and status 1.
+model_bytes() {
+  local dir="$1" total=0 f
+  [[ -f "$dir/config.json" ]] || { echo "${dir:t}: missing config.json" >&2; return 1; }
+  for f in "$dir"/*.safetensors(N); do
+    total=$(( total + $(wc -c <"$f" | tr -d ' ') ))
+  done
+  (( total > 0 )) || { echo "${dir:t}: no safetensors" >&2; return 1; }
+  print -r -- "$total"
+}
+
+# One line for the admin: complete (<embed> + <rerank> bytes) or incomplete (<why>).
+weights_state() {
+  local e r why
+  if ! e="$(model_bytes "$EMBED_MODEL_DIR" 2>&1)"; then echo "incomplete ($e)"; return 1; fi
+  if ! r="$(model_bytes "$RERANK_MODEL_DIR" 2>&1)"; then echo "incomplete ($r)"; return 1; fi
+  # Phase 0: the repo's sentence-transformers template renders empty query/document for
+  # MLX-VLM's messages, so every pair scores the same; it must be renamed aside
+  if [[ -f "$RERANK_MODEL_DIR/chat_template.jinja" ]]; then
+    echo "incomplete (Qwen3-Reranker-0.6B: rename chat_template.jinja to chat_template.jinja.st-crossencoder)"; return 1
+  fi
+  if (( r < MIN_WEIGHTS_BYTES )); then
+    echo "incomplete (Qwen3-Reranker-0.6B: $r bytes of safetensors)"; return 1
+  fi
+  echo "complete ($e + $r bytes)"
+}
+
+file_mode() {
+  stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"
+}
+
+# Reads only allow-listed KEY=VALUE lines; the file is parsed, never sourced.
+load_env() {
+  if [[ -f "$ENV_FILE" ]]; then
+    if [[ "$(file_mode "$ENV_FILE")" != 600 ]]; then
+      echo "$ENV_FILE must be mode 600" >&2
+      exit 1
+    fi
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" == *=* ]] || continue
+      key="${line%%=*}"
+      value="${line#*=}"
+      case "$key" in
+        EMBED_API_KEY)
+          if [[ "$value" =~ '^[A-Za-z0-9_-]+$' ]] && (( ${#value} >= 32 && ${#value} <= 256 )); then
+            export EMBED_API_KEY="$value"
+          fi ;;
+        EMBED_LOG_LEVEL)
+          [[ "$value" =~ '^(debug|info|warning|error)$' ]] && export EMBED_LOG_LEVEL="$value" ;;
+      esac
+    done <"$ENV_FILE"
+  fi
+  export HF_HOME="$ROOT/cache/hf" HF_HUB_OFFLINE=1 PYTHONUNBUFFERED=1
+}
+
+rotate_log() {
+  [[ -f "$LOG_FILE" ]] || return 0
+  local size
+  size=$(wc -c <"$LOG_FILE" 2>/dev/null | tr -d ' ') || return 0
+  (( size > LOG_ROTATE_MAX )) || return 0
+  mv "$LOG_FILE" "$LOG_FILE.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || return 0
+  local -a archives
+  archives=("$LOG_FILE".<->-<->(N.On))
+  local old
+  for old in "${archives[@]:$LOG_ROTATE_KEEP}"; do
+    rm -f "$old"
+  done
+}
+
+cmd_status() {
+  local pid="" w=""
+  if pid="$(current_pid)"; then
+    echo "qwen-embed: running pid $pid"
+  else
+    echo "qwen-embed: stopped"
+    rm -f "$PID_FILE"
+  fi
+  if comfy_running; then
+    echo "comfyui: running (stop it before qwen-embed start)"
+  else
+    echo "comfyui: stopped"
+  fi
+  echo "listen: http://${HOST}:${PORT}"
+  echo "models: $EMBED_MODEL_DIR $RERANK_MODEL_DIR"
+  w="$(weights_state)" || true
+  echo "weights: $w"
+  echo "log: $LOG_FILE"
+}
+
+cmd_start() {
+  local pid="" w=""
+  if pid="$(current_pid)"; then
+    echo "qwen-embed is already running (pid $pid)" >&2
+    exit 1
+  fi
+  rm -f "$PID_FILE"
+  require_install
+  if comfy_running; then
+    echo "ComfyUI is running. Stop it first: /Volumes/Models/comfyui/bin/comfyui stop" >&2
+    exit 1
+  fi
+  if port_listening "$PORT"; then
+    echo "Port $PORT is already in use" >&2
+    exit 1
+  fi
+  if ! w="$(weights_state)"; then
+    echo "Embedding service weights are $w" >&2
+    exit 1
+  fi
+  load_env
+  mkdir -p "$ROOT/logs" "$ROOT/run" "$HF_HOME"
+  rotate_log || true
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') start qwen-embed =====" >>"$LOG_FILE"
+  nohup "$VENV/bin/mlx_vlm.server" "${SERVER_ARGS[@]}" >>"$LOG_FILE" 2>&1 &
+  pid=$!
+  print -r -- "$pid" >"$PID_FILE"
+  sleep 0.5
+  if ! pid_running "$pid"; then
+    echo "qwen-embed exited immediately. See $LOG_FILE" >&2
+    rm -f "$PID_FILE"
+    exit 1
+  fi
+  echo "qwen-embed started (pid $pid)"
+  echo "Listening on http://${HOST}:${PORT}"
+  echo "Log: $LOG_FILE"
+}
+
+cmd_stop() {
+  local pid=""
+  if ! pid="$(current_pid)"; then
+    echo "qwen-embed is not running"
+    rm -f "$PID_FILE"
+    return 0
+  fi
+  kill "$pid" 2>/dev/null || true
+  local i
+  for i in {1..$STOP_TRIES}; do
+    pid_running "$pid" || break
+    sleep 0.25
+  done
+  if pid_running "$pid"; then
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    echo "qwen-embed did not exit after SIGTERM; killed (pid $pid)"
+    return 0
+  fi
+  rm -f "$PID_FILE"
+  echo "qwen-embed stopped"
+}
+
+case "${1:-}" in
+  start) require_volume; cmd_start ;;
+  stop) require_volume; cmd_stop ;;
+  status) require_volume; cmd_status ;;
+  *) usage; exit 2 ;;
+esac

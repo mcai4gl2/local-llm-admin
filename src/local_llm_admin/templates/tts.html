@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}TTS{% endblock %}
+{% block content %}
+<p class="warn-note">Speech runs one request at a time on the TTS sidecar. Long text is split at sentences and synthesized in order; the chat model is slower while it runs.</p>
+<div id="tts-disabled" class="error" hidden></div>
+<div class="decision-layout">
+  <section class="card">
+    <form id="tts-form">
+      <div class="card-head"><h2>Text</h2><span class="muted" id="tts-count"></span></div>
+      <textarea id="tts-text" rows="10" required placeholder="Text to speak"></textarea>
+      <div class="toolbar">
+        <label>Voice <select id="tts-voice"></select></label>
+        <label>Format <select id="tts-format"><option value="wav">WAV</option><option value="mp3">MP3</option></select></label>
+      </div>
+      <label>Style instruction (optional) <input id="tts-instructions" maxlength="1000" placeholder="e.g. calm, warm, slightly slow"></label>
+      <div class="actions">
+        <button type="button" id="tts-curl">Copy as curl</button>
+        <button type="submit" id="tts-run" class="primary">Speak</button>
+      </div>
+    </form>
+  </section>
+  <section class="card" aria-live="polite">
+    <div class="card-head"><h2>Audio</h2><span class="muted" id="tts-meta"></span></div>
+    <div id="tts-error" class="error" hidden></div>
+    <audio id="tts-audio" controls hidden></audio>
+    <p><a id="tts-download" class="button" hidden>Download</a></p>
+  </section>
+</div>
+<section class="card" id="tts-history">
+  <div class="card-head"><h2>History</h2><span class="muted" id="tts-availability"></span></div>
+  <p class="muted">Counts, voice, format and timings only; the text is never stored.</p>
+  <div class="table-wrap"><table id="tts-daily">
+    <thead><tr><th>Day</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Characters</th><th class="num">Audio</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
+  </table></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/tts.js"></script>{% endblock %}

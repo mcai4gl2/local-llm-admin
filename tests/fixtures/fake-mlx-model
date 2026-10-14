@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Fake /Volumes/Models/bin/mlx-model for tests. State lives in $FAKE_MLX_STATE.
+set -u
+S="${FAKE_MLX_STATE:?}"
+# records SIGTERM so tests can check the runner terminates before it kills
+trap 'echo term >> "$S/terminated"; exit 143' TERM
+[ -f "$S/ignore_term" ] && trap '' TERM
+printf '%s\n' "$*" >> "$S/calls.log"
+case "${1:-}" in
+  list)   cat "$S/list.txt" ;;
+  status) cat "$S/status.txt" ;;
+  add)
+    printf '  %s %s\n' "$2" "$3" >> "$S/list.txt"
+    echo "Registered $2 -> $3" ;;
+  select)
+    echo "mlx-model: select $2"
+    [ -f "$S/select_fails" ] && { echo "select failed" >&2; exit 1; }
+    printf 'MLX_ACTIVE_NAME=%s\n' "$2" > "${FAKE_MLX_ROOT:?}/run/active.env"
+    echo "Selected $2 (not started)" ;;
+  switch|start|stop)
+    echo "mlx-model: $1 ${2:-}"
+    # opt-in: record the selection like the real CLI (start/switch write active.env)
+    if [ -f "$S/track_env" ] && [ "$1" != "stop" ] && [ -n "${2:-}" ]; then
+      printf 'MLX_ACTIVE_NAME=%s\n' "$2" > "${FAKE_MLX_ROOT:?}/run/active.env"
+    fi
+    [ -f "$S/delay" ] && { sleep "$(cat "$S/delay")" & wait $!; }
+    [ -f "$S/spawn" ] && { sleep "$(cat "$S/spawn")" & }
+    if [ -f "$S/track_pid" ]; then
+      P="${FAKE_MLX_ROOT:?}/run/mlx-server.pid"
+      # stale-lock simulation: a failing stop changes nothing
+      [ -f "$S/stop_fails" ] && [ "$1" = "stop" ] && { echo "Another mlx-model command is running." >&2; exit 1; }
+      if [ "$1" = "start" ]; then
+        # D-C1 guard: refuse while ComfyUI runs
+        if [ ! -f "$S/no_guard" ] && [ -f "${FAKE_COMFY_ROOT:-/nonexistent}/run/comfyui.pid" ] && kill -0 "$(cat "$FAKE_COMFY_ROOT/run/comfyui.pid")" 2>/dev/null; then
+          echo "An MLX or ComfyUI process is already running." >&2; exit 1
+        fi
+        [ -f "$S/start_fails" ] && { echo "Server did not become healthy" >&2; exit 1; }
+      fi
+      [ -f "$P" ] && kill "$(cat "$P")" 2>/dev/null; rm -f "$P"      # stop, and the stop half of switch
+      if [ "$1" != "stop" ]; then sleep 60 >/dev/null 2>&1 & echo $! > "$P"; fi
+    fi
+    echo "done"
+    exit "$(cat "$S/exit" 2>/dev/null || echo 0)" ;;
+  unlock)
+    if [ -d "${FAKE_MLX_ROOT:?}/run/mlx.lock" ]; then
+      rm -f "$FAKE_MLX_ROOT/run/mlx.lock/owner"; rmdir "$FAKE_MLX_ROOT/run/mlx.lock" && echo "Removed stale lock (no owner recorded)."
+    else
+      echo "No lock held."
+    fi ;;
+  remove)
+    # drops the entry from list.txt like the real registry rewrite
+    grep -v "^[* ] $2 " "$S/list.txt" > "$S/list.tmp"; mv "$S/list.tmp" "$S/list.txt"
+    echo "Unregistered $2" ;;
+  rotate-logs)
+    # canned output from $S/rotate_output; exit code from $S/rotate_exit
+    [ -f "$S/rotate_output" ] && cat "$S/rotate_output" || echo "skipped mlx-server.log below-threshold 0"
+    exit "$(cat "$S/rotate_exit" 2>/dev/null || echo 0)" ;;
+  *) echo "usage" >&2; exit 2 ;;
+esac

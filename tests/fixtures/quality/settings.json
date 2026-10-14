@@ -1,0 +1,303 @@
+{
+ "current": {
+  "apc_block_size": 16,
+  "apc_checkpoint_entries": 2,
+  "apc_checkpoint_guard_tokens": 1,
+  "apc_checkpoint_interval_tokens": 2048,
+  "apc_disk_enabled": true,
+  "apc_disk_max_gb": null,
+  "apc_disk_path": null,
+  "apc_disk_queue_max_gb": 1.0,
+  "apc_disk_shard_max_blocks": 256,
+  "apc_enabled": false,
+  "apc_memory_max_gb": null,
+  "apc_memory_reserve_gb": null,
+  "apc_num_blocks": 2048,
+  "kv_bits": null,
+  "kv_group_size": null,
+  "kv_key_bits": null,
+  "kv_key_scheme": null,
+  "kv_quant_scheme": "uniform",
+  "kv_value_bits": null,
+  "kv_value_scheme": null,
+  "max_kv_size": null,
+  "quantized_kv_start": null,
+  "spec_draft_kind": null,
+  "spec_draft_model": null,
+  "token_queue_timeout": 600.0,
+  "vision_cache_size": 20
+ },
+ "fingerprint": "012d49fa130f6d2a11f65e5b09c187d224afea70e29df0bcc6260f1bb81b1ad0",
+ "schema": [
+  {
+   "allowed": null,
+   "default": null,
+   "help": "KV bits; null = model default.",
+   "name": "kv_bits",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "float_or_none"
+  },
+  {
+   "allowed": [
+    "uniform",
+    "turboquant"
+   ],
+   "default": "uniform",
+   "help": "KV quantization scheme.",
+   "name": "kv_quant_scheme",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "str"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "KV quantization group size.",
+   "name": "kv_group_size",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int_or_none"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "Split KV key bits.",
+   "name": "kv_key_bits",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "float_or_none"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "Split KV value bits.",
+   "name": "kv_value_bits",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "float_or_none"
+  },
+  {
+   "allowed": [
+    "uniform",
+    "turboquant"
+   ],
+   "default": null,
+   "help": "Split KV key scheme.",
+   "name": "kv_key_scheme",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "str_or_none"
+  },
+  {
+   "allowed": [
+    "uniform",
+    "turboquant"
+   ],
+   "default": null,
+   "help": "Split KV value scheme.",
+   "name": "kv_value_scheme",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "str_or_none"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "Quantized KV start layer.",
+   "name": "quantized_kv_start",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int_or_none"
+  },
+  {
+   "allowed": null,
+   "default": false,
+   "help": "Prefix caching on/off.",
+   "name": "apc_enabled",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "bool"
+  },
+  {
+   "allowed": null,
+   "default": true,
+   "help": "APC disk persistence on/off.",
+   "name": "apc_disk_enabled",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "bool"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "APC disk directory; null uses the default cache directory, empty disables disk.",
+   "name": "apc_disk_path",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "str_or_none"
+  },
+  {
+   "allowed": null,
+   "default": 16,
+   "help": "APC block size (tokens).",
+   "name": "apc_block_size",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int"
+  },
+  {
+   "allowed": null,
+   "default": 2048,
+   "help": "APC block pool capacity; 0 disables block retention.",
+   "name": "apc_num_blocks",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "APC disk tier cap (GiB); None defaults to 20, 0 is uncapped.",
+   "name": "apc_disk_max_gb",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "float_or_none"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "Resident APC budget (GiB); null = automatic, 0 = disk-only retention.",
+   "name": "apc_memory_max_gb",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "float_or_none"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "Additional prefill headroom (GiB); null = automatic, 0 = no fixed reserve.",
+   "name": "apc_memory_reserve_gb",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "float_or_none"
+  },
+  {
+   "allowed": null,
+   "default": 1.0,
+   "help": "Queued disk tensor budget (GiB); null = 1 GiB, 0 = synchronous writes.",
+   "name": "apc_disk_queue_max_gb",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "float_or_none"
+  },
+  {
+   "allowed": null,
+   "default": 256,
+   "help": "Maximum blocks per disk shard.",
+   "name": "apc_disk_shard_max_blocks",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int"
+  },
+  {
+   "allowed": null,
+   "default": 2,
+   "help": "Resident checkpoint entries and hybrid capture bound; 0 = disk-only checkpoints.",
+   "name": "apc_checkpoint_entries",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int"
+  },
+  {
+   "allowed": null,
+   "default": 2048,
+   "help": "Intermediate hybrid checkpoint spacing; 0 = final checkpoint only.",
+   "name": "apc_checkpoint_interval_tokens",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int"
+  },
+  {
+   "allowed": null,
+   "default": 1,
+   "help": "Tokens retained after the final reusable checkpoint.",
+   "name": "apc_checkpoint_guard_tokens",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "Requested context budget (tokens).",
+   "name": "max_kv_size",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "int_or_none"
+  },
+  {
+   "allowed": null,
+   "default": 600.0,
+   "help": "Token queue wait timeout in seconds; null disables the timeout.",
+   "name": "token_queue_timeout",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "float_or_none"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "Speculative drafting model path.",
+   "name": "spec_draft_model",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "str_or_none"
+  },
+  {
+   "allowed": null,
+   "default": null,
+   "help": "Speculative draft kind (auto if unset).",
+   "name": "spec_draft_kind",
+   "reload_kinds": [
+    "text_generation"
+   ],
+   "type": "str_or_none"
+  },
+  {
+   "allowed": null,
+   "default": 20,
+   "help": "Vision feature cache capacity.",
+   "name": "vision_cache_size",
+   "reload_kinds": [
+    "image_generation",
+    "image_edit"
+   ],
+   "type": "int"
+  }
+ ]
+}

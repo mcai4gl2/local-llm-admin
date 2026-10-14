@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Outputs{% endblock %}
+{% block content %}
+<section class="card" id="outputs-card">
+  <div class="card-head">
+    <h2>ComfyUI outputs</h2>
+    <div class="actions"><span class="muted" id="out-meta"></span><button id="out-refresh">Refresh</button></div>
+  </div>
+  <p class="muted">Read-only view of <code>comfyui/output/</code>, newest first. Images and videos only (PNG, JPEG, WebP, GIF, MP4, WebM, MOV). Other files and symlinks are not shown. Nothing here deletes files.</p>
+  <p class="bad" id="out-error" hidden></p>
+  <p class="muted" id="out-empty" hidden>No images or videos in the output folder yet.</p>
+  <div class="gallery" id="out-grid"></div>
+  <div class="pager">
+    <span class="muted" id="out-page"></span>
+    <button id="out-prev">Newer</button>
+    <button id="out-next">Older</button>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/outputs.js"></script>{% endblock %}

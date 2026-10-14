@@ -1,0 +1,15 @@
+{
+  "0f3e2d1c-6b5a-4978-8a6b-5c4d3e2f1a0b": {
+    "prompt": [6, "0f3e2d1c-6b5a-4978-8a6b-5c4d3e2f1a0b", {"9": {"class_type": "SaveImage", "inputs": {}}}, {"create_time": 1789999990000}, ["9"]],
+    "outputs": {
+      "9": {"images": [{"filename": "ComfyUI_00001_.png", "subfolder": "", "type": "output"},
+                       {"filename": "ComfyUI_temp_x_00001_.png", "subfolder": "", "type": "temp"}]},
+      "12": {"gifs": [{"filename": "clip_00001.mp4", "subfolder": "video", "type": "output", "format": "video/h264-mp4"}]},
+      "13": {"text": ["not a file"]}
+    },
+    "status": {"status_str": "success", "completed": true,
+               "messages": [["execution_start", {"prompt_id": "0f3e2d1c-6b5a-4978-8a6b-5c4d3e2f1a0b", "timestamp": 1789999991000}],
+                            ["execution_success", {"prompt_id": "0f3e2d1c-6b5a-4978-8a6b-5c4d3e2f1a0b", "timestamp": 1789999999000}]]},
+    "meta": {}
+  }
+}

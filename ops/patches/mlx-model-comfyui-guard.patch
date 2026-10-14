@@ -1,0 +1,13 @@
+--- a/mlx-model
++++ b/mlx-model
+@@ -130,8 +130,8 @@
+ start_server() {
+   local name="$1" model_dir
+   model_dir="$(lookup "$name")"
+-  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:7860 -sTCP:LISTEN >/dev/null 2>&1; then
+-    echo "An MLX process is already running. Use switch or stop first." >&2
++  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:7860 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:8188 -sTCP:LISTEN >/dev/null 2>&1; then
++    echo "An MLX or ComfyUI process is already running. Use switch or stop first (ComfyUI: /Volumes/Models/comfyui/bin/comfyui stop)." >&2
+     exit 1
+   fi
+   write_state "$name" "$model_dir"

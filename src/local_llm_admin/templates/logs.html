@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+<section class="card">
+  <form class="toolbar" id="log-form">
+    <label>Source <select id="source"></select></label>
+    <label>Lines <input type="number" id="lines" min="1" max="5000" value="500"></label>
+    <label>Filter <input type="search" id="grep" maxlength="200" placeholder="text…"></label>
+    <label>Level
+      <select id="level"><option value="">All</option><option>INFO</option><option>WARNING</option><option>ERROR</option></select>
+    </label>
+    <button type="submit">Reload</button>
+    <button type="button" id="btn-follow" aria-pressed="false">Follow</button>
+    <label class="check"><input type="checkbox" id="wrap" checked> Wrap</label>
+    <a id="download" class="button" href="#">Download</a>
+  </form>
+  <div id="dl-summary" class="facts" hidden></div>
+  <p class="muted" id="log-meta"></p>
+  <pre class="log wrap" id="log-view"></pre>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/logs.js"></script>{% endblock %}

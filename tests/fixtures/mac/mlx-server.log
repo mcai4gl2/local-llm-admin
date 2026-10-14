@@ -1,0 +1,28 @@
+
+===== 2026-09-28 22:06:52 start qwen3.8-27b =====
+INFO:     Started server process [7540]
+INFO:     Waiting for application startup.
+2026-09-28 22:33:27,356 - INFO - Request started: endpoint=/chat/completions model=/Volumes/Models/models/active stream=True in_flight=1
+INFO:     192.0.2.10:42078 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-09-28 22:33:27,361 - INFO - Generation queued: request=7358719640 prompt_tokens=2459 max_tokens=2048 images=0 audio=0 videos=0
+2026-09-28 22:33:27,362 - INFO - Prefill started: request=7358719640 backend=continuous_batching prompt_tokens=2459 images=0 audio=0 videos=0
+2026-09-28 22:33:31,308 - WARNING - Request failed: endpoint=/chat/completions model=/Volumes/Models/models/active stream=True error=stream_closed_before_completion in_flight=0
+2026-09-28 22:33:32,321 - INFO - Prefill progress: request=7358719640 tokens=2048/2459 (83.3%)
+2026-09-28 22:41:58,429 - INFO - Request started: endpoint=/chat/completions model=/Volumes/Models/models/active stream=False in_flight=1
+2026-09-28 22:41:58,429 - INFO - Generation queued: request=735875ffb0 prompt_tokens=17 max_tokens=50 images=0 audio=0 videos=0
+2026-09-28 22:41:58,431 - INFO - Prefill started: request=735875ffb0 backend=continuous_batching prompt_tokens=17 images=0 audio=0 videos=0
+2026-09-28 22:41:58,762 - INFO - Prefill progress: request=735875ffb0 tokens=16/17 (94.1%)
+2026-09-28 22:41:58,844 - INFO - Prefill completed: request=735875ffb0 prompt_tokens=17 cached_tokens=0 elapsed=0.408s rate=41.6 tok/s
+2026-09-28 22:41:58,893 - INFO - Decode started: request=735875ffb0 time_to_first_token=0.464s
+2026-09-28 22:41:58,958 - INFO - Decode completed: request=735875ffb0 generated_tokens=2 elapsed=0.065s rate=15.3 tok/s finish_reason=stop
+2026-09-28 22:41:58,977 - INFO - Request completed: endpoint=/chat/completions model=/Volumes/Models/models/active stream=False backend=continuous_batching prompt_tokens=17 generated_tokens=2 elapsed=0.550s prefill=41.6 tok/s decode=30.7 tok/s finish_reason=stop in_flight=0
+2026-09-29 06:34:23,376 - INFO - Request started: endpoint=/chat/completions model=/Volumes/Models/models/active stream=True in_flight=1
+INFO:     192.0.2.10:44292 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-09-29 06:34:23,383 - INFO - Generation queued: request=735875ec00 prompt_tokens=2185 max_tokens=2048 images=0 audio=0 videos=0
+2026-09-29 06:34:23,385 - INFO - Prefill started: request=735875ec00 backend=continuous_batching prompt_tokens=2185 images=0 audio=0 videos=0
+2026-09-29 06:34:28,369 - INFO - Prefill progress: request=735875ec00 tokens=2048/2185 (93.7%)
+2026-09-29 06:34:28,899 - INFO - Prefill progress: request=735875ec00 tokens=2184/2185 (100.0%)
+2026-09-29 06:34:29,005 - INFO - Prefill completed: request=735875ec00 prompt_tokens=2185 cached_tokens=0 elapsed=5.614s rate=389.2 tok/s
+2026-09-29 06:34:29,055 - INFO - Decode started: request=735875ec00 time_to_first_token=5.678s
+2026-09-29 06:34:29,570 - INFO - Decode completed: request=735875ec00 generated_tokens=10 elapsed=0.515s rate=17.5 tok/s finish_reason=stop
+2026-09-29 06:34:29,570 - INFO - Request completed: endpoint=/chat/completions model=/Volumes/Models/models/active stream=True backend=continuous_batching prompt_tokens=2185 generated_tokens=10 elapsed=6.224s prefill=389.2 tok/s decode=19.4 tok/s finish_reason=stop in_flight=0

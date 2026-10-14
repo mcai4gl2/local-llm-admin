@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Models{% endblock %}
+{% block content %}
+<section class="card" id="engine-card">
+  <div class="card-head"><h2>Engine</h2><span class="badge" id="engine-current" data-state="unknown">…</span></div>
+  <p class="muted">Only one engine may use the GPU. Switching stops the other one first.</p>
+  <div class="toolbar">
+    <label>Run <select id="engine-target"></select></label>
+    <button id="engine-apply" class="primary">Apply</button>
+  </div>
+</section>
+<section class="card" id="comfy-card">
+  <div class="card-head"><h2>ComfyUI</h2><a id="comfy-link" class="button" target="_blank" rel="noopener">Open ComfyUI</a></div>
+  <dl class="facts" id="comfy-facts"></dl>
+  <p class="muted">ComfyUI has no login; anyone on the LAN can reach it on port 8188.</p>
+  <div class="table-wrap"><table id="comfy-weights">
+    <thead><tr><th>Category</th><th>File</th><th>State</th><th class="num">Size</th></tr></thead><tbody></tbody>
+  </table></div>
+  <div id="queue-panel" hidden>
+    <div class="card-head"><h3>Queue</h3><span class="muted" id="q-state">…</span></div>
+    <p class="muted">Removing pending work never touches the running generation. Generated files are on the <a href="/outputs">Outputs</a> page.</p>
+    <div class="table-wrap"><table id="q-running">
+      <thead><tr><th>Running</th><th>Queued at</th><th class="num">Nodes</th><th></th></tr></thead><tbody></tbody>
+    </table></div>
+    <div class="table-wrap"><table id="q-pending">
+      <thead><tr><th><input type="checkbox" id="q-all" aria-label="Select all pending"></th><th>Pending</th><th class="num">#</th><th>Queued at</th><th class="num">Nodes</th></tr></thead><tbody></tbody>
+    </table></div>
+    <div class="actions">
+      <button id="q-delete">Remove selected</button>
+      <button id="q-clear">Clear pending</button>
+      <button id="q-interrupt" class="danger" title="Stops whatever is running, whichever client queued it">Interrupt running (global)</button>
+    </div>
+    <p class="muted" id="q-result" role="status"></p>
+  </div>
+</section>
+{% if decision_enabled or tts_enabled %}
+<section class="card" id="sidecar-card">
+  <div class="card-head"><h2>Sidecar</h2>
+    <label>Model <select id="sidecar-select"></select></label>
+    <a class="button" id="sidecar-page" href="/decision">Open test page</a>
+  </div>
+  <p class="muted">One small model runs next to an allowed MLX model at a time, never next to ComfyUI. Starting one while another runs stops the other first (you are asked). It shares GPU time with the chat model while it works.</p>
+  <div class="error" id="sidecar-conflict" hidden>More than one sidecar is running. Stop all but one.</div>
+  <dl class="facts" id="sidecar-facts"></dl>
+  <ul class="muted" id="sidecar-budget"></ul>
+  <div class="error" id="sidecar-refusal" hidden></div>
+  <div class="actions">
+    <button id="sidecar-start" class="primary">Start</button>
+    <button id="sidecar-stop">Stop</button>
+  </div>
+</section>
+{% endif %}
+{% if embed_enabled %}
+<section class="card" id="embed-card">
+  <div class="card-head"><h2>Embeddings</h2>
+    <a class="button" href="/embed">Open test page</a>
+  </div>
+  <p class="muted">Always on: Qwen3-Embedding-4B and Qwen3-Reranker-0.6B run next to the chat model and whichever sidecar is loaded. They stop while ComfyUI runs and come back when you switch away. A crash raises an alert; start it again here.</p>
+  <dl class="facts" id="embed-facts"></dl>
+  <ul class="muted" id="embed-budget"></ul>
+  <div class="error" id="embed-refusal" hidden></div>
+  <div class="actions">
+    <button id="embed-start" class="primary">Start</button>
+    <button id="embed-stop">Stop</button>
+  </div>
+</section>
+{% endif %}
+<section class="card">
+  <div class="card-head">
+    <h2>Registered models</h2>
+    <div class="actions">
+      <button id="btn-start">Start selected</button>
+      <button id="btn-stop" class="danger">Stop</button>
+    </div>
+  </div>
+  <p class="warn-note">Switching or stopping takes the API down for about 30–90 s. In-flight LiteLLM requests to <code>local-qwen</code> will fail.</p>
+  <div class="table-wrap"><table id="models-table">
+    <thead><tr><th>Name</th><th>Directory</th><th class="num">Size</th><th>Weights</th><th>Checks <a href="/quality" class="muted">(Quality)</a></th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="card" id="inventory-card">
+  <div class="card-head"><h2>Inventory</h2><span class="muted" id="inv-checked"></span></div>
+  <dl class="facts" id="inv-disk"></dl>
+  <p class="muted" id="inv-note"></p>
+  <div class="table-wrap"><table id="inv-table">
+    <thead><tr><th>Name</th><th class="num">Size</th><th>Fingerprint</th><th>First observed</th><th>Last started</th><th class="num">Logged requests</th><th class="num">Logged tokens</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="card" id="download-card">
+  <div class="card-head"><h2>Download a model</h2><span class="muted" id="dl-owners"></span></div>
+  <p class="muted">Hugging Face repositories only (no URLs). The preview pins the exact commit; every file is checked against its published checksum before the directory appears under <code>models/</code>. Registering it is a separate step.</p>
+  <form class="toolbar" id="dl-form">
+    <label>Repository <input id="dl-repo" placeholder="mlx-community/…" required autocomplete="off" size="40"></label>
+    <label>Revision <input id="dl-rev" value="main" size="12" autocomplete="off"></label>
+    <button class="primary">Preview</button>
+  </form>
+  <div id="dl-preview" hidden>
+    <dl class="facts" id="dl-facts"></dl>
+    <ul class="bad" id="dl-warnings"></ul>
+    <details><summary>Files (<span id="dl-nfiles"></span>)</summary><div class="table-wrap"><table id="dl-files"><thead><tr><th>File</th><th class="num">Size</th><th>Check</th></tr></thead><tbody></tbody></table></div></details>
+    <details><summary>Model card</summary><pre class="log" id="dl-card"></pre></details>
+    <div class="toolbar">
+      <label>Directory under <code>models/</code> <input id="dl-dest" pattern="[A-Za-z0-9][A-Za-z0-9._\-]*" size="36"></label>
+      <button id="dl-start" class="primary">Download</button>
+    </div>
+  </div>
+  <div class="table-wrap"><table id="dl-runs">
+    <thead><tr><th>Started</th><th>Repository</th><th>Directory</th><th>State</th><th>Progress</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Weights on disk</h2><span class="muted" id="disk-checked"></span></div>
+  <p class="muted">Every directory under <code>/Volumes/Models/models/</code>, re-read every 10 s. A download shows up here as soon as its directory exists; register it once it is complete to make it switchable.</p>
+  <div class="table-wrap"><table id="disk-table">
+    <thead><tr><th>Directory</th><th>State</th><th class="num">On disk</th><th>Model</th><th>Registered as</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="card" id="job-card" hidden>
+  <div class="card-head"><h2>Job <span id="job-title"></span></h2><span class="badge" id="job-status"></span></div>
+  <pre class="log" id="job-output"></pre>
+</section>
+
+<section class="card">
+  <h2>Switch history</h2>
+  <div class="table-wrap"><table id="history-table">
+    <thead><tr><th>When</th><th>Action</th><th>From</th><th>To</th><th>Result</th><th class="num">Duration</th><th>Source</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<dialog id="register-dialog">
+  <form method="dialog">
+    <h3>Register <span id="reg-dir"></span></h3>
+    <label>Name in <code>models.conf</code> <input id="reg-name" pattern="[A-Za-z0-9._\-]+" required></label>
+    <p class="muted">Runs <code>mlx-model add &lt;name&gt; &lt;dir&gt;</code>. It does not stop or switch the running model.</p>
+    <div class="actions"><button value="cancel" formnovalidate>Cancel</button><button value="ok" class="primary">Register</button></div>
+  </form>
+</dialog>
+
+<dialog id="profile-dialog" class="wide">
+  <form method="dialog">
+    <h3>Settings for <span id="pf-name"></span></h3>
+    <p class="muted" id="pf-state"></p>
+    <p class="warn-note" id="pf-restart" hidden>Saved settings differ from the running server. They apply at the next start: <button type="button" id="pf-restart-btn">Restart now</button></p>
+    <p class="warn-note" id="pf-stale" hidden>The latest compatibility checks ran with other launch settings; re-run them on the Quality page.</p>
+    <h4>Server launch flags <span class="muted">(restart required; <span id="pf-runtime"></span>)</span></h4>
+    <p class="muted">Server defaults (max_tokens, enable_thinking, thinking_budget) apply to every client that does not set them, LiteLLM included. Concurrency stays at one sequence.</p>
+    <div class="form-grid" id="pf-launch"></div>
+    <h4>Admin test-chat defaults <span class="muted">(this page's chat only)</span></h4>
+    <div class="form-grid" id="pf-chat"></div>
+    <p class="bad" id="pf-error"></p>
+    <div class="actions">
+      <button value="cancel" formnovalidate>Close</button>
+      <button type="button" id="pf-revert">Revert to previous</button>
+      <button type="button" id="pf-reset" class="danger">Reset to defaults</button>
+      <button type="button" id="pf-save" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="remove-dialog">
+  <form method="dialog">
+    <h3>Remove <span id="rm-name"></span></h3>
+    <dl class="facts" id="rm-facts"></dl>
+    <ul class="bad" id="rm-refusals"></ul>
+    <label><input type="checkbox" id="rm-delete"> Also delete the weights directory (cannot be undone)</label>
+    <label id="rm-confirm-label" hidden>Type the model name to confirm <input id="rm-confirm" autocomplete="off"></label>
+    <p class="muted">Runs <code>mlx-model remove</code>. Without deleting, the directory stays on disk and can be registered again.</p>
+    <div class="actions"><button value="cancel" formnovalidate>Cancel</button><button value="ok" class="danger" id="rm-ok">Remove</button></div>
+  </form>
+</dialog>
+
+<dialog id="confirm">
+  <form method="dialog">
+    <h3 id="confirm-title"></h3>
+    <p id="confirm-body">Switching stops the API for ~30–90 s. In-flight LiteLLM requests to <code>local-qwen</code> will fail.</p>
+    <div class="actions"><button value="cancel">Cancel</button><button value="ok" class="primary">Continue</button></div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/models.js"></script>{% endblock %}

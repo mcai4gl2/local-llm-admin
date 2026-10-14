@@ -1,0 +1,828 @@
+#!/usr/bin/python3
+"""Download a Hugging Face model repository into staging, verify it, then publish it.
+
+Run through mlx-model (download-preview, download, download-resume, download-status,
+download-cancel), never directly. Standard library only: it runs on the Mac's
+/usr/bin/python3 (3.9) and never uses the MLX venv.
+
+- A run downloads one repository at one pinned commit into downloads/<run>/files/,
+  which the admin never lists as a model. Files are fetched to <file>.part with HTTP
+  range resume, then checked against the size and checksum Hugging Face publishes (LFS
+  sha256, or the git blob sha1 for small files) before they get their final name.
+- Only one run at a time (run/download.lock, owner pid + start time). A run never holds
+  run/mlx.lock while downloading; publication calls `mlx-model publish-download`, which
+  renames the staged directory to models/<dest> under that lock, never over an
+  existing directory. Registration stays a separate step.
+- downloads/<run>/status.json is replaced atomically. The log (logs/download-<run>.log)
+  gets the markers the admin already reads: "===== <ts> start =====", "GET <repo>/<file>"
+  and exactly one "===== <ts> done fail=N =====" when a run ends published or failed.
+  Cancelled and interrupted runs keep their partial files and can be resumed.
+- The token (HF_TOKEN, or /Volumes/Models/hf/token) is sent only to the Hugging Face
+  host, never to a redirect target such as the CDN, and never written anywhere.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import http.client
+import json
+import os
+import re
+import signal
+import socket
+import ssl
+import subprocess
+import sys
+import time
+import urllib.parse
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+ROOT = Path("/Volumes/Models")
+ENDPOINT = "https://huggingface.co"
+ALLOWED_SCHEMES = ("https",)
+DOWNLOADS = ROOT / "downloads"
+MODELS = ROOT / "models"
+LOCK = ROOT / "run" / "download.lock"
+TOKEN_FILE = ROOT / "hf" / "token"
+MLX_MODEL = ROOT / "bin" / "mlx-model"
+
+RETRIES = 5
+RETRY_BASE_S = 2.0
+TIMEOUT_S = 30.0
+CHUNK = 1 << 20
+STATUS_EVERY_S = 1.0
+PUBLISH_WAIT_S = 600.0
+PUBLISH_POLL_S = 5.0
+CARD_MAX = 65536
+META_MAX = 32 << 20
+MAX_FILES = 5000
+MAX_REDIRECTS = 5
+HEADROOM_MIN = 2 << 30
+HEADROOM_FRACTION = 0.05
+STALE_LOCK_S = 60.0
+
+REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+REV_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
+RUN_RE = re.compile(r"^[a-z0-9]{12}$")
+DEST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+PART_RE = re.compile(r"^[A-Za-z0-9._+=@() -]{1,255}$")
+ACTIVE = ("running", "publishing")
+
+
+class Fail(Exception):
+    def __init__(self, kind: str, message: str, retryable: bool) -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+        self.retryable = retryable
+
+
+class Cancelled(Exception):
+    pass
+
+
+# --- validation ------------------------------------------------------------------------
+
+
+def safe_relpath(p: Any) -> str:
+    """A repository file path that stays inside the staging directory."""
+    if not isinstance(p, str) or not p or len(p) > 1024 or p.startswith("/") or "\\" in p:
+        raise Fail("metadata", f"unsafe file path in the repository: {p!r}", False)
+    parts = p.split("/")
+    if len(parts) > 8 or any(
+        x in ("", ".", "..") or not PART_RE.match(x) or x.endswith(".part") for x in parts
+    ):
+        raise Fail("metadata", f"unsafe file path in the repository: {p!r}", False)
+    return p
+
+
+def check_dest(dest: str) -> None:
+    if not DEST_RE.match(dest) or dest == "active" or ".." in dest:
+        raise Fail("usage", f"invalid destination directory name: {dest!r}", False)
+
+
+# --- secrets ---------------------------------------------------------------------------
+
+
+def token() -> Optional[str]:
+    t = os.environ.get("HF_TOKEN", "").strip()
+    if not t:
+        try:
+            t = TOKEN_FILE.read_text().strip()
+        except OSError:
+            t = ""
+    return t or None
+
+
+def redact(text: str) -> str:
+    t = token()
+    if t:
+        text = text.replace(t, "<redacted>")
+    text = re.sub(r"(?i)(bearer\s+)\S+", r"\1<redacted>", text)
+    text = re.sub(r"\bhf_[A-Za-z0-9]{8,}", "hf_<redacted>", text)
+    # signed CDN URLs carry credentials in the query string
+    return re.sub(r"(https?://[^\s?\"']+)\?[^\s\"']*", r"\1?<redacted>", text)
+
+
+# --- HTTP ------------------------------------------------------------------------------
+
+
+def request(
+    url: str, headers: Dict[str, str]
+) -> Tuple[http.client.HTTPConnection, http.client.HTTPResponse]:
+    """GET with manual redirects: the token goes only to the Hugging Face host."""
+    home = urllib.parse.urlsplit(ENDPOINT).netloc
+    tok = token()
+    for _ in range(MAX_REDIRECTS + 1):
+        u = urllib.parse.urlsplit(url)
+        if u.scheme not in ALLOWED_SCHEMES or not u.hostname:
+            raise Fail("redirect", f"refusing a non-{ALLOWED_SCHEMES[0]} URL", False)
+        h = dict(headers)
+        h["User-Agent"] = "mlx-download/1"
+        if tok and u.netloc == home:
+            h["Authorization"] = f"Bearer {tok}"
+        conn: http.client.HTTPConnection
+        if u.scheme == "https":
+            conn = http.client.HTTPSConnection(
+                u.hostname, u.port, timeout=TIMEOUT_S, context=ssl.create_default_context()
+            )
+        else:
+            conn = http.client.HTTPConnection(u.hostname, u.port, timeout=TIMEOUT_S)
+        path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+        conn.request("GET", path, headers=h)
+        resp = conn.getresponse()
+        if resp.status in (301, 302, 303, 307, 308):
+            loc = resp.getheader("Location") or ""
+            resp.read()
+            conn.close()
+            if not loc:
+                raise Fail("network", "redirect without a location", True)
+            url = urllib.parse.urljoin(url, loc)
+            continue
+        return conn, resp
+    raise Fail("redirect", "too many redirects", False)
+
+
+def http_fail(status: int, what: str) -> Fail:
+    if status in (401, 403):
+        return Fail(
+            "auth",
+            f"{what}: HTTP {status}. The repository is gated or private: accept its terms on"
+            f" huggingface.co and save a read token to {TOKEN_FILE}.",
+            False,
+        )
+    if status == 404:
+        return Fail("not-found", f"{what}: not found (HTTP 404)", False)
+    if status == 429 or status >= 500:
+        return Fail("network", f"{what}: HTTP {status}", True)
+    return Fail("http", f"{what}: HTTP {status}", False)
+
+
+def get_bytes(url: str, what: str, limit: int) -> bytes:
+    try:
+        conn, resp = request(url, {"Accept": "application/json"})
+        try:
+            if resp.status != 200:
+                raise http_fail(resp.status, what)
+            data = resp.read(limit + 1)
+        finally:
+            conn.close()
+    except (OSError, http.client.HTTPException) as exc:
+        raise Fail("network", f"{what}: {redact(str(exc))}", True) from None
+    if len(data) > limit:
+        raise Fail("metadata", f"{what}: response too large", False)
+    return data
+
+
+def fetch_metadata(repo: str, rev: str) -> Dict[str, Any]:
+    url = f"{ENDPOINT}/api/models/{repo}/revision/{urllib.parse.quote(rev, safe='')}?blobs=true"
+    try:
+        doc = json.loads(get_bytes(url, f"metadata of {repo}@{rev}", META_MAX))
+    except ValueError:
+        raise Fail("metadata", "the repository metadata is not JSON", True) from None
+    sha = doc.get("sha") if isinstance(doc, dict) else None
+    if not isinstance(sha, str) or not SHA_RE.match(sha):
+        raise Fail("metadata", "the repository metadata has no commit hash", False)
+    siblings = doc.get("siblings")
+    if not isinstance(siblings, list) or len(siblings) > MAX_FILES:
+        raise Fail("metadata", "the repository file list is missing or too long", False)
+    files = []
+    for s in siblings:
+        if not isinstance(s, dict):
+            raise Fail("metadata", "unexpected file entry", False)
+        lfs = s.get("lfs") if isinstance(s.get("lfs"), dict) else {}
+        size = s.get("size", lfs.get("size"))
+        sha256 = lfs.get("sha256")
+        blob = s.get("blobId")
+        files.append(
+            {
+                "path": safe_relpath(s.get("rfilename")),
+                "size": size if isinstance(size, int) and size >= 0 else None,
+                "sha256": sha256 if isinstance(sha256, str) and re.match(r"^[0-9a-f]{64}$", sha256) else None,
+                "blob": blob if isinstance(blob, str) and re.match(r"^[0-9a-f]{40}$", blob) else None,
+            }
+        )
+    return {
+        "sha": sha,
+        "gated": doc.get("gated") or False,
+        "private": bool(doc.get("private")),
+        "files": sorted(files, key=lambda f: f["path"]),
+    }
+
+
+def required_missing(files: List[Dict[str, Any]]) -> List[str]:
+    """What a loadable MLX model needs, judged from the file list alone."""
+    names = {f["path"] for f in files}
+    missing = []
+    if "config.json" not in names:
+        missing.append("config.json")
+    if not names & {"tokenizer.json", "tokenizer.model", "tokenizer_config.json"}:
+        missing.append("tokenizer (tokenizer.json, tokenizer.model or tokenizer_config.json)")
+    if "model.safetensors" not in names and "model.safetensors.index.json" not in names:
+        missing.append("weights (model.safetensors or model.safetensors.index.json)")
+    return missing
+
+
+def index_shards(path: Path) -> List[str]:
+    try:
+        doc = json.loads(path.read_text())
+        return sorted(set(doc["weight_map"].values()))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        raise Fail("incomplete", "model.safetensors.index.json is unreadable", False) from None
+
+
+def free_bytes(p: Path) -> int:
+    st = os.statvfs(str(p))
+    return st.f_bavail * st.f_frsize
+
+
+def headroom(remaining: int) -> int:
+    return max(HEADROOM_MIN, int(remaining * HEADROOM_FRACTION))
+
+
+# --- files, status and lock ------------------------------------------------------------
+
+
+def write_json(path: Path, doc: Any) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
+    os.replace(tmp, path)
+
+
+def read_json(path: Path) -> Optional[Dict[str, Any]]:
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def proc_start(pid: int) -> str:
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True, timeout=5
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return out.strip()
+
+
+def proc_command(pid: int) -> str:
+    try:
+        return subprocess.run(
+            ["ps", "-ww", "-o", "command=", "-p", str(pid)], capture_output=True, text=True, timeout=5
+        ).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def lock_owner() -> Optional[Dict[str, str]]:
+    try:
+        text = (LOCK / "owner").read_text()
+    except OSError:
+        return None
+    return dict(ln.split("=", 1) for ln in text.splitlines() if "=" in ln)
+
+
+def owner_alive(owner: Optional[Dict[str, str]]) -> bool:
+    if not owner or not owner.get("pid", "").isdigit() or not owner.get("start"):
+        return False
+    return proc_start(int(owner["pid"])) == owner["start"]
+
+
+def acquire_lock(run_id: str) -> None:
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    for _ in range(2):
+        try:
+            os.mkdir(LOCK)
+        except FileExistsError:
+            owner = lock_owner()
+            if owner_alive(owner):
+                raise Fail(
+                    "busy", f"download {owner.get('run', '?')} is running; one at a time", False
+                ) from None
+            if owner is None:
+                try:
+                    age = time.time() - LOCK.stat().st_mtime
+                except OSError:
+                    continue
+                if age < STALE_LOCK_S:
+                    raise Fail("busy", "another download is starting", False) from None
+            # the owner is gone (for example after a reboot): the lock is stale
+            try:
+                (LOCK / "owner").unlink()
+            except OSError:
+                pass
+            try:
+                os.rmdir(LOCK)
+            except OSError:
+                raise Fail("busy", f"cannot clear the stale lock {LOCK}", False) from None
+            continue
+        (LOCK / "owner").write_text(
+            f"pid={os.getpid()}\nstart={proc_start(os.getpid())}\nrun={run_id}\ncmd=mlx-download\n"
+        )
+        return
+    raise Fail("busy", "another download holds the lock", False)
+
+
+def release_lock() -> None:
+    owner = lock_owner()
+    if owner and owner.get("pid") == str(os.getpid()):
+        try:
+            (LOCK / "owner").unlink()
+            os.rmdir(LOCK)
+        except OSError:
+            pass
+
+
+def effective_status(run_id: str) -> Optional[Dict[str, Any]]:
+    st = read_json(DOWNLOADS / run_id / "status.json")
+    if st is None:
+        return None
+    if st.get("state") in ACTIVE:
+        owner = lock_owner()
+        if not (owner and owner.get("run") == run_id and owner_alive(owner)):
+            st["state"] = "interrupted"
+            st["retryable"] = True
+            st["message"] = "the downloader stopped without finishing (for example a reboot)"
+    return st
+
+
+def stamp() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def say(line: str) -> None:
+    print(redact(line), flush=True)
+
+
+# --- one run ---------------------------------------------------------------------------
+
+
+class Run:
+    def __init__(self, run_id: str) -> None:
+        self.id = run_id
+        self.dir = DOWNLOADS / run_id
+        self.files = self.dir / "files"
+        self.status: Dict[str, Any] = read_json(self.dir / "status.json") or {}
+        self._last = 0.0
+        self._cancel = False
+        self.base = 0  # bytes of the files already finished in this run
+
+    def save(self, force: bool = True, **fields: Any) -> None:
+        self.status.update(fields)
+        now = time.time()
+        if force or now - self._last >= STATUS_EVERY_S:
+            self.status["updated"] = now
+            write_json(self.dir / "status.json", self.status)
+            self._last = now
+
+    def save_final(self, **fields: Any) -> None:
+        """The terminal state, best effort: the drive itself may be what failed."""
+        try:
+            self.save(**fields)
+        except OSError as exc:
+            say(f"could not record the final state: {exc}")
+
+    def on_term(self, signum: int, frame: Any) -> None:
+        self._cancel = True
+        raise Cancelled()
+
+    def defer_term(self, signum: int, frame: Any) -> None:
+        self._cancel = True
+
+    def target(self, rel: str) -> Path:
+        t = self.files.joinpath(*rel.split("/"))
+        root = os.path.realpath(self.files)
+        parent = os.path.realpath(t.parent)
+        if parent != root and not parent.startswith(root + os.sep):
+            raise Fail("metadata", f"{rel} escapes the staging directory", False)
+        return t
+
+    def hasher(self, f: Dict[str, Any]) -> Any:
+        if f["sha256"]:
+            return hashlib.sha256()
+        h = hashlib.sha1()
+        h.update(b"blob %d\0" % f["size"])
+        return h
+
+    def matches(self, f: Dict[str, Any], h: Any) -> bool:
+        want = f["sha256"] or f["blob"]
+        return h.hexdigest() == want
+
+    def hash_file(self, path: Path, f: Dict[str, Any]) -> Any:
+        h = self.hasher(f)
+        with path.open("rb") as fh:
+            while True:
+                block = fh.read(CHUNK)
+                if not block:
+                    return h
+                h.update(block)
+
+    def fetch(self, repo: str, sha: str, f: Dict[str, Any], part: Path) -> None:
+        """One attempt: append to ``part`` from where it ends; verify when complete."""
+        size = f["size"]
+        have = part.stat().st_size if part.exists() else 0
+        if have > size:
+            part.write_bytes(b"")
+            have = 0
+        h = self.hash_file(part, f) if have else self.hasher(f)
+        if have < size:
+            url = f"{ENDPOINT}/{repo}/resolve/{sha}/{urllib.parse.quote(f['path'])}"
+            headers = {"Range": f"bytes={have}-"} if have else {}
+            try:
+                conn, resp = request(url, headers)
+            except (OSError, http.client.HTTPException) as exc:
+                raise Fail("network", redact(str(exc)), True) from None
+            try:
+                if resp.status == 206:
+                    m = re.match(r"bytes (\d+)-", resp.getheader("Content-Range") or "")
+                    if not m or int(m.group(1)) != have:
+                        part.write_bytes(b"")
+                        raise Fail("network", "the server resumed at another offset", True)
+                elif resp.status == 200:
+                    if have:
+                        say(f"range ignored for {f['path']}; starting it again")
+                        part.write_bytes(b"")
+                        have = 0
+                        h = self.hasher(f)
+                elif resp.status == 416 and have:
+                    part.write_bytes(b"")
+                    raise Fail("network", "range not satisfiable; starting the file again", True)
+                else:
+                    raise http_fail(resp.status, f["path"])
+                with part.open("ab") as out:
+                    while True:
+                        try:
+                            block = resp.read1(CHUNK)
+                        except (OSError, http.client.HTTPException) as exc:
+                            raise Fail("network", redact(str(exc)), True) from None
+                        if not block:
+                            break
+                        if have + len(block) > size:
+                            raise Fail("checksum", f"{f['path']} is larger than published", True)
+                        out.write(block)
+                        h.update(block)
+                        have += len(block)
+                        self.status["bytes_done"] = self.base + have
+                        self.save(force=False)
+            finally:
+                conn.close()
+        if have != size:
+            raise Fail("network", f"{f['path']}: connection ended early", True)
+        if not self.matches(f, h):
+            part.unlink()
+            raise Fail("checksum", f"{f['path']} does not match its published checksum", True)
+
+    def download(self, repo: str, sha: str, f: Dict[str, Any]) -> int:
+        t = self.target(f["path"])
+        t.parent.mkdir(parents=True, exist_ok=True)
+        t = self.target(f["path"])  # again, now that the parents exist
+        done = self.status.setdefault("done", {})
+        if t.exists():
+            st = t.stat()
+            if done.get(f["path"]) == [st.st_size, st.st_mtime_ns]:
+                return f["size"]
+            if st.st_size == f["size"] and self.matches(f, self.hash_file(t, f)):
+                done[f["path"]] = [st.st_size, st.st_mtime_ns]
+                return f["size"]
+            t.unlink()
+        part = t.with_name(t.name + ".part")
+        say(f"GET {repo}/{f['path']}")
+        for attempt in range(1, RETRIES + 1):
+            try:
+                self.fetch(repo, sha, f, part)
+                break
+            except Fail as exc:
+                if not exc.retryable or attempt == RETRIES:
+                    raise
+                say(f"retry {f['path']} ({attempt}/{RETRIES - 1}): {exc.message}")
+                time.sleep(min(30.0, RETRY_BASE_S * 2 ** (attempt - 1)))
+        os.replace(part, t)
+        st = t.stat()
+        done[f["path"]] = [st.st_size, st.st_mtime_ns]
+        say(f"verified {f['path']}")
+        return f["size"]
+
+    def check_index(self, names: Any) -> None:
+        if "model.safetensors.index.json" in names:
+            shards = index_shards(self.target("model.safetensors.index.json"))
+            absent = [s for s in shards if s not in names]
+            if absent:
+                raise Fail(
+                    "incomplete",
+                    "shards named by the index are missing: " + ", ".join(absent[:5]),
+                    False,
+                )
+
+    def publish(self, dest: str) -> str:
+        self.save(state="publishing", message="publishing to models/")
+        deadline = time.monotonic() + PUBLISH_WAIT_S
+        while True:
+            # the rename may be under way: a cancel waits for its outcome, so a
+            # published directory is never reported as cancelled
+            signal.signal(signal.SIGTERM, self.defer_term)
+            try:
+                r = subprocess.run(
+                    [str(MLX_MODEL), "publish-download", self.id, dest],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise Fail("publish", f"mlx-model publish-download: {exc}", True) from None
+            finally:
+                signal.signal(signal.SIGTERM, self.on_term)
+            if r.returncode != 0 and self._cancel:
+                raise Cancelled()
+            if r.returncode == 0:
+                m = re.search(r"^published (/.+)$", r.stdout, re.M)
+                return m.group(1) if m else str(MODELS / dest)
+            busy = "Another mlx-model command" in r.stderr or "Maintenance in progress" in r.stderr
+            if busy and self._cancel:
+                raise Cancelled()
+            if busy and time.monotonic() < deadline:
+                time.sleep(PUBLISH_POLL_S)
+                continue
+            raise Fail(
+                "exists" if r.returncode == 3 else "publish",
+                redact(r.stderr.strip() or r.stdout.strip() or f"exit {r.returncode}"),
+                True,
+            )
+
+    def execute(self, repo: Optional[str], sha: Optional[str], dest: Optional[str]) -> int:
+        manifest_path = self.dir / "manifest.json"
+        manifest = read_json(manifest_path)
+        if manifest is not None:
+            if (repo, sha, dest) != (None, None, None) and (
+                manifest.get("repo"),
+                manifest.get("revision"),
+                manifest.get("dest"),
+            ) != (repo, sha, dest):
+                raise Fail("usage", "this run id belongs to another download", False)
+            repo, sha, dest = manifest["repo"], manifest["revision"], manifest["dest"]
+        assert repo is not None and sha is not None and dest is not None
+        self.files.mkdir(parents=True, exist_ok=True)
+        self.save(
+            id=self.id,
+            repo=repo,
+            revision=sha,
+            dest=dest,
+            state="running",
+            message="fetching the file list",
+            retryable=False,
+            error_kind=None,
+            pid=os.getpid(),
+            started=self.status.get("started") or time.time(),
+            finished=None,
+        )
+        if manifest is None:
+            meta = fetch_metadata(repo, sha)
+            if meta["sha"] != sha:
+                raise Fail("revision", f"the repository returned commit {meta['sha']}", False)
+            unknown = [f["path"] for f in meta["files"] if f["size"] is None]
+            unchecked = [f["path"] for f in meta["files"] if not (f["sha256"] or f["blob"])]
+            if unknown or unchecked:
+                raise Fail(
+                    "metadata",
+                    "files without a published size or checksum: "
+                    + ", ".join((unknown + unchecked)[:5]),
+                    False,
+                )
+            missing = required_missing(meta["files"])
+            if missing:
+                raise Fail("incomplete", "not a loadable model: missing " + "; ".join(missing), False)
+            manifest = {"repo": repo, "revision": sha, "dest": dest, "files": meta["files"]}
+            write_json(manifest_path, manifest)
+        # small files first: the index names the shards, so a missing shard is found
+        # before the large transfers start
+        files = sorted(
+            (dict(f, path=safe_relpath(f["path"])) for f in manifest["files"]),
+            key=lambda f: (f["path"] != "model.safetensors.index.json", bool(f["sha256"]), f["path"]),
+        )
+        total = sum(f["size"] for f in files)
+        self.base = 0
+        present = 0
+        for f in files:
+            for p in (self.target(f["path"]), self.target(f["path"] + ".part")):
+                if p.exists():
+                    present += min(p.stat().st_size, f["size"])
+        need = total - present
+        free = free_bytes(self.files)
+        if free < need + headroom(need):
+            raise Fail(
+                "disk-full",
+                f"needs {need + headroom(need)} bytes free (including headroom), {free} free",
+                True,
+            )
+        self.save(
+            bytes_total=total,
+            bytes_done=present,
+            files_total=len(files),
+            files_done=0,
+            message="downloading",
+        )
+        names = {f["path"] for f in files}
+        checked = False
+        for i, f in enumerate(files):
+            if not checked and f["sha256"] and f["path"] != "model.safetensors.index.json":
+                self.check_index(names)
+                checked = True
+            self.status["current_file"] = f["path"]
+            self.base += self.download(repo, sha, f)
+            self.save(files_done=i + 1, bytes_done=self.base)
+        if not checked:
+            self.check_index(names)
+        path = self.publish(dest)
+        self.save(
+            state="published",
+            published_path=path,
+            finished=time.time(),
+            current_file=None,
+            message=f"published to {path}; register it to make it switchable",
+        )
+        say(f"published {path}")
+        return 0
+
+
+def run_download(run_id: str, repo: Optional[str], sha: Optional[str], dest: Optional[str]) -> int:
+    r = Run(run_id)
+    new = not (r.dir / "status.json").exists()
+    try:
+        acquire_lock(run_id)
+    except Fail as exc:
+        say(f"refused: {exc.message}")
+        if new:
+            r.dir.mkdir(parents=True, exist_ok=True)
+            r.save(id=run_id, repo=repo, revision=sha, dest=dest, state="failed",
+                   error_kind=exc.kind, message=exc.message, retryable=False, finished=time.time())
+        return 3
+    signal.signal(signal.SIGTERM, r.on_term)
+    say(f"===== {stamp()} start =====")
+    rc = 1
+    marker = True
+    try:
+        r.dir.mkdir(parents=True, exist_ok=True)
+        rc = r.execute(repo, sha, dest)
+    except Cancelled:
+        marker = False
+        r.save_final(state="cancelled", retryable=True, finished=time.time(),
+               message="cancelled; partial files are kept for a resume")
+        say("cancelled")
+    except Fail as exc:
+        r.save_final(state="failed", error_kind=exc.kind, message=exc.message,
+               retryable=exc.retryable, finished=time.time())
+        say(f"failed ({exc.kind}): {exc.message}")
+    except OSError as exc:
+        kind = "disk-full" if exc.errno == 28 else "drive"
+        r.save_final(state="failed", error_kind=kind, message=redact(str(exc)), retryable=True,
+               finished=time.time())
+        say(f"failed ({kind}): {exc}")
+    finally:
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        if marker:
+            say(f"===== {stamp()} done fail={0 if rc == 0 else 1} =====")
+        release_lock()
+    return rc
+
+
+# --- commands --------------------------------------------------------------------------
+
+
+def cmd_preview(repo: str, rev: str) -> int:
+    if not REPO_RE.match(repo) or ".." in repo:
+        raise Fail("usage", f"invalid repository id: {repo!r}", False)
+    if not REV_RE.match(rev) or ".." in rev:
+        raise Fail("usage", f"invalid revision: {rev!r}", False)
+    meta = fetch_metadata(repo, rev)
+    card = ""
+    if any(f["path"] == "README.md" for f in meta["files"]):
+        try:
+            raw = get_bytes(f"{ENDPOINT}/{repo}/resolve/{meta['sha']}/README.md", "README.md", CARD_MAX * 4)
+            card = raw[:CARD_MAX].decode("utf-8", errors="replace")
+        except Fail as exc:
+            card = f"(model card unavailable: {exc.message})"
+    total = sum(f["size"] or 0 for f in meta["files"])
+    unknown = [f["path"] for f in meta["files"] if f["size"] is None]
+    dest = repo.split("/", 1)[1]
+    free = free_bytes(ROOT if ROOT.exists() else Path("/"))
+    out = {
+        "repo": repo,
+        "requested_revision": rev,
+        "revision": meta["sha"],
+        "gated": meta["gated"],
+        "private": meta["private"],
+        "files": meta["files"],
+        "total_bytes": total,
+        "unknown_size_files": unknown,
+        "unchecked_files": [f["path"] for f in meta["files"] if not (f["sha256"] or f["blob"])],
+        "missing": required_missing(meta["files"]),
+        "free_bytes": free,
+        "required_bytes": total + headroom(total),
+        "fits": free >= total + headroom(total),
+        "suggested_dest": dest,
+        "dest_exists": (MODELS / dest).exists() or (MODELS / dest).is_symlink(),
+        "token": token() is not None,
+        "card": card,
+    }
+    print(json.dumps(out))
+    return 0
+
+
+def cmd_status(run_id: Optional[str]) -> int:
+    if run_id is not None:
+        if not RUN_RE.match(run_id):
+            raise Fail("usage", f"invalid run id: {run_id!r}", False)
+        st = effective_status(run_id)
+        if st is None:
+            print(json.dumps({"id": run_id, "state": "unknown"}))
+            return 1
+        print(json.dumps(st))
+        return 0
+    runs = []
+    if DOWNLOADS.is_dir():
+        for d in sorted(DOWNLOADS.iterdir()):
+            if RUN_RE.match(d.name):
+                st = effective_status(d.name)
+                if st is not None:
+                    runs.append(st)
+    runs.sort(key=lambda s: s.get("started") or 0, reverse=True)
+    print(json.dumps(runs[:100]))
+    return 0
+
+
+def cmd_cancel(run_id: str) -> int:
+    if not RUN_RE.match(run_id):
+        raise Fail("usage", f"invalid run id: {run_id!r}", False)
+    owner = lock_owner()
+    if not owner or owner.get("run") != run_id or not owner_alive(owner):
+        print(f"download {run_id} is not running", file=sys.stderr)
+        return 1
+    pid = int(owner["pid"])
+    if "mlx-download" not in proc_command(pid):
+        print(f"pid {pid} is not the downloader; not signalling it", file=sys.stderr)
+        return 1
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(150):
+        st = read_json(DOWNLOADS / run_id / "status.json") or {}
+        if st.get("state") not in ACTIVE:
+            print(f"{st.get('state', 'stopped')} {run_id}")  # published if it had finished
+            return 0
+        time.sleep(0.1)
+    print(f"download {run_id} did not stop within 15 s", file=sys.stderr)
+    return 1
+
+
+def main(argv: List[str]) -> int:
+    try:
+        if len(argv) == 3 and argv[0] == "preview":
+            return cmd_preview(argv[1], argv[2])
+        if len(argv) == 5 and argv[0] == "run":
+            _, repo, sha, dest, run_id = argv
+            if not REPO_RE.match(repo) or ".." in repo or not SHA_RE.match(sha) or not RUN_RE.match(run_id):
+                raise Fail("usage", "invalid download arguments", False)
+            check_dest(dest)
+            return run_download(run_id, repo, sha, dest)
+        if len(argv) == 3 and argv[:2] == ["run", "--resume"] and RUN_RE.match(argv[2]):
+            if read_json(DOWNLOADS / argv[2] / "manifest.json") is None:
+                raise Fail("usage", f"no download {argv[2]} to resume", False)
+            if (effective_status(argv[2]) or {}).get("state") == "published":
+                raise Fail("usage", f"download {argv[2]} is already published", False)
+            return run_download(argv[2], None, None, None)
+        if argv[:1] == ["status"] and len(argv) <= 2:
+            return cmd_status(argv[1] if len(argv) == 2 else None)
+        if len(argv) == 2 and argv[0] == "cancel":
+            return cmd_cancel(argv[1])
+    except Fail as exc:
+        print(json.dumps({"error": exc.kind, "message": exc.message, "retryable": exc.retryable}))
+        return 2
+    print("usage: mlx-download preview <repo> <revision> | run <repo> <sha> <dest> <run-id>"
+          " | run --resume <run-id> | status [<run-id>] | cancel <run-id>", file=sys.stderr)
+    return 64
+
+
+if __name__ == "__main__":
+    socket.setdefaulttimeout(TIMEOUT_S)
+    sys.exit(main(sys.argv[1:]))

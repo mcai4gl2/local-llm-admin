@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Fake /Volumes/Models/embed/bin/qwen-embed. Shares $FAKE_MLX_STATE with the other fakes.
+set -u
+S="${FAKE_MLX_STATE:?}"; ROOT="${FAKE_EMBED_ROOT:?}"; COMFYROOT="${FAKE_COMFY_ROOT:-/nonexistent}"
+PID="$ROOT/run/qwen-embed.pid"
+printf 'qwen-embed %s\n' "$*" >> "$S/calls.log"
+alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+case "${1:-}" in
+  status)
+    if alive "$PID"; then echo "qwen-embed: running pid $(cat "$PID")"; else echo "qwen-embed: stopped"; fi
+    echo "weights: $(cat "$S/embed_weights" 2>/dev/null || echo complete) (4500000000 + 1200000000 bytes)" ;;
+  start)
+    if alive "$PID"; then echo "qwen-embed is already running" >&2; exit 1; fi
+    if alive "$COMFYROOT/run/comfyui.pid"; then echo "ComfyUI is running. Stop it first" >&2; exit 1; fi
+    [ -f "$S/embed_start_exit" ] && { echo "qwen-embed exited immediately" >&2; exit 1; }
+    (exec -a "mlx_vlm.server --port 8084" sleep 60) >/dev/null 2>&1 &
+    echo $! > "$PID"
+    [ -f "$S/embed_never_ready" ] || touch "$S/embed_ready"
+    echo "qwen-embed started (pid $(cat "$PID"))" ;;
+  stop)
+    [ -f "$S/embed_stop_fails" ] && { echo "could not stop" >&2; exit 1; }
+    if alive "$PID"; then kill "$(cat "$PID")"; fi
+    rm -f "$PID" "$S/embed_ready"; echo "qwen-embed stopped" ;;
+  *) echo usage >&2; exit 2 ;;
+esac

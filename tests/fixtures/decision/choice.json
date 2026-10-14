@@ -1,0 +1,47 @@
+{
+  "request": {
+    "state": {
+      "ticket": "My card was charged twice for the October invoice and the app now shows a sync error when I open billing settings. Please refund the duplicate charge.",
+      "customer_tier": "pro",
+      "previous_tickets": 2
+    },
+    "model": "openjev-latest",
+    "questions": {
+      "department": {
+        "type": "choice",
+        "criteria": {
+          "billing": "Payments, invoices, refunds",
+          "technical": "Bugs, errors, crashes",
+          "account": "Login, profile, permissions",
+          "other": "Anything else"
+        }
+      }
+    }
+  },
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "server-timing": "model;dur=0.0, server;dur=400.9, total;dur=400.9",
+    "x-request-id": "req_fa69f92e36068f274a4e65663309be12"
+  },
+  "response": {
+    "model": "openjev-0.1",
+    "answers": {
+      "department": {
+        "type": "choice",
+        "choice": "billing",
+        "probabilities": {
+          "billing": 0.9537988609370497,
+          "technical": 0.04584707646821809,
+          "account": 4.5053989816772616e-05,
+          "other": 0.00030900860491548076
+        },
+        "confidence": 0.8633865799040494
+      }
+    },
+    "usage": {
+      "input_tokens": 166,
+      "output_tokens": 0
+    }
+  }
+}

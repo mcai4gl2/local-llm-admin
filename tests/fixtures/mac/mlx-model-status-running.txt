@@ -1,0 +1,6 @@
+process: running pid 7540
+MLX_ACTIVE_NAME=qwen3.8-27b
+MLX_ACTIVE_PATH=/Volumes/Models/models/Qwen3.8-27B-4bit
+MLX_ACTIVE_ID=/Volumes/Models/models/active
+MLX_PORT=8080
+health: {"status":"healthy","loaded_model":"/Volumes/Models/models/active","loaded_adapter":null,"loaded_models":{"text_generation":{"model":"/Volumes/Models/models/active","adapter":null,"model_kind":"text_generation"}},"loaded_context_size":262144,"configured_context_limit":null,"effective_context_limit":262144,"loaded_tool_parser":"qwen3_coder","continuous_batching_enabled":true,"apc_enabled":false}

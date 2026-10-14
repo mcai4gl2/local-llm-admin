@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Decision{% endblock %}
+{% block content %}
+<p class="warn-note">Reads run one at a time on the decision sidecar. LiteLLM clients of the chat model keep working, but both share GPU time, so the chat model is slower while reads run.</p>
+<div id="decision-disabled" class="error" hidden></div>
+<div class="decision-layout">
+  <section class="card">
+    <form id="read-form">
+      <div class="card-head"><h2>State</h2>
+        <label>Preset <select id="preset"><option value="">—</option></select></label>
+      </div>
+      <textarea id="state" rows="6" placeholder="Text, or JSON describing the situation" required></textarea>
+      <div class="card-head"><h2>Questions</h2>
+        <button type="button" id="add-question">Add question</button>
+      </div>
+      <div id="questions"></div>
+      <div class="toolbar">
+        <label>Steps <input type="number" id="steps" min="1" max="8" placeholder="1"></label>
+        <label>Samples <input type="number" id="samples" min="1" max="8" placeholder="auto"></label>
+      </div>
+      <div class="actions">
+        <button type="button" id="copy-curl">Copy as curl</button>
+        <button type="submit" id="run" class="primary">Run</button>
+      </div>
+    </form>
+  </section>
+  <section class="card" aria-live="polite">
+    <div class="card-head"><h2>Answers</h2><span class="muted" id="read-meta"></span></div>
+    <div id="read-error" class="error" hidden></div>
+    <div id="answers"><p class="muted">Run a read to see the probabilities.</p></div>
+  </section>
+</div>
+<section class="card" id="history-card">
+  <div class="card-head"><h2>History</h2><span class="muted" id="hist-availability"></span></div>
+  <p class="muted">Counts, question types and timings only; the state and the questions are never stored. Kept for the observability retention period.</p>
+  <div class="table-wrap"><table id="hist-daily">
+    <thead><tr><th>Day</th><th class="num">Reads</th><th class="num">Errors</th><th class="num">p50</th><th class="num">p95</th><th class="num">Input tokens</th></tr></thead><tbody></tbody>
+  </table></div>
+  <details><summary>Last 100 reads</summary>
+    <div class="table-wrap"><table id="hist-recent">
+      <thead><tr><th>Time</th><th>Source</th><th class="num">Questions</th><th>Types</th><th class="num">Latency</th><th>Result</th></tr></thead><tbody></tbody>
+    </table></div>
+  </details>
+</section>
+<section class="card" id="clients-card">
+  <div class="card-head"><h2>LAN clients</h2><span class="muted" id="gateway-addr"></span></div>
+  <p class="muted">Other machines call the gateway with <code>POST /v1/systemone</code>, the same body as OpenJev. No key is needed unless <code>DECISION_GATEWAY_REQUIRE_KEY=true</code>; sending a client key (<code>Authorization: Bearer dsk_…</code>) attributes its usage to that client. Revoking takes effect on the next request.</p>
+  <form id="client-form" class="toolbar">
+    <label>Name <input id="client-name" required pattern="[A-Za-z0-9_.\-]{1,48}" maxlength="48" placeholder="laptop"></label>
+    <label>Note <input id="client-note" maxlength="200" placeholder="optional"></label>
+    <button type="submit" class="primary">Create key</button>
+  </form>
+  <div id="new-key" class="warn-note" hidden>
+    <p>Copy this key now; it is not shown again.</p>
+    <code id="new-key-value" class="wrap"></code> <button type="button" id="copy-key">Copy</button>
+  </div>
+  <div id="client-error" class="error" hidden></div>
+  <div class="table-wrap"><table id="clients-table">
+    <thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th>State</th><th></th></tr></thead><tbody></tbody>
+  </table></div>
+  <h3>Usage by client (30 days)</h3>
+  <div class="table-wrap"><table id="client-usage">
+    <thead><tr><th>Client</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Questions</th><th class="num">Input tokens</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
+  </table></div>
+</section>
+<template id="question-tpl">
+  <fieldset class="question">
+    <div class="toolbar">
+      <label>Id <input class="q-id" required pattern="[A-Za-z0-9_.\-]{1,64}" maxlength="64"></label>
+      <label>Type <select class="q-type">
+        <option value="noul">yes / no</option><option value="choice">choice</option><option value="score">score</option>
+      </select></label>
+      <button type="button" class="q-remove link">Remove</button>
+    </div>
+    <label>Question <input class="q-instructions" placeholder="What do you want to know?"></label>
+    <label class="q-criteria-label">Options <textarea class="q-criteria" rows="3"></textarea></label>
+    <p class="muted q-hint"></p>
+  </fieldset>
+</template>
+{% endblock %}
+{% block scripts %}<script src="/static/decision.js"></script><script src="/static/decision_usage.js"></script>{% endblock %}

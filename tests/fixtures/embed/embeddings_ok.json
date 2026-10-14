@@ -1,0 +1,30 @@
+{
+ "object": "list",
+ "data": [
+  {
+   "object": "embedding",
+   "index": 0,
+   "embedding": [
+    0.000171661376953125,
+    -0.0133056640625,
+    0.0286865234375,
+    0.0274658203125
+   ]
+  },
+  {
+   "object": "embedding",
+   "index": 1,
+   "embedding": [
+    7.867813110351562e-05,
+    0.05810546875,
+    0.0262451171875,
+    -0.0296630859375
+   ]
+  }
+ ],
+ "model": "/Volumes/Models/embed/models/Qwen3-Embedding-4B-8bit",
+ "usage": {
+  "prompt_tokens": 4,
+  "total_tokens": 4
+ }
+}

@@ -1,0 +1,308 @@
+#!/usr/bin/python3
+"""Validated per-model settings for mlx_vlm.server (M3c). Run through mlx-model.
+
+A profile is etc/profiles/<name>.json: {"version": 1, "launch": {...}, "chat": {...}}.
+Profiles are parsed as data by this script and never sourced by a shell. Every field
+is on an allow-list with a type, range or enum; anything else is refused.
+
+- "launch" fields become mlx_vlm.server flags when mlx-model starts that model, so a
+  change needs a restart. Some are server-wide request defaults (max_tokens,
+  enable_thinking, thinking_budget): they apply to every client, LiteLLM included, that
+  does not set the field itself. Concurrency (--max-num-seqs 1), the host, port, model
+  path and log level are fixed by mlx-model and are not settings.
+- "chat" fields are defaults for the admin's test chat only; the server never sees them.
+
+The allow-list follows `mlx_vlm.server --help` of mlx-vlm 0.7.3 (RUNTIME). `set` keeps
+the previous file as <name>.json.prev (restored by `revert`), and every write is a
+temp file plus rename. The fingerprint names the effective launch flags; "default"
+means none beyond mlx-model's own.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+ROOT = Path("/Volumes/Models")
+PROFILES = ROOT / "etc" / "profiles"
+RUNTIME = "mlx-vlm 0.7.3"
+VERSION = 1
+NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+MAX_BYTES = 16384
+
+# name: (type, min, max, enum, flag, help)
+LAUNCH: Dict[str, Tuple[str, Any, Any, Any, str, str]] = {
+    "max_kv_size": ("int", 512, 1048576, None, "--max-kv-size",
+                    "Maximum KV cache size in tokens (bounds context memory)."),
+    "prefill_step_size": ("int", 64, 16384, None, "--prefill-step-size",
+                          "Tokens per prefill step (server default 2048)."),
+    "max_tokens": ("int", 1, 131072, None, "--max-tokens",
+                   "Server default for max tokens, for every client that does not set it."),
+    "enable_thinking": ("bool", None, None, None, "--enable-thinking",
+                        "Thinking on by default for every client that does not set it."),
+    "thinking_budget": ("int", 1, 131072, None, "--thinking-budget",
+                        "Default maximum tokens inside a thinking block."),
+    "kv_bits": ("number", None, None, [2, 3, 3.5, 4, 6, 8], "--kv-bits",
+                "KV cache quantization bits (fractional values need turboquant)."),
+    "kv_quant_scheme": ("str", None, None, ["uniform", "turboquant"], "--kv-quant-scheme",
+                        "KV cache quantization backend."),
+    "kv_group_size": ("int", None, None, [32, 64, 128], "--kv-group-size",
+                      "Group size for uniform KV quantization."),
+    "quantized_kv_start": ("int", 0, 1048576, None, "--quantized-kv-start",
+                           "Token index where KV quantization starts."),
+    "vision_cache_size": ("int", 0, 1000, None, "--vision-cache-size",
+                          "Cached vision features (server default 20)."),
+}
+CHAT: Dict[str, Tuple[str, Any, Any, Any, str, str]] = {
+    "temperature": ("number", 0, 2, None, "", "Sampling temperature."),
+    "top_p": ("number", 0, 1, None, "", "Nucleus sampling."),
+    "top_k": ("int", 0, 1000, None, "", "Top-k sampling (0 = off)."),
+    "min_p": ("number", 0, 1, None, "", "Minimum probability sampling."),
+    "max_tokens": ("int", 1, 4096, None, "", "Max tokens per answer."),
+    "enable_thinking": ("bool", None, None, None, "", "Thinking on or off."),
+    "reasoning_effort": ("str", None, None, ["low", "medium", "high"], "",
+                         "Reasoning effort; only values the model's checks passed."),
+}
+FIXED = {"max_num_seqs": 1, "log_level": "INFO", "port": 8080, "model": "models/active"}
+
+
+class Invalid(Exception):
+    pass
+
+
+def check_name(name: str) -> str:
+    if not NAME_RE.match(name) or name.startswith("-") or ".." in name or name == "active":
+        raise Invalid(f"invalid model name: {name!r}")
+    return name
+
+
+def check_value(section: str, key: str, value: Any, spec: Tuple[str, Any, Any, Any, str, str]) -> Any:
+    kind, lo, hi, enum, _flag, _help = spec
+    where = f"{section}.{key}"
+    if value is None:
+        return None
+    if kind == "bool":
+        if not isinstance(value, bool):
+            raise Invalid(f"{where} must be true or false")
+        return value
+    if kind == "str":
+        if not isinstance(value, str) or value not in enum:
+            raise Invalid(f"{where} must be one of {', '.join(enum)}")
+        return value
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise Invalid(f"{where} must be a number")
+    if kind == "int" and (not isinstance(value, int) and not float(value).is_integer()):
+        raise Invalid(f"{where} must be a whole number")
+    if kind == "int":
+        value = int(value)
+    if value != value or value in (float("inf"), float("-inf")):
+        raise Invalid(f"{where} must be a finite number")
+    if enum is not None and value not in enum:
+        raise Invalid(f"{where} must be one of {', '.join(str(e) for e in enum)}")
+    if lo is not None and value < lo or hi is not None and value > hi:
+        raise Invalid(f"{where} must be between {lo} and {hi}")
+    return value
+
+
+def validate(doc: Any) -> Dict[str, Any]:
+    if not isinstance(doc, dict):
+        raise Invalid("a profile is a JSON object")
+    unknown = set(doc) - {"version", "launch", "chat", "updated", "model"}
+    if unknown:
+        raise Invalid(f"unknown profile keys: {', '.join(sorted(unknown))}")
+    if doc.get("version", VERSION) != VERSION:
+        raise Invalid(f"unsupported profile version {doc.get('version')!r}")
+    out: Dict[str, Any] = {"version": VERSION, "launch": {}, "chat": {}}
+    for section, specs in (("launch", LAUNCH), ("chat", CHAT)):
+        values = doc.get(section, {})
+        if values is None:
+            values = {}
+        if not isinstance(values, dict):
+            raise Invalid(f"{section} must be an object")
+        extra = set(values) - set(specs)
+        if extra:
+            raise Invalid(f"unsupported {section} settings: {', '.join(sorted(extra))}")
+        for key, value in values.items():
+            v = check_value(section, key, value, specs[key])
+            if v is not None:
+                out[section][key] = v
+    launch = out["launch"]
+    bits = launch.get("kv_bits")
+    if bits is not None and not float(bits).is_integer() and launch.get("kv_quant_scheme") != "turboquant":
+        raise Invalid("launch.kv_bits 3.5 needs launch.kv_quant_scheme turboquant")
+    if "kv_group_size" in launch and launch.get("kv_quant_scheme") == "turboquant":
+        raise Invalid("launch.kv_group_size applies to uniform quantization only")
+    return out
+
+
+def launch_args(profile: Dict[str, Any]) -> List[str]:
+    args: List[str] = []
+    for key, spec in LAUNCH.items():
+        if key not in profile["launch"]:
+            continue
+        value = profile["launch"][key]
+        if spec[0] == "bool":
+            if value:
+                args.append(spec[4])
+        else:
+            args += [spec[4], str(value)]
+    return args
+
+
+def fingerprint(args: List[str]) -> str:
+    if not args:
+        return "default"
+    return hashlib.sha256("\0".join(args).encode()).hexdigest()[:16]
+
+
+def path_for(name: str) -> Path:
+    return PROFILES / f"{check_name(name)}.json"
+
+
+def load(name: str) -> Optional[Dict[str, Any]]:
+    p = path_for(name)
+    if p.is_symlink():
+        raise Invalid(f"{p} is a symlink")
+    try:
+        raw = p.read_bytes()
+    except FileNotFoundError:
+        return None
+    if len(raw) > MAX_BYTES:
+        raise Invalid(f"{p} is too large")
+    try:
+        doc = json.loads(raw)
+    except ValueError:
+        raise Invalid(f"{p} is not valid JSON") from None
+    return validate(doc)
+
+
+def write_atomic(p: Path, doc: Dict[str, Any]) -> None:
+    PROFILES.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(f".{p.name}.tmp-{os.getpid()}")
+    try:
+        tmp.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+        os.replace(tmp, p)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def describe(name: str) -> Dict[str, Any]:
+    saved = load(name)
+    effective = saved or {"version": VERSION, "launch": {}, "chat": {}}
+    args = launch_args(effective)
+    prev = PROFILES / f"{check_name(name)}.json.prev"
+    return {
+        "name": name,
+        "saved": saved,
+        "launch": effective["launch"],
+        "chat": effective["chat"],
+        "launch_args": args,
+        "fingerprint": fingerprint(args),
+        "has_previous": prev.is_file() and not prev.is_symlink(),
+        "runtime": RUNTIME,
+    }
+
+
+def schema() -> Dict[str, Any]:
+    def fields(specs: Dict[str, Tuple[str, Any, Any, Any, str, str]], restart: bool) -> List[Dict[str, Any]]:
+        return [
+            {"name": k, "type": t, "min": lo, "max": hi, "enum": enum, "flag": flag or None,
+             "help": text, "restart": restart}
+            for k, (t, lo, hi, enum, flag, text) in specs.items()
+        ]
+
+    return {
+        "version": VERSION,
+        "runtime": RUNTIME,
+        "launch": fields(LAUNCH, True),
+        "chat": fields(CHAT, False),
+        "fixed": FIXED,
+        "server_defaults": ["max_tokens", "enable_thinking", "thinking_budget"],
+    }
+
+
+def main(argv: List[str]) -> int:
+    try:
+        if argv == ["schema"]:
+            print(json.dumps(schema()))
+            return 0
+        if argv == ["list"]:
+            out = {}
+            if PROFILES.is_dir():
+                for p in sorted(PROFILES.glob("*.json")):
+                    name = p.name[: -len(".json")]
+                    if NAME_RE.match(name):
+                        try:
+                            out[name] = describe(name)["fingerprint"]
+                        except Invalid:
+                            out[name] = "invalid"
+            print(json.dumps(out))
+            return 0
+        if len(argv) == 2 and argv[0] == "show":
+            print(json.dumps(describe(argv[1])))
+            return 0
+        if len(argv) == 2 and argv[0] == "launch-args":
+            # for mlx-model start: the fingerprint, then one argument per line
+            args = launch_args(load(argv[1]) or {"launch": {}})
+            print("\n".join([fingerprint(args), *args]))
+            return 0
+        if len(argv) == 3 and argv[0] == "set":
+            if len(argv[2].encode()) > MAX_BYTES:
+                raise Invalid("profile too large")
+            try:
+                doc = json.loads(argv[2])
+            except ValueError:
+                raise Invalid("the profile is not valid JSON") from None
+            profile = validate(doc)
+            p = path_for(argv[1])
+            if p.is_symlink():
+                raise Invalid(f"{p} is a symlink")
+            current = load(argv[1])
+            if current is not None:
+                write_atomic(p.with_name(p.name + ".prev"), current)
+            profile["updated"] = time.time()
+            write_atomic(p, profile)
+            print(json.dumps(describe(argv[1])))
+            return 0
+        if len(argv) == 2 and argv[0] in ("reset", "revert"):
+            p = path_for(argv[1])
+            prev = p.with_name(p.name + ".prev")
+            current = load(argv[1])
+            if argv[0] == "reset":
+                if current is not None:
+                    write_atomic(prev, current)
+                    p.unlink()
+            else:
+                if prev.is_symlink() or not prev.is_file():
+                    raise Invalid(f"no previous profile for {argv[1]}")
+                try:
+                    old = validate(json.loads(prev.read_text()))
+                except ValueError:
+                    raise Invalid(f"{prev} is not valid JSON") from None
+                if current is not None:
+                    write_atomic(prev, current)
+                else:
+                    prev.unlink()
+                write_atomic(p, old)
+            print(json.dumps(describe(argv[1])))
+            return 0
+    except Invalid as exc:
+        print(f"invalid profile: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print(f"profile storage failed: {exc}", file=sys.stderr)
+        return 1
+    print("usage: mlx-profile schema | list | show <name> | launch-args <name> | set <name> <json>"
+          " | reset <name> | revert <name>", file=sys.stderr)
+    return 64
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

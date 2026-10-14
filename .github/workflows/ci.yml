@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # weekly, Friday 00:00 UTC
+    - cron: '0 0 * * 5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (ruff, mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --frozen --all-extras --python 3.11
+      - name: ruff
+        run: uv run ruff check src tests scripts
+      - name: mypy
+        run: uv run mypy src scripts
+
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zsh and sqlite3 (host-script tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh sqlite3
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --frozen --all-extras --python 3.11
+      - name: pytest
+        run: >-
+          uv run pytest --cov --cov-report=term --cov-report=xml
+          --cov-report=html --cov-fail-under=80
+      - name: Archive coverage HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/
+          retention-days: 30
+        continue-on-error: true
+
+  agent-docs:
+    name: AGENTS.md == CLAUDE.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmp AGENTS.md CLAUDE.md
+
+  summary:
+    name: Summary
+    needs: [lint, test, agent-docs]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report
+        run: |
+          {
+            echo "## CI Summary"
+            echo ""
+            echo "| Job | Result |"
+            echo "|-----|--------|"
+            echo "| lint | ${{ needs.lint.result }} |"
+            echo "| test | ${{ needs.test.result }} |"
+            echo "| agent-docs | ${{ needs.agent-docs.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for r in "${{ needs.lint.result }}" "${{ needs.test.result }}" "${{ needs.agent-docs.result }}"; do
+            [ "$r" = success ] || { echo "❌ a job did not succeed"; exit 1; }
+          done
+          echo "✅ All checks passed"

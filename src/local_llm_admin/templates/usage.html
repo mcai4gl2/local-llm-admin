@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Usage{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Range">
+      <button data-days="7" aria-pressed="false">7 days</button>
+      <button data-days="30" aria-pressed="true">30 days</button>
+      <button data-days="90" aria-pressed="false">90 days</button>
+    </div>
+    <form id="custom-range" class="inline">
+      <label>From <input type="date" id="from"></label>
+      <label>To <input type="date" id="to"></label>
+      <button type="submit">Apply</button>
+    </form>
+    <span id="gw-health" class="muted"></span>
+  </div>
+  <div id="usage-error" class="error" hidden></div>
+  <div class="hero" id="usage-totals"></div>
+</section>
+
+<div class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-tab="daily">By date</button>
+  <button role="tab" aria-selected="false" data-tab="sessions">Sessions</button>
+</div>
+
+<section class="card" data-panel="daily">
+  <div class="card-head"><h2>Tokens per day</h2>
+    <div class="legend"><span class="key s1"></span>Prompt <span class="key s2"></span>Completion</div></div>
+  <div class="chart tall" id="usage-chart"></div>
+  <div class="table-wrap"><table id="daily-table">
+    <thead><tr><th>Date</th><th>App</th><th class="num">Requests</th><th class="num">Prompt</th><th class="num">Completion</th><th class="num">Errors</th><th>Model active that day</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <p class="muted">Days use the ops timezone (UTC+8), counted from LiteLLM's request logs (LiteLLM's own daily rollups are UTC days). LiteLLM keeps 90 days.</p>
+</section>
+
+<section class="card" data-panel="sessions" hidden>
+  <div class="table-wrap"><table id="sessions-table">
+    <thead><tr><th>App</th><th>Session</th><th class="num">Requests</th><th class="num">Prompt</th><th class="num">Completion</th><th>First</th><th>Last</th><th>Status</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="pager"><button id="prev">‹ Prev</button><span id="page-info"></span><button id="next">Next ›</button></div>
+</section>
+{% if decision_enabled %}
+<section class="card" id="decision-usage">
+  <div class="card-head"><h2>Decision model</h2><span class="muted">via the admin gateway, not LiteLLM</span></div>
+  <div class="table-wrap"><table id="decision-usage-table">
+    <thead><tr><th>Date</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Questions</th><th class="num">Reads run</th><th class="num">Input tokens</th><th class="num">p50</th><th class="num">p95</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <p class="muted">Recorded by the admin for the Decision page and LAN clients on the gateway; last 30 days, ops timezone. Per-client totals are on the <a href="/decision">Decision</a> page.</p>
+</section>
+{% endif %}
+{% if tts_enabled %}
+<section class="card" id="tts-usage">
+  <div class="card-head"><h2>Text to speech</h2><span class="muted">via the admin gateway and LiteLLM</span></div>
+  <div class="table-wrap"><table id="tts-usage-table">
+    <thead><tr><th>Day</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Characters</th><th class="num">Audio</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
+  </table></div>
+  <div class="table-wrap"><table id="tts-usage-clients">
+    <thead><tr><th>Client</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Characters</th><th class="num">Audio</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
+  </table></div>
+  <p class="muted">Recorded by the admin for the TTS page and gateway clients (LiteLLM calls the gateway with its own key); last 30 days, ops timezone.</p>
+</section>
+{% endif %}
+{% if embed_enabled %}
+<section class="card" id="embed-usage">
+  <div class="card-head"><h2>Embeddings</h2><span class="muted">last 30 days</span></div>
+  <div class="table-wrap"><table id="embed-usage-table">
+    <thead><tr><th>Day</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Inputs</th><th class="num">Characters</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
+  </table></div>
+  <div class="table-wrap"><table id="embed-usage-clients">
+    <thead><tr><th>Client</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Inputs</th><th class="num">Characters</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/usage.js"></script>{% if decision_enabled %}<script src="/static/decision_usage.js"></script>{% endif %}{% if tts_enabled %}<script src="/static/tts_usage.js"></script>{% endif %}{% if embed_enabled %}<script src="/static/embed_usage.js"></script>{% endif %}{% endblock %}

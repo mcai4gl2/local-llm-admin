@@ -1,0 +1,251 @@
+#!/bin/zsh
+# Start, stop, and status for the Qwen3-TTS sidecar (mlx-audio). Runs next to the MLX LLM
+# server, never next to ComfyUI or another sidecar. Listens on loopback only.
+# Does not touch /Volumes/Models/models, /Volumes/Models/bin, or the MLX venv.
+set -euo pipefail
+
+VOLUME="/Volumes/Models"
+ROOT="$VOLUME/tts"
+VENV="$ROOT/venv"
+MODEL_DIR="$ROOT/models/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit"
+ENV_FILE="$ROOT/etc/qwen-tts.env"
+LOG_FILE="$ROOT/logs/qwen-tts.log"
+PID_FILE="$ROOT/run/qwen-tts.pid"
+COMFY_PID_FILE="$VOLUME/comfyui/run/comfyui.pid"
+# other sidecars: pid file and port (one at a time, D-S2)
+OPENJEV_PID_FILE="$VOLUME/decision/run/openjev.pid"
+OPENJEV_PORT=8081
+HOST="127.0.0.1"
+PORT=8083
+COMFY_PORT=8188
+MARKER="mlx_audio.server"   # Phase 0 fallback: "tts/app/server.py"
+MIN_WEIGHTS_BYTES=1000000000  # the 8-bit weights are ~3.1 GB
+STOP_TRIES=80
+LOG_ROTATE_MAX=52428800
+LOG_ROTATE_KEEP=8
+
+usage() {
+  cat <<'EOF'
+Usage:
+  /Volumes/Models/tts/bin/qwen-tts status
+  /Volumes/Models/tts/bin/qwen-tts start
+  /Volumes/Models/tts/bin/qwen-tts stop
+
+Serves POST /v1/audio/speech on http://127.0.0.1:8083 (loopback only; the admin's
+gateway on :8082 is the LAN entry point).
+Stop ComfyUI and the decision sidecar before starting this. The MLX server may keep running.
+EOF
+}
+
+require_volume() {
+  if [[ ! -d "$VOLUME" ]]; then
+    echo "External volume is not mounted at $VOLUME" >&2
+    exit 1
+  fi
+}
+
+require_install() {
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    echo "Missing venv at $VENV" >&2
+    exit 1
+  fi
+  if ! "$VENV/bin/python" -c 'import mlx_audio'; then
+    echo "mlx-audio is not installed in $VENV" >&2
+    exit 1
+  fi
+}
+
+port_listening() {
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+pid_running() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+# The pid file's process, only if it really is the sidecar: a reused pid is never signalled.
+current_pid() {
+  local pid=""
+  [[ -f "$PID_FILE" ]] || return 1
+  pid="$(<"$PID_FILE")"
+  pid="${pid//$'\n'/}"
+  [[ "$pid" == <-> ]] || return 1
+  pid_running "$pid" || return 1
+  [[ "$(ps -o command= -p "$pid" 2>/dev/null)" == *"$MARKER"* ]] || return 1
+  print -r -- "$pid"
+}
+
+comfy_running() {
+  local pid=""
+  if [[ -f "$COMFY_PID_FILE" ]]; then
+    pid="$(<"$COMFY_PID_FILE")"
+    pid="${pid//$'\n'/}"
+    pid_running "$pid" && return 0
+  fi
+  port_listening "$COMFY_PORT"
+}
+
+openjev_running() {
+  local pid=""
+  if [[ -f "$OPENJEV_PID_FILE" ]]; then
+    pid="$(<"$OPENJEV_PID_FILE")"
+    pid="${pid//$'\n'/}"
+    pid_running "$pid" && return 0
+  fi
+  port_listening "$OPENJEV_PORT"
+}
+
+# config.json plus at least one safetensors file, total at least MIN_WEIGHTS_BYTES.
+weights_state() {
+  local total=0 f
+  [[ -f "$MODEL_DIR/config.json" ]] || { echo "incomplete (missing config.json)"; return 1; }
+  for f in "$MODEL_DIR"/*.safetensors(N); do
+    total=$(( total + $(wc -c <"$f" | tr -d ' ') ))
+  done
+  if (( total < MIN_WEIGHTS_BYTES )); then
+    echo "incomplete ($total bytes of safetensors)"; return 1
+  fi
+  echo "complete ($total bytes)"
+}
+
+file_mode() {
+  stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"
+}
+
+# Reads only allow-listed KEY=VALUE lines; the file is parsed, never sourced.
+# TTS_API_KEY is optional and unused today: mlx-audio 0.5.7 serves without a key (Phase 0).
+load_env() {
+  if [[ -f "$ENV_FILE" ]]; then
+    if [[ "$(file_mode "$ENV_FILE")" != 600 ]]; then
+      echo "$ENV_FILE must be mode 600" >&2
+      exit 1
+    fi
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" == *=* ]] || continue
+      key="${line%%=*}"
+      value="${line#*=}"
+      case "$key" in
+        TTS_API_KEY)
+          if [[ "$value" =~ '^[A-Za-z0-9_-]+$' ]] && (( ${#value} >= 32 && ${#value} <= 256 )); then
+            export TTS_API_KEY="$value"
+          fi ;;
+        TTS_LOG_LEVEL)
+          [[ "$value" =~ '^(debug|info|warning|error)$' ]] && export TTS_LOG_LEVEL="$value" ;;
+      esac
+    done <"$ENV_FILE"
+  fi
+  export HF_HOME="$ROOT/cache/hf" HF_HUB_OFFLINE=1 PYTHONUNBUFFERED=1
+}
+
+rotate_log() {
+  [[ -f "$LOG_FILE" ]] || return 0
+  local size
+  size=$(wc -c <"$LOG_FILE" 2>/dev/null | tr -d ' ') || return 0
+  (( size > LOG_ROTATE_MAX )) || return 0
+  mv "$LOG_FILE" "$LOG_FILE.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || return 0
+  local -a archives
+  archives=("$LOG_FILE".<->-<->(N.On))
+  local old
+  for old in "${archives[@]:$LOG_ROTATE_KEEP}"; do
+    rm -f "$old"
+  done
+}
+
+cmd_status() {
+  local pid="" w=""
+  if pid="$(current_pid)"; then
+    echo "qwen-tts: running pid $pid"
+  else
+    echo "qwen-tts: stopped"
+    rm -f "$PID_FILE"
+  fi
+  if comfy_running; then
+    echo "comfyui: running (stop it before qwen-tts start)"
+  else
+    echo "comfyui: stopped"
+  fi
+  if openjev_running; then
+    echo "decision: running (stop it before qwen-tts start)"
+  else
+    echo "decision: stopped"
+  fi
+  echo "listen: http://${HOST}:${PORT}"
+  echo "model: $MODEL_DIR"
+  w="$(weights_state)" || true
+  echo "weights: $w"
+  echo "log: $LOG_FILE"
+}
+
+cmd_start() {
+  local pid="" w=""
+  if pid="$(current_pid)"; then
+    echo "qwen-tts is already running (pid $pid)" >&2
+    exit 1
+  fi
+  rm -f "$PID_FILE"
+  require_install
+  if comfy_running; then
+    echo "ComfyUI is running. Stop it first: /Volumes/Models/comfyui/bin/comfyui stop" >&2
+    exit 1
+  fi
+  if openjev_running; then
+    echo "The decision sidecar is running. Stop it first: /Volumes/Models/decision/bin/openjev stop" >&2
+    exit 1
+  fi
+  if port_listening "$PORT"; then
+    echo "Port $PORT is already in use" >&2
+    exit 1
+  fi
+  if ! w="$(weights_state)"; then
+    echo "Qwen3-TTS weights are $w: $MODEL_DIR" >&2
+    exit 1
+  fi
+  load_env
+  mkdir -p "$ROOT/logs" "$ROOT/run" "$HF_HOME"
+  rotate_log || true
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') start qwen-tts =====" >>"$LOG_FILE"
+  nohup "$VENV/bin/python" -m mlx_audio.server --host "$HOST" --port "$PORT" >>"$LOG_FILE" 2>&1 &
+  pid=$!
+  print -r -- "$pid" >"$PID_FILE"
+  sleep 0.5
+  if ! pid_running "$pid"; then
+    echo "qwen-tts exited immediately. See $LOG_FILE" >&2
+    rm -f "$PID_FILE"
+    exit 1
+  fi
+  echo "qwen-tts started (pid $pid)"
+  echo "Listening on http://${HOST}:${PORT}"
+  echo "Log: $LOG_FILE"
+}
+
+cmd_stop() {
+  local pid=""
+  if ! pid="$(current_pid)"; then
+    echo "qwen-tts is not running"
+    rm -f "$PID_FILE"
+    return 0
+  fi
+  kill "$pid" 2>/dev/null || true
+  local i
+  for i in {1..$STOP_TRIES}; do
+    pid_running "$pid" || break
+    sleep 0.25
+  done
+  if pid_running "$pid"; then
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    echo "qwen-tts did not exit after SIGTERM; killed (pid $pid)"
+    return 0
+  fi
+  rm -f "$PID_FILE"
+  echo "qwen-tts stopped"
+}
+
+case "${1:-}" in
+  start) require_volume; cmd_start ;;
+  stop) require_volume; cmd_stop ;;
+  status) require_volume; cmd_status ;;
+  *) usage; exit 2 ;;
+esac

@@ -1,0 +1,221 @@
+#!/bin/zsh
+# Start, stop, and status for the ComfyUI install on this volume.
+# Does not touch /Volumes/Models/models, /Volumes/Models/bin, or the MLX venv.
+set -euo pipefail
+
+ROOT="/Volumes/Models/comfyui"
+APP="$ROOT/app"
+VENV="$ROOT/venv"
+LOG_FILE="$ROOT/logs/comfyui.log"
+PID_FILE="$ROOT/run/comfyui.pid"
+PORT=8188
+HOST="0.0.0.0"
+
+export PATH="/opt/homebrew/bin:$VENV/bin:$PATH"
+export PYTHONUNBUFFERED=1
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+export HF_HOME="$ROOT/cache/hf"
+export HF_HUB_CACHE="$HF_HOME/hub"
+export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
+export UV_CACHE_DIR="/Volumes/Models/cache/uv"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  /Volumes/Models/comfyui/bin/comfyui status
+  /Volumes/Models/comfyui/bin/comfyui start
+  /Volumes/Models/comfyui/bin/comfyui stop
+
+Weights go in /Volumes/Models/comfyui/models, not /Volumes/Models/models.
+The server listens on 0.0.0.0:8188. There is no login.
+Stop the MLX server before starting this. Video generation needs the same memory.
+EOF
+}
+
+require_volume() {
+  if [[ ! -d "/Volumes/Models" ]]; then
+    echo "External volume is not mounted at /Volumes/Models" >&2
+    exit 1
+  fi
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    echo "Missing venv at $VENV" >&2
+    exit 1
+  fi
+  if [[ ! -f "$APP/main.py" ]]; then
+    echo "Missing ComfyUI checkout at $APP" >&2
+    exit 1
+  fi
+}
+
+pid_running() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+current_pid() {
+  local pid=""
+  if [[ -f "$PID_FILE" ]]; then
+    pid="$(<"$PID_FILE")"
+    pid="${pid//$'\n'/}"
+    if pid_running "$pid"; then
+      print -r -- "$pid"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+mlx_running() {
+  pgrep -f '/Volumes/Models/venvs/mlx/.*/mlx_vlm.server' >/dev/null 2>&1
+}
+
+# The OpenJev decision sidecar (decision/bin/openjev) on :8081 shares the GPU too.
+decision_running() {
+  local pid=""
+  if [[ -f "/Volumes/Models/decision/run/openjev.pid" ]]; then
+    pid="$(</Volumes/Models/decision/run/openjev.pid)"
+    pid="${pid//$'\n'/}"
+    pid_running "$pid" && return 0
+  fi
+  lsof -nP -iTCP:8081 -sTCP:LISTEN >/dev/null 2>&1
+}
+
+tts_running() {
+  local pid=""
+  if [[ -f "/Volumes/Models/tts/run/qwen-tts.pid" ]]; then
+    pid="$(</Volumes/Models/tts/run/qwen-tts.pid)"
+    pid="${pid//$'\n'/}"
+    pid_running "$pid" && return 0
+  fi
+  lsof -nP -iTCP:8083 -sTCP:LISTEN >/dev/null 2>&1
+}
+
+# The always-on embedding service (embed/bin/qwen-embed) on :8084 (M8).
+embed_running() {
+  local pid=""
+  if [[ -f "/Volumes/Models/embed/run/qwen-embed.pid" ]]; then
+    pid="$(</Volumes/Models/embed/run/qwen-embed.pid)"
+    pid="${pid//$'\n'/}"
+    pid_running "$pid" && return 0
+  fi
+  lsof -nP -iTCP:8084 -sTCP:LISTEN >/dev/null 2>&1
+}
+
+cmd_status() {
+  require_volume
+  local pid=""
+  if pid="$(current_pid)"; then
+    echo "comfyui: running pid $pid"
+  else
+    echo "comfyui: stopped"
+    rm -f "$PID_FILE"
+  fi
+  if mlx_running; then
+    echo "mlx: running (stop it before comfyui start)"
+  else
+    echo "mlx: stopped"
+  fi
+  if decision_running; then
+    echo "decision: running (stop it before comfyui start)"
+  else
+    echo "decision: stopped"
+  fi
+  if tts_running; then
+    echo "tts: running (stop it before comfyui start)"
+  else
+    echo "tts: stopped"
+  fi
+  if embed_running; then
+    echo "embed: running (stop it before comfyui start)"
+  else
+    echo "embed: stopped"
+  fi
+  echo "listen: http://${HOST}:${PORT}"
+  echo "models: $ROOT/models"
+  echo "output: $ROOT/output"
+  echo "log: $LOG_FILE"
+  if [[ -x /opt/homebrew/bin/ffmpeg ]]; then
+    echo "ffmpeg: /opt/homebrew/bin/ffmpeg"
+  else
+    echo "ffmpeg: missing" >&2
+  fi
+}
+
+cmd_start() {
+  require_volume
+  local pid=""
+  if pid="$(current_pid)"; then
+    echo "ComfyUI is already running (pid $pid)" >&2
+    exit 1
+  fi
+  rm -f "$PID_FILE"
+  if mlx_running; then
+    echo "MLX server is running. Stop it first: /Volumes/Models/bin/mlx-model stop" >&2
+    exit 1
+  fi
+  if decision_running; then
+    echo "The decision sidecar is running. Stop it first: /Volumes/Models/decision/bin/openjev stop" >&2
+    exit 1
+  fi
+  if tts_running; then
+    echo "The TTS sidecar is running. Stop it first: /Volumes/Models/tts/bin/qwen-tts stop" >&2
+    exit 1
+  fi
+  if embed_running; then
+    echo "The embedding service is running. Stop it first: /Volumes/Models/embed/bin/qwen-embed stop" >&2
+    exit 1
+  fi
+  if [[ ! -x /opt/homebrew/bin/ffmpeg ]]; then
+    echo "ffmpeg is not installed. Video export will fail." >&2
+    exit 1
+  fi
+  mkdir -p "$ROOT/logs" "$ROOT/run" "$ROOT/output" "$ROOT/input" "$ROOT/temp" "$ROOT/user" "$HF_HUB_CACHE"
+  cd "$APP"
+  nohup "$VENV/bin/python" "$APP/main.py" \
+    --listen "$HOST" \
+    --port "$PORT" \
+    --base-directory "$ROOT" \
+    --disable-auto-launch \
+    --disable-api-nodes \
+    >>"$LOG_FILE" 2>&1 &
+  pid=$!
+  print -r -- "$pid" >"$PID_FILE"
+  sleep 0.5
+  if ! pid_running "$pid"; then
+    echo "ComfyUI exited immediately. See $LOG_FILE" >&2
+    rm -f "$PID_FILE"
+    exit 1
+  fi
+  echo "ComfyUI started (pid $pid)"
+  echo "Open http://${HOST}:${PORT}"
+  echo "Log: $LOG_FILE"
+}
+
+cmd_stop() {
+  require_volume
+  local pid=""
+  if ! pid="$(current_pid)"; then
+    echo "ComfyUI is not running"
+    rm -f "$PID_FILE"
+    return 0
+  fi
+  kill "$pid" 2>/dev/null || true
+  local i
+  for i in {1..20}; do
+    pid_running "$pid" || break
+    sleep 0.25
+  done
+  if pid_running "$pid"; then
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+  rm -f "$PID_FILE"
+  echo "ComfyUI stopped"
+}
+
+require_volume
+case "${1:-}" in
+  start) cmd_start ;;
+  stop) cmd_stop ;;
+  status) cmd_status ;;
+  *) usage; exit 1 ;;
+esac

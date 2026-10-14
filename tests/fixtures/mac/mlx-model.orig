@@ -1,0 +1,259 @@
+#!/bin/zsh
+# Start, stop, and switch local MLX models. Only one server is allowed.
+set -euo pipefail
+source /Volumes/Models/bin/mlx-env.sh
+
+RUN_DIR="$MODELS_ROOT/run"
+LOCK_DIR="$RUN_DIR/mlx.lock"
+PID_FILE="$RUN_DIR/mlx-server.pid"
+STATE_FILE="$RUN_DIR/active.env"
+REGISTRY="$MODELS_ROOT/etc/models.conf"
+ACTIVE_LINK="$MODELS_ROOT/models/active"
+LOG_FILE="$MODELS_ROOT/logs/mlx-server.log"
+PORT=8080
+HOST="0.0.0.0"
+export PYTHONUNBUFFERED=1
+export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  mlx-model list
+  mlx-model status
+  mlx-model add <name> <model-dir>
+  mlx-model start [name]
+  mlx-model switch <name>
+  mlx-model stop
+
+Only one MLX server or chat UI is allowed. switch stops the current process,
+points /Volumes/Models/models/active at the chosen model, then starts the API
+on port 8080. LiteLLM should always use that stable path as the model id.
+EOF
+}
+
+lookup() {
+  local name="$1"
+  local found="" line key model_dir
+  [[ -f "$REGISTRY" ]] || { echo "Missing registry $REGISTRY" >&2; exit 1; }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    key="${line%%$'\t'*}"
+    model_dir="${line#*$'\t'}"
+    if [[ "$key" == "$name" ]]; then
+      found="$model_dir"
+    fi
+  done < "$REGISTRY"
+  if [[ -z "$found" ]]; then
+    echo "Unknown model: $name" >&2
+    echo "Known models:" >&2
+    list_models >&2
+    exit 1
+  fi
+  if [[ ! -f "$found/config.json" ]]; then
+    echo "Model directory has no config.json: $found" >&2
+    exit 1
+  fi
+  print -r -- "$found"
+}
+
+list_models() {
+  local line key model_dir mark current=""
+  if [[ -f "$STATE_FILE" ]]; then
+    current="$(sed -n 's/^MLX_ACTIVE_NAME=//p' "$STATE_FILE" | tail -1)"
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    key="${line%%$'\t'*}"
+    model_dir="${line#*$'\t'}"
+    mark=" "
+    [[ "$key" == "$current" ]] && mark="*"
+    printf '%s %-16s %s\n' "$mark" "$key" "$model_dir"
+  done < "$REGISTRY"
+}
+
+listeners() {
+  lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null || true
+  lsof -nP -tiTCP:7860 -sTCP:LISTEN 2>/dev/null || true
+}
+
+mlx_pids() {
+  local pid
+  if [[ -f "$PID_FILE" ]]; then
+    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
+    fi
+  fi
+  pgrep -f "$MLX_VENV/bin/mlx_vlm.(server|chat_ui)" 2>/dev/null || true
+  listeners
+}
+
+stop_server() {
+  local pids pid i
+  pids="$(mlx_pids | awk 'NF && !seen[$0]++')"
+  if [[ -z "$pids" ]]; then
+    rm -f "$PID_FILE"
+    echo "No MLX server is running."
+    return 0
+  fi
+  echo "Stopping: $(echo $pids | tr '\n' ' ')"
+  echo "$pids" | xargs kill 2>/dev/null || true
+  for i in {1..30}; do
+    pids="$(mlx_pids | awk 'NF && !seen[$0]++')"
+    [[ -z "$pids" ]] && break
+    sleep 1
+  done
+  pids="$(mlx_pids | awk 'NF && !seen[$0]++')"
+  if [[ -n "$pids" ]]; then
+    echo "$pids" | xargs kill -9 2>/dev/null || true
+    sleep 1
+  fi
+  rm -f "$PID_FILE"
+  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Port 8080 is still in use." >&2
+    exit 1
+  fi
+}
+
+write_state() {
+  local name="$1" model_dir="$2"
+  mkdir -p "$RUN_DIR"
+  ln -sfn "$model_dir" "$ACTIVE_LINK"
+  cat > "$STATE_FILE" <<EOF
+MLX_ACTIVE_NAME=$name
+MLX_ACTIVE_PATH=$model_dir
+MLX_ACTIVE_ID=$ACTIVE_LINK
+MLX_PORT=$PORT
+EOF
+}
+
+start_server() {
+  local name="$1" model_dir
+  model_dir="$(lookup "$name")"
+  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:7860 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "An MLX process is already running. Use switch or stop first." >&2
+    exit 1
+  fi
+  write_state "$name" "$model_dir"
+  mkdir -p "$MODELS_ROOT/logs"
+  {
+    echo
+    echo "===== $(date '+%Y-%m-%d %H:%M:%S') start $name ====="
+  } >> "$LOG_FILE"
+  nohup "$MLX_VENV/bin/mlx_vlm.server" \
+    --host "$HOST" \
+    --port "$PORT" \
+    --model "$ACTIVE_LINK" \
+    --max-num-seqs 1 \
+    --log-level INFO >> "$LOG_FILE" 2>&1 &
+  echo $! > "$PID_FILE"
+  local i
+  for i in {1..90}; do
+    if curl -sf --max-time 2 "http://127.0.0.1:$PORT/health" 2>/dev/null | grep -q '"status":"healthy"'; then
+      echo "Serving $name"
+      echo "  weights: $model_dir"
+      echo "  LiteLLM model id: $ACTIVE_LINK"
+      echo "  API: http://mac-mini.local:$PORT/v1"
+      echo "  pid: $(cat "$PID_FILE")"
+      return 0
+    fi
+    if ! kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+      echo "Server exited. Last log lines:" >&2
+      tail -40 "$LOG_FILE" >&2
+      exit 1
+    fi
+    sleep 2
+  done
+  echo "Server did not become healthy. See $LOG_FILE" >&2
+  exit 1
+}
+
+with_lock() {
+  mkdir -p "$RUN_DIR"
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "Another mlx-model command is running." >&2
+    exit 1
+  fi
+  "$@"
+  local rc=$?
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+  return $rc
+}
+
+switch_model() {
+  stop_server
+  start_server "$1"
+}
+
+cmd_status() {
+  local pid="" health=""
+  if [[ -f "$PID_FILE" ]]; then
+    pid="$(cat "$PID_FILE")"
+  fi
+  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    echo "process: running pid $pid"
+  else
+    echo "process: stopped"
+  fi
+  if [[ -f "$STATE_FILE" ]]; then
+    cat "$STATE_FILE"
+  fi
+  health="$(curl -sf --max-time 2 "http://127.0.0.1:$PORT/health" 2>/dev/null || true)"
+  if [[ -n "$health" ]]; then
+    echo "health: $health"
+  else
+    echo "health: not reachable on $PORT"
+  fi
+}
+
+cmd_add() {
+  local name="$1" model_dir="$2"
+  if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "Name must contain only letters, numbers, dots, underscores, or dashes." >&2
+    exit 1
+  fi
+  if [[ ! -f "$model_dir/config.json" ]]; then
+    echo "No config.json in $model_dir" >&2
+    exit 1
+  fi
+  model_dir="$(cd "$model_dir" && pwd -P)"
+  mkdir -p "$MODELS_ROOT/etc"
+  touch "$REGISTRY"
+  if grep -q "^${name}"$'\t' "$REGISTRY"; then
+    local tmp
+    tmp="$(mktemp)"
+    awk -F '\t' -v name="$name" -v model_dir="$model_dir" 'BEGIN{OFS="\t"} $1==name {$2=model_dir} {print}' "$REGISTRY" > "$tmp"
+    mv "$tmp" "$REGISTRY"
+  else
+    printf '%s\t%s\n' "$name" "$model_dir" >> "$REGISTRY"
+  fi
+  echo "Registered $name -> $model_dir"
+}
+
+main() {
+  local cmd="${1:-}"
+  case "$cmd" in
+    list) list_models ;;
+    status) cmd_status ;;
+    add)
+      [[ $# -eq 3 ]] || { usage; exit 1; }
+      cmd_add "$2" "$3"
+      ;;
+    stop) with_lock stop_server ;;
+    start)
+      local name="${2:-}"
+      if [[ -z "$name" && -f "$STATE_FILE" ]]; then
+        name="$(sed -n 's/^MLX_ACTIVE_NAME=//p' "$STATE_FILE" | tail -1)"
+      fi
+      [[ -n "$name" ]] || { echo "No model selected." >&2; exit 1; }
+      with_lock start_server "$name"
+      ;;
+    switch)
+      [[ $# -eq 2 ]] || { usage; exit 1; }
+      with_lock switch_model "$2"
+      ;;
+    *) usage; exit 1 ;;
+  esac
+}
+
+main "$@"

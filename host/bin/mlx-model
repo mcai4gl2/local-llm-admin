@@ -1,0 +1,1035 @@
+#!/bin/zsh
+# Start, stop, and switch local MLX models. Only one server is allowed.
+set -euo pipefail
+source /Volumes/Models/bin/mlx-env.sh
+
+RUN_DIR="$MODELS_ROOT/run"
+LOCK_DIR="$RUN_DIR/mlx.lock"
+# Short-lived gate shared by lock acquisition, unlock and ops/deploy-host.sh.
+GATE_DIR="$RUN_DIR/maintenance.lock"
+GATE_TRIES=50   # 0.1 s apart
+LOCK_CREATED=0
+GATE_OWNED=0
+SELF_START=""
+PID_FILE="$RUN_DIR/mlx-server.pid"
+STATE_FILE="$RUN_DIR/active.env"
+REGISTRY="$MODELS_ROOT/etc/models.conf"
+ACTIVE_LINK="$MODELS_ROOT/models/active"
+LOG_DIR="$MODELS_ROOT/logs"
+LOG_FILE="$LOG_DIR/mlx-server.log"
+# rotate-logs defaults; the admin passes its own validated settings
+LOG_ROTATE_DEFAULT_MAX=52428800   # 50 MiB
+LOG_ROTATE_DEFAULT_KEEP=8
+# remove --delete-files moves a directory here (same volume) before deleting it
+QUARANTINE="$MODELS_ROOT/quarantine"
+REGISTRY_BACKUPS="$MODELS_ROOT/etc/backups"
+REGISTRY_BACKUP_KEEP=20
+# downloads and profiles: stdlib-only helpers on the system Python (never the MLX venv)
+HOST_PY="/usr/bin/python3"
+DOWNLOAD_HELPER="$MODELS_ROOT/bin/mlx-download"
+PROFILE_HELPER="$MODELS_ROOT/bin/mlx-profile"
+DOWNLOADS_DIR="$MODELS_ROOT/downloads"
+PORT=8080
+HOST="0.0.0.0"
+export PYTHONUNBUFFERED=1
+export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  mlx-model list
+  mlx-model status
+  mlx-model add <name> <model-dir>
+  mlx-model start [name]
+  mlx-model switch <name>
+  mlx-model select <name>
+  mlx-model stop
+  mlx-model unlock
+  mlx-model rotate-logs [--max-bytes N] [--keep K]
+  mlx-model remove <name> [--delete-files] [--expect-path DIR] [--expect-inode N]
+  mlx-model remove-recover
+  mlx-model download-preview <owner/repo> [revision]
+  mlx-model download <owner/repo> <commit-sha> <dest-dir> <run-id>
+  mlx-model download-resume <run-id>
+  mlx-model download-status [run-id]
+  mlx-model download-cancel <run-id>
+  mlx-model profile schema|list|show <name>
+  mlx-model profile set <name> <json> | reset <name> | revert <name>
+
+Only one MLX server or chat UI is allowed. switch stops the current process,
+points /Volumes/Models/models/active at the chosen model, then starts the API
+on port 8080. LiteLLM should always use that stable path as the model id.
+select changes the selected model while nothing is running, without loading it.
+unlock removes run/mlx.lock only when the command that took it is gone.
+rotate-logs renames logs over the size limit whose writer has stopped and keeps K
+archives per log; a log with a running (or unverifiable) writer is deferred.
+remove unregisters a model that is not selected or loaded; --delete-files also deletes
+its directory (only a real directory directly under models/, registered once) through a
+journaled quarantine. remove-recover finishes or undoes an interrupted removal.
+download starts one background download of a pinned commit into downloads/<run-id>/;
+when every file is verified it is renamed to models/<dest-dir> (never over an existing
+directory). Register it with add afterwards. One download runs at a time.
+profile keeps validated per-model server flags (etc/profiles/<name>.json); start and
+switch apply them, so a change takes effect at the next restart of that model.
+EOF
+}
+
+lookup() {
+  local name="$1"
+  local found="" line key model_dir
+  [[ -f "$REGISTRY" ]] || { echo "Missing registry $REGISTRY" >&2; exit 1; }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    key="${line%%$'\t'*}"
+    model_dir="${line#*$'\t'}"
+    if [[ "$key" == "$name" ]]; then
+      found="$model_dir"
+    fi
+  done < "$REGISTRY"
+  if [[ -z "$found" ]]; then
+    echo "Unknown model: $name" >&2
+    echo "Known models:" >&2
+    list_models >&2
+    exit 1
+  fi
+  if [[ ! -f "$found/config.json" ]]; then
+    echo "Model directory has no config.json: $found" >&2
+    exit 1
+  fi
+  print -r -- "$found"
+}
+
+list_models() {
+  local line key model_dir mark current=""
+  if [[ -f "$STATE_FILE" ]]; then
+    current="$(sed -n 's/^MLX_ACTIVE_NAME=//p' "$STATE_FILE" | tail -1)"
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    key="${line%%$'\t'*}"
+    model_dir="${line#*$'\t'}"
+    mark=" "
+    [[ "$key" == "$current" ]] && mark="*"
+    printf '%s %-16s %s\n' "$mark" "$key" "$model_dir"
+  done < "$REGISTRY"
+}
+
+listeners() {
+  lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null || true
+  lsof -nP -tiTCP:7860 -sTCP:LISTEN 2>/dev/null || true
+}
+
+mlx_pids() {
+  local pid
+  if [[ -f "$PID_FILE" ]]; then
+    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
+    fi
+  fi
+  pgrep -f "$MLX_VENV/bin/mlx_vlm.(server|chat_ui)" 2>/dev/null || true
+  listeners
+}
+
+stop_server() {
+  local pids pid i
+  pids="$(mlx_pids | awk 'NF && !seen[$0]++')"
+  if [[ -z "$pids" ]]; then
+    rm -f "$PID_FILE"
+    echo "No MLX server is running."
+    return 0
+  fi
+  echo "Stopping: $(echo $pids | tr '\n' ' ')"
+  echo "$pids" | xargs kill 2>/dev/null || true
+  for i in {1..30}; do
+    pids="$(mlx_pids | awk 'NF && !seen[$0]++')"
+    [[ -z "$pids" ]] && break
+    sleep 1
+  done
+  pids="$(mlx_pids | awk 'NF && !seen[$0]++')"
+  if [[ -n "$pids" ]]; then
+    echo "$pids" | xargs kill -9 2>/dev/null || true
+    sleep 1
+  fi
+  rm -f "$PID_FILE"
+  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Port 8080 is still in use." >&2
+    exit 1
+  fi
+}
+
+write_state() {
+  local name="$1" model_dir="$2" profile="${3:-}"
+  mkdir -p "$RUN_DIR"
+  ln -sfn "$model_dir" "$ACTIVE_LINK"
+  cat > "$STATE_FILE" <<EOF
+MLX_ACTIVE_NAME=$name
+MLX_ACTIVE_PATH=$model_dir
+MLX_ACTIVE_ID=$ACTIVE_LINK
+MLX_PORT=$PORT
+EOF
+  if [[ -n "$profile" ]]; then
+    echo "MLX_PROFILE_FINGERPRINT=$profile" >> "$STATE_FILE"
+  fi
+}
+
+# The model's validated launch flags. Never fails a start: a missing helper or an
+# invalid profile starts with the built-in flags and says so (fingerprint *-fallback).
+profile_args() {  # name; sets PROFILE_FP and PROFILE_ARGS
+  local out err="" line why=""
+  local -a lines
+  PROFILE_FP="default"
+  PROFILE_ARGS=()
+  if [[ ! -f "$PROFILE_HELPER" ]]; then
+    return 0
+  fi
+  # stdout only: a warning on stderr must never become a server argument
+  if out="$("$HOST_PY" "$PROFILE_HELPER" launch-args "$1" 2>/dev/null)"; then
+    lines=( "${(@f)out}" )
+    if [[ "${lines[1]}" =~ ^(default|[0-9a-f]{16})$ ]]; then
+      for line in "${(@)lines[2,-1]}"; do
+        # the helper's allow-list emits only known flags, numbers and enum words
+        if [[ ! "$line" =~ ^(--(max-kv-size|prefill-step-size|max-tokens|enable-thinking|thinking-budget|kv-bits|kv-quant-scheme|kv-group-size|quantized-kv-start|vision-cache-size)|[0-9]+(\.[0-9]+)?|uniform|turboquant)$ ]]; then
+          why="unexpected helper output"
+          break
+        fi
+      done
+    else
+      why="unexpected helper output"
+    fi
+    if [[ -z "$why" ]]; then
+      PROFILE_FP="${lines[1]}"
+      PROFILE_ARGS=( "${(@)lines[2,-1]}" )
+      return 0
+    fi
+  else
+    why="$("$HOST_PY" "$PROFILE_HELPER" launch-args "$1" 2>&1 >/dev/null | tail -1)" || true
+  fi
+  PROFILE_FP="default-fallback"
+  PROFILE_ARGS=()
+  echo "Profile for $1 not applied (${why:-helper failed}); starting with built-in settings." >&2
+  echo "mlx-model: profile for $1 not applied: ${why:-helper failed}" >> "$LOG_FILE"
+}
+
+start_server() {
+  local name="$1" model_dir
+  model_dir="$(lookup "$name")"
+  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:7860 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:8188 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "An MLX or ComfyUI process is already running. Use switch or stop first (ComfyUI: /Volumes/Models/comfyui/bin/comfyui stop)." >&2
+    exit 1
+  fi
+  mkdir -p "$LOG_DIR"
+  local PROFILE_FP
+  local -a PROFILE_ARGS
+  profile_args "$name"
+  write_state "$name" "$model_dir" "$PROFILE_FP"
+  rotate_before_start
+  {
+    echo
+    echo "===== $(date '+%Y-%m-%d %H:%M:%S') start $name ====="
+  } >> "$LOG_FILE"
+  nohup "$MLX_VENV/bin/mlx_vlm.server" \
+    --host "$HOST" \
+    --port "$PORT" \
+    --model "$ACTIVE_LINK" \
+    --max-num-seqs 1 \
+    "${PROFILE_ARGS[@]}" \
+    --log-level INFO >> "$LOG_FILE" 2>&1 &
+  echo $! > "$PID_FILE"
+  local i
+  for i in {1..90}; do
+    if curl -sf --max-time 2 "http://127.0.0.1:$PORT/health" 2>/dev/null | grep -q '"status":"healthy"'; then
+      echo "Serving $name"
+      echo "  weights: $model_dir"
+      echo "  LiteLLM model id: $ACTIVE_LINK"
+      echo "  API: http://${MLX_PUBLIC_HOST:-$(hostname)}:$PORT/v1"
+      echo "  pid: $(cat "$PID_FILE")"
+      echo "  profile: $PROFILE_FP${PROFILE_ARGS:+ (${PROFILE_ARGS[*]})}"
+      return 0
+    fi
+    if ! kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+      echo "Server exited. Last log lines:" >&2
+      tail -40 "$LOG_FILE" >&2
+      exit 1
+    fi
+    sleep 2
+  done
+  echo "Server did not become healthy. See $LOG_FILE" >&2
+  exit 1
+}
+
+# --- lock ownership ---------------------------------------------------------
+# run/mlx.lock and run/maintenance.lock are directories (mkdir is atomic) holding an
+# "owner" file: pid, process start time (pid plus start identifies a process even
+# after pid reuse) and command. A lock without an owner file comes from an older
+# mlx-model that did not record one.
+
+proc_start() {
+  { ps -o lstart= -p "$1" 2>/dev/null || true; } | sed 's/^ *//'
+}
+
+owner_field() {
+  [[ -f "$1/owner" ]] || return 0
+  sed -n "s/^$2=//p" "$1/owner" 2>/dev/null | sed -n 1p
+}
+
+owner_summary() {
+  if [[ -f "$1/owner" ]]; then
+    echo "pid $(owner_field "$1" pid), $(owner_field "$1" cmd)"
+  else
+    echo "no owner recorded"
+  fi
+}
+
+write_owner() {
+  [[ -n "$SELF_START" ]] || SELF_START="$(proc_start $$)"
+  print -rl -- "pid=$$" "start=$SELF_START" "cmd=$2" > "$1/owner"
+}
+
+owned_by_me() {
+  [[ -f "$1/owner" && "$(owner_field "$1" pid)" == "$$" && -n "$SELF_START" \
+    && "$(owner_field "$1" start)" == "$SELF_START" ]]
+}
+
+# none | live | dead | unknown
+owner_state() {
+  local pid start now
+  [[ -f "$1/owner" ]] || { echo none; return 0; }
+  pid="$(owner_field "$1" pid)"
+  start="$(owner_field "$1" start)"
+  if [[ ! "$pid" =~ ^[0-9]+$ || -z "$start" ]]; then
+    echo unknown
+    return 0
+  fi
+  now="$(proc_start "$pid")"
+  if [[ -n "$now" && "$now" == "$start" ]]; then
+    echo live
+  else
+    echo dead   # gone, or the pid now belongs to another process
+  fi
+}
+
+gate_acquire() {
+  local i
+  mkdir -p "$RUN_DIR"
+  for i in {1..$GATE_TRIES}; do
+    if mkdir "$GATE_DIR" 2>/dev/null; then
+      GATE_OWNED=1
+      write_owner "$GATE_DIR" "$1"
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "Maintenance in progress: $GATE_DIR is held ($(owner_summary "$GATE_DIR")). Try again later; if that process is gone, see the maintenance gate notes in bin/README.md." >&2
+  return 1
+}
+
+gate_release() {
+  if (( GATE_OWNED )); then
+    rm -f "$GATE_DIR/owner"
+    rmdir "$GATE_DIR" 2>/dev/null || true
+  fi
+  GATE_OWNED=0
+}
+
+release_lock() {
+  (( LOCK_CREATED )) || return 0
+  # only this process's lock; an ownerless one only while the gate still covers the
+  # moment between mkdir and writing the owner file
+  if owned_by_me "$LOCK_DIR" || { (( GATE_OWNED )) && [[ ! -e "$LOCK_DIR/owner" ]]; }; then
+    rm -f "$LOCK_DIR/owner"
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+  fi
+  LOCK_CREATED=0
+}
+
+cleanup() {
+  release_lock
+  gate_release
+}
+
+with_lock() {
+  gate_acquire "$1" || exit 1
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    gate_release
+    echo "Another mlx-model command is running." >&2
+    exit 1
+  fi
+  LOCK_CREATED=1
+  write_owner "$LOCK_DIR" "$1"
+  gate_release
+  "$@"
+  local rc=$?
+  release_lock
+  return $rc
+}
+
+live_cli_pids() {
+  { pgrep -f 'bin/mlx-model (start|stop|switch|select|add|remove|profile)' 2>/dev/null || true; } | { grep -vx "$$" || true; }
+}
+
+lock_fingerprint() {
+  local -a st
+  zstat -A st +inode "$LOCK_DIR" 2>/dev/null || { echo gone; return 0; }
+  echo "${st[1]} $(cat "$LOCK_DIR/owner" 2>/dev/null || true)"
+}
+
+cmd_unlock() {
+  local state before summary
+  zmodload -F zsh/stat b:zstat
+  gate_acquire unlock || exit 1
+  if [[ ! -e "$LOCK_DIR" ]]; then
+    echo "No lock held."
+    return 0
+  fi
+  if [[ -z "$(proc_start $$)" ]]; then
+    echo "Cannot verify who owns $LOCK_DIR (process start times are unreadable); not removing it." >&2
+    exit 1
+  fi
+  before="$(lock_fingerprint)"
+  summary="$(owner_summary "$LOCK_DIR")"
+  state="$(owner_state "$LOCK_DIR")"
+  case "$state" in
+    live)
+      echo "Lock is held by a running mlx-model command ($summary); not removing it." >&2
+      exit 1 ;;
+    unknown)
+      echo "Cannot verify who owns $LOCK_DIR; not removing it." >&2
+      exit 1 ;;
+    none)
+      # older mlx-model versions ignore the gate: require no such command, twice
+      if [[ -n "$(live_cli_pids)" ]]; then
+        echo "An mlx-model command is running (pid $(live_cli_pids | tr '\n' ' ')); not removing the lock." >&2
+        exit 1
+      fi
+      sleep 1
+      if [[ -n "$(live_cli_pids)" ]]; then
+        echo "An mlx-model command started while checking; not removing the lock." >&2
+        exit 1
+      fi ;;
+  esac
+  if [[ "$(lock_fingerprint)" != "$before" ]]; then
+    echo "The lock changed while checking; not removing it." >&2
+    exit 1
+  fi
+  rm -f "$LOCK_DIR/owner"
+  if ! rmdir "$LOCK_DIR" 2>/dev/null; then
+    echo "$LOCK_DIR contains unexpected files; not removing it." >&2
+    exit 1
+  fi
+  echo "Removed stale lock ($summary)."
+}
+
+# --- log rotation -------------------------------------------------------------
+# Rename-only rotation of logs whose writer has stopped. Never copy-truncate a live log:
+# that loses writes and defeats the admin's byte-offset ingestion. One output line per
+# file for the admin: rotated|deferred|skipped|missing|pruned|error <name> ...
+# Everything that can fail is tested in a condition, so errexit/ZERR never fire midway.
+
+valid_count() {  # value min max
+  [[ "$1" =~ ^[0-9]{1,12}$ ]] && (( $1 >= $2 && $1 <= $3 ))
+}
+
+rotatable_logs() {
+  setopt localoptions nullglob
+  local f
+  print -rl -- mlx-server.log chat-qwen.log serve-qwen.log
+  for f in "$LOG_DIR"/download-*.log; do
+    if [[ "${f:t}" =~ ^download-[A-Za-z0-9_-]+\.log$ ]]; then
+      print -r -- "${f:t}"
+    fi
+  done
+}
+
+# none | active-writer | writer-unknown
+log_writer() {
+  local name="$1" f="$2" out rc
+  case "$name" in
+    download-*)
+      if pgrep -f "$MODELS_ROOT/bin/(download-|mlx-download)" >/dev/null 2>&1; then
+        echo active-writer
+        return 0
+      fi ;;
+    *)
+      if [[ -n "$(mlx_pids | awk 'NF')" ]]; then
+        echo active-writer
+        return 0
+      fi ;;
+  esac
+  out="$(lsof -t -- "$f" 2>/dev/null)" && rc=0 || rc=$?
+  if (( rc == 0 )) && [[ -n "$out" ]]; then
+    echo active-writer
+  elif (( rc == 1 )) && [[ -z "$out" ]]; then
+    echo none
+  else
+    echo writer-unknown
+  fi
+}
+
+prune_archives() {
+  setopt localoptions extendedglob nullglob
+  local name="$1" keep="$2" a
+  local -a arch
+  arch=( "$LOG_DIR/$name".[0-9](#c8)-[0-9](#c6)(.On) )
+  for a in "${(@)arch[keep+1,-1]}"; do
+    if rm -f -- "$a"; then
+      echo "pruned ${a:t}"
+    fi
+  done
+}
+
+rotate_one() {
+  local name="$1" max="$2" keep="$3" f="$LOG_DIR/$1" size writer archive mode
+  local -a st
+  zmodload -F zsh/stat b:zstat
+  if [[ -L "$f" ]]; then
+    echo "error $name symlink"
+    return 1
+  fi
+  if [[ ! -e "$f" ]]; then
+    echo "missing $name"
+    return 0
+  fi
+  if [[ ! -f "$f" ]] || ! zstat -A st +size "$f" 2>/dev/null; then
+    echo "error $name not-a-file"
+    return 1
+  fi
+  size="${st[1]}"
+  if (( size < max )); then
+    echo "skipped $name below-threshold $size"
+  else
+    writer="$(log_writer "$name" "$f")"
+    if [[ "$writer" != none ]]; then
+      echo "deferred $name $writer $size"
+    else
+      if ! zstat -A st +mode "$f" 2>/dev/null; then
+        echo "error $name not-a-file"
+        return 1
+      fi
+      mode="$(printf '%o' $(( st[1] & 8#7777 )))"
+      archive="$f.$(date +%Y%m%d-%H%M%S)"
+      if [[ -e "$archive" || -L "$archive" ]]; then
+        echo "error $name archive-exists"
+        return 1
+      fi
+      if ! mv -- "$f" "$archive" 2>/dev/null; then
+        echo "error $name rename-failed"
+        return 1
+      fi
+      if ! ( set -o noclobber; : > "$f" ) 2>/dev/null || ! chmod "$mode" "$f" 2>/dev/null; then
+        rm -f -- "$f" 2>/dev/null || true
+        if mv -- "$archive" "$f" 2>/dev/null; then
+          echo "error $name create-failed restored"
+        else
+          echo "error $name create-failed not-restored ${archive:t}"
+        fi
+        return 1
+      fi
+      echo "rotated $name ${archive:t} $size"
+    fi
+  fi
+  prune_archives "$name" "$keep"
+}
+
+rotate_all() {
+  local name rc=0
+  for name in $(rotatable_logs); do
+    rotate_one "$name" "$1" "$2" || rc=1
+  done
+  return $rc
+}
+
+cmd_rotate_logs() {
+  local max="$LOG_ROTATE_DEFAULT_MAX" keep="$LOG_ROTATE_DEFAULT_KEEP"
+  while (( $# )); do
+    case "$1" in
+      --max-bytes|--keep)
+        if (( $# < 2 )); then
+          echo "$1 needs a value" >&2
+          exit 1
+        fi
+        if [[ "$1" == --keep ]]; then keep="$2"; else max="$2"; fi
+        shift 2 ;;
+      *)
+        echo "Unknown rotate-logs argument: $1" >&2
+        exit 1 ;;
+    esac
+  done
+  if ! valid_count "$max" 1048576 10737418240; then
+    echo "--max-bytes must be a whole number from 1048576 (1 MiB) to 10737418240 (10 GiB)" >&2
+    exit 1
+  fi
+  if ! valid_count "$keep" 1 50; then
+    echo "--keep must be a whole number from 1 to 50" >&2
+    exit 1
+  fi
+  with_lock rotate_all "$max" "$keep"
+}
+
+# start holds the lock and the server is stopped: the one safe moment for a live log
+rotate_before_start() {
+  local max="${MLX_LOG_ROTATE_MAX_BYTES:-$LOG_ROTATE_DEFAULT_MAX}"
+  local keep="${MLX_LOG_ROTATE_KEEP:-$LOG_ROTATE_DEFAULT_KEEP}"
+  if valid_count "$max" 1048576 10737418240 && valid_count "$keep" 1 50; then
+    rotate_one mlx-server.log "$max" "$keep" || true
+  fi
+}
+
+# --- remove -------------------------------------------------------------------
+# Unregister (files kept) or delete a model that is neither selected nor loaded. The
+# registry is rewritten atomically (temp file + rename in etc/) after a backup. Deletion
+# first renames the validated directory into quarantine/<id> on the same volume, with a
+# journal next to it; a failed registry update renames it back. Only then is the
+# quarantined copy removed; if that fails the removal is "cleanup-pending" and
+# remove-recover finishes it. Everything that can fail is tested in a condition.
+
+refuse() {
+  echo "$*" >&2
+  exit 1
+}
+
+valid_model_name() {
+  [[ "$1" =~ ^[A-Za-z0-9._-]+$ && "$1" != -* && "$1" != *..* && "$1" != . && "$1" != active ]]
+}
+
+registry_dirs_for() {  # name: its directories, one per registry line
+  local line key
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    key="${line%%$'\t'*}"
+    [[ "$key" == "$1" ]] && print -r -- "${line#*$'\t'}"
+  done < "$REGISTRY"
+  return 0
+}
+
+registry_aliases() {  # name canonical-dir: other names registered for the same directory
+  local line key d
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    key="${line%%$'\t'*}"
+    d="${line#*$'\t'}"
+    [[ "$key" == "$1" ]] && continue
+    [[ -e "$d" && "${d:A}" == "$2" ]] && print -r -- "$key"
+  done < "$REGISTRY"
+  return 0
+}
+
+backup_registry() {
+  setopt localoptions nullglob
+  local -a old
+  mkdir -p "$REGISTRY_BACKUPS" 2>/dev/null || return 1
+  cp -p -- "$REGISTRY" "$REGISTRY_BACKUPS/models.conf.$(date +%Y%m%d-%H%M%S)-$$" 2>/dev/null \
+    || return 1
+  old=( "$REGISTRY_BACKUPS"/models.conf.*(.On) )
+  if (( ${#old} > REGISTRY_BACKUP_KEEP )); then
+    rm -f -- "${(@)old[REGISTRY_BACKUP_KEEP+1,-1]}" 2>/dev/null || true
+  fi
+  return 0
+}
+
+registry_write_without() {  # name
+  local tmp="$REGISTRY.tmp-$$"
+  local -a st
+  if ! zstat -A st +mode "$REGISTRY" 2>/dev/null \
+    || ! awk -F '\t' -v name="$1" '/^#/ || $0 == "" || $1 != name' "$REGISTRY" > "$tmp" 2>/dev/null \
+    || ! chmod "$(printf '%o' $(( st[1] & 8#7777 )))" "$tmp" 2>/dev/null \
+    || ! mv -f -- "$tmp" "$REGISTRY" 2>/dev/null; then
+    rm -f -- "$tmp" 2>/dev/null || true
+    return 1
+  fi
+  return 0
+}
+
+journal_write() {  # id name dir state
+  local j="$QUARANTINE/$1.journal"
+  if print -rl -- "id=$1" "name=$2" "path=$3" "state=$4" "ts=$(date +%s)" > "$j.tmp" 2>/dev/null \
+    && mv -f -- "$j.tmp" "$j" 2>/dev/null; then
+    return 0
+  fi
+  rm -f -- "$j.tmp" 2>/dev/null || true
+  return 1
+}
+
+journal_field() {  # journal key
+  sed -n "s/^$2=//p" "$1" 2>/dev/null | sed -n 1p
+}
+
+remove_model() {
+  local name="$1" delete="$2" expect_path="$3" expect_inode="$4"
+  local dir canon="" current="" mroot id q aliases
+  local -a dirs st
+  zmodload -F zsh/stat b:zstat
+  [[ -f "$REGISTRY" ]] || refuse "Missing registry $REGISTRY"
+  dirs=( ${(f)"$(registry_dirs_for "$name")"} )
+  (( ${#dirs} )) || refuse "Unknown model: $name"
+  (( ${#dirs} == 1 )) || refuse "$name is registered more than once in $REGISTRY; fix the registry by hand first."
+  dir="${dirs[1]}"
+  if [[ -f "$STATE_FILE" ]]; then
+    current="$(sed -n 's/^MLX_ACTIVE_NAME=//p' "$STATE_FILE" | tail -1)"
+  fi
+  [[ "$current" != "$name" ]] || refuse "$name is the selected model (it may be loaded); switch to another model first."
+  [[ -e "$dir" ]] && canon="${dir:A}"
+  if [[ -n "$canon" && -e "$ACTIVE_LINK" && "${ACTIVE_LINK:A}" == "$canon" ]]; then
+    refuse "models/active points at $canon; switch to another model first."
+  fi
+  if [[ -n "$expect_path" && "$canon" != "$expect_path" ]]; then
+    refuse "The registry entry for $name changed since the preview (now ${canon:-missing}); nothing was removed."
+  fi
+  if [[ -n "$expect_inode" ]]; then
+    if ! zstat -A st +inode -- "$canon" 2>/dev/null || [[ "${st[1]}" != "$expect_inode" ]]; then
+      refuse "The directory for $name changed since the preview; nothing was removed."
+    fi
+  fi
+  if (( ! delete )); then
+    backup_registry || refuse "Cannot back up $REGISTRY; nothing was changed."
+    registry_write_without "$name" || refuse "Cannot rewrite the registry $REGISTRY; nothing was changed."
+    echo "Unregistered $name (files kept: $dir)"
+    return 0
+  fi
+  if [[ -L "$dir" || ( -n "$canon" && "$dir" != "$canon" ) ]]; then
+    refuse "$dir is a symlink or has a symlink in its path; only a real directory can be deleted. Remove without deleting files instead."
+  fi
+  [[ -d "$dir" ]] || refuse "$dir is not a directory; remove without deleting files instead."
+  mroot="$MODELS_ROOT/models"
+  mroot="${mroot:A}"
+  if [[ "${canon:h}" != "$mroot" || "${canon:t}" == active || "${canon:t}" == .* ]]; then
+    refuse "$canon is outside $mroot (only a directory directly under it can be deleted); remove without deleting files instead."
+  fi
+  aliases="$(registry_aliases "$name" "$canon" | tr '\n' ' ')"
+  aliases="${aliases% }"
+  [[ -z "$aliases" ]] || refuse "$canon is also registered as $aliases; remove those first, or remove without deleting files."
+  [[ ! -L "$QUARANTINE" ]] || refuse "$QUARANTINE is a symlink; nothing was removed."
+  mkdir -p "$QUARANTINE" 2>/dev/null || refuse "Cannot create $QUARANTINE; nothing was removed."
+  local dev_m dev_q
+  zstat -A st +device -- "$canon" 2>/dev/null && dev_m="${st[1]}" || refuse "Cannot read $canon; nothing was removed."
+  zstat -A st +device -- "$QUARANTINE" 2>/dev/null && dev_q="${st[1]}" || refuse "Cannot read $QUARANTINE; nothing was removed."
+  [[ "$dev_m" == "$dev_q" ]] || refuse "$QUARANTINE is on another volume than $canon; nothing was removed."
+  id="$(date +%Y%m%d-%H%M%S)-$$"
+  q="$QUARANTINE/$id"
+  [[ ! -e "$q" && ! -L "$q" ]] || refuse "$q already exists; nothing was removed."
+  journal_write "$id" "$name" "$canon" moving || refuse "Cannot write the quarantine journal in $QUARANTINE; nothing was removed."
+  if ! mv -- "$canon" "$q" 2>/dev/null; then
+    rm -f -- "$QUARANTINE/$id.journal" 2>/dev/null || true
+    refuse "Cannot move $canon into quarantine; nothing was removed."
+  fi
+  journal_write "$id" "$name" "$canon" moved || true
+  if ! backup_registry || ! registry_write_without "$name"; then
+    if [[ ! -e "$canon" ]] && mv -- "$q" "$canon" 2>/dev/null; then
+      rm -f -- "$QUARANTINE/$id.journal" 2>/dev/null || true
+      refuse "Cannot rewrite the registry $REGISTRY; $canon was restored and nothing was removed."
+    fi
+    refuse "Cannot rewrite the registry $REGISTRY and cannot restore $canon from $q; run mlx-model remove-recover."
+  fi
+  journal_write "$id" "$name" "$canon" registry-updated || true
+  if [[ -d "$q" && ! -L "$q" ]] && rm -rf -- "$q" 2>/dev/null; then
+    rm -f -- "$QUARANTINE/$id.journal" 2>/dev/null || true
+    echo "Deleted $name: $canon"
+  else
+    journal_write "$id" "$name" "$canon" cleanup-pending || true
+    echo "Unregistered $name; deleting its files did not finish (cleanup-pending $id). Run mlx-model remove-recover to finish."
+  fi
+  return 0
+}
+
+cmd_remove() {
+  local name="" delete=0 expect_path="" expect_inode=""
+  while (( $# )); do
+    case "$1" in
+      --delete-files) delete=1; shift ;;
+      --expect-path|--expect-inode)
+        (( $# >= 2 )) || refuse "$1 needs a value"
+        if [[ "$1" == --expect-path ]]; then expect_path="$2"; else expect_inode="$2"; fi
+        shift 2 ;;
+      -*) refuse "Unknown remove argument: $1" ;;
+      *)
+        [[ -z "$name" ]] || refuse "remove takes one model name"
+        name="$1"; shift ;;
+    esac
+  done
+  valid_model_name "$name" || refuse "Invalid model name: '$name'"
+  [[ -z "$expect_path" || "$expect_path" == /* ]] || refuse "--expect-path must be absolute"
+  [[ -z "$expect_inode" || "$expect_inode" =~ ^[0-9]+$ ]] || refuse "--expect-inode must be a number"
+  with_lock remove_model "$name" "$delete" "$expect_path" "$expect_inode"
+}
+
+# Finish (registry already updated) or undo (registry unchanged) interrupted removals.
+recover_removals() {
+  setopt localoptions nullglob
+  local j id name orig state q rc=0
+  local -a dirs
+  for j in "$QUARANTINE"/*.journal; do
+    id="$(journal_field "$j" id)"
+    name="$(journal_field "$j" name)"
+    orig="$(journal_field "$j" path)"
+    state="$(journal_field "$j" state)"
+    if [[ ! "$id" =~ ^[0-9A-Za-z_-]+$ || "${j:t}" != "$id.journal" || "$orig" != /* ]]; then
+      echo "kept ${j:t}: unreadable journal"
+      rc=1
+      continue
+    fi
+    q="$QUARANTINE/$id"
+    if [[ "$state" == moving || "$state" == moved ]]; then
+      dirs=( ${(f)"$(registry_dirs_for "$name")"} )
+      if (( ${dirs[(Ie)$orig]} )); then
+        # the registry still lists it: undo
+        if [[ ! -e "$q" ]]; then
+          rm -f -- "$j"
+          echo "dropped $id: nothing was moved"
+        elif [[ ! -e "$orig" && ! -L "$orig" ]] && mv -- "$q" "$orig" 2>/dev/null; then
+          rm -f -- "$j"
+          echo "restored $id: $orig"
+        else
+          echo "kept $id: cannot restore to $orig (it exists or the rename failed)"
+          rc=1
+        fi
+        continue
+      fi
+      state=registry-updated
+    fi
+    if [[ "$state" == registry-updated || "$state" == cleanup-pending ]]; then
+      if [[ -L "$q" ]]; then
+        echo "kept $id: $q is a symlink"
+        rc=1
+      elif [[ ! -e "$q" ]] || rm -rf -- "$q" 2>/dev/null; then
+        rm -f -- "$j"
+        echo "cleaned $id"
+      else
+        journal_write "$id" "$name" "$orig" cleanup-pending || true
+        echo "kept $id: removing $q failed"
+        rc=1
+      fi
+      continue
+    fi
+    echo "kept $id: unknown state '$state'"
+    rc=1
+  done
+  return $rc
+}
+
+# --- downloads ------------------------------------------------------------------
+# The helper does the work and owns run/download.lock; this CLI only validates, starts
+# it in the background and renames a verified staging directory into models/ under
+# run/mlx.lock (publish-download, called by the helper). Downloads never hold mlx.lock.
+
+download_helper() {
+  "$HOST_PY" "$DOWNLOAD_HELPER" "$@"
+}
+
+valid_run_id() {
+  [[ "$1" =~ ^[a-z0-9]{12}$ ]]
+}
+
+valid_dest() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ && "$1" != *..* && "$1" != active ]]
+}
+
+launch_download() {  # helper arguments; the last one is the run id
+  local run="${@[-1]}" log i
+  mkdir -p "$LOG_DIR" "$DOWNLOADS_DIR" || refuse "Cannot create $DOWNLOADS_DIR"
+  log="$LOG_DIR/download-$run.log"
+  nohup "$HOST_PY" "$DOWNLOAD_HELPER" "$@" >> "$log" 2>&1 < /dev/null &
+  local pid=$!
+  # report once the helper has recorded its state (or has already exited)
+  for i in {1..100}; do
+    [[ -f "$DOWNLOADS_DIR/$run/status.json" ]] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  sleep 0.2
+  download_helper status "$run"
+}
+
+cmd_download() {
+  (( $# == 4 )) || { usage; exit 1; }
+  local repo="$1" sha="$2" dest="$3" run="$4"
+  [[ "$repo" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$ && "$repo" != *..* ]] \
+    || refuse "Invalid repository id: $repo"
+  [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || refuse "The revision must be a full commit hash (use download-preview)."
+  valid_dest "$dest" || refuse "Invalid destination directory name: $dest"
+  valid_run_id "$run" || refuse "Invalid run id: $run"
+  [[ ! -e "$MODELS_ROOT/models/$dest" && ! -L "$MODELS_ROOT/models/$dest" ]] \
+    || refuse "$MODELS_ROOT/models/$dest already exists; choose another directory name."
+  [[ ! -e "$DOWNLOADS_DIR/$run" ]] || refuse "Run $run exists; use download-resume."
+  launch_download run "$repo" "$sha" "$dest" "$run"
+}
+
+cmd_download_resume() {
+  (( $# == 1 )) && valid_run_id "$1" || refuse "download-resume takes one run id"
+  [[ -f "$DOWNLOADS_DIR/$1/manifest.json" ]] || refuse "No download $1 to resume."
+  launch_download run --resume "$1"
+}
+
+publish_download() {  # run-id dest; runs under run/mlx.lock
+  local run="$1" dest="$2" src target dev_s dev_t
+  local -a st
+  zmodload -F zsh/stat b:zstat
+  src="$DOWNLOADS_DIR/$run/files"
+  target="$MODELS_ROOT/models/$dest"
+  [[ ! -L "$DOWNLOADS_DIR" && ! -L "$DOWNLOADS_DIR/$run" && ! -L "$src" && -d "$src" ]] \
+    || refuse "No staged files for $run."
+  if [[ -e "$target" || -L "$target" ]]; then
+    echo "$target already exists; not overwriting it. The files stay in $src." >&2
+    exit 3
+  fi
+  zstat -A st +device -- "$src" 2>/dev/null && dev_s="${st[1]}" || refuse "Cannot read $src"
+  zstat -A st +device -- "$MODELS_ROOT/models" 2>/dev/null && dev_t="${st[1]}" || refuse "Cannot read $MODELS_ROOT/models"
+  [[ "$dev_s" == "$dev_t" ]] || refuse "$src is on another volume than models/; not publishing."
+  mv -- "$src" "$target" 2>/dev/null || refuse "Cannot move $src to $target"
+  echo "published $target"
+}
+
+# --- profiles -------------------------------------------------------------------
+profile_write() {  # action name [json]; under run/mlx.lock, registered names only
+  local -a dirs
+  dirs=( ${(f)"$(registry_dirs_for "$2")"} )
+  (( ${#dirs} )) || refuse "Unknown model: $2"
+  "$HOST_PY" "$PROFILE_HELPER" "$@"
+}
+
+cmd_profile() {
+  local action="${1:-}"
+  case "$action" in
+    schema|list)
+      (( $# == 1 )) || { usage; exit 1; }
+      "$HOST_PY" "$PROFILE_HELPER" "$action" ;;
+    show)
+      (( $# == 2 )) && valid_model_name "$2" || { usage; exit 1; }
+      "$HOST_PY" "$PROFILE_HELPER" show "$2" ;;
+    set)
+      (( $# == 3 )) && valid_model_name "$2" || { usage; exit 1; }
+      with_lock profile_write set "$2" "$3" ;;
+    reset|revert)
+      (( $# == 2 )) && valid_model_name "$2" || { usage; exit 1; }
+      with_lock profile_write "$action" "$2" ;;
+    *) usage; exit 1 ;;
+  esac
+}
+
+switch_model() {
+  stop_server
+  start_server "$1"
+}
+
+select_model() {
+  local name="$1" model_dir
+  model_dir="$(lookup "$name")"
+  if [[ -n "$(mlx_pids | awk 'NF')" ]] || lsof -nP -iTCP:8188 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "An MLX or ComfyUI process is running; select only works while stopped. Use switch." >&2
+    exit 1
+  fi
+  write_state "$name" "$model_dir"
+  echo "Selected $name (not started)"
+}
+
+cmd_status() {
+  local pid="" health=""
+  if [[ -f "$PID_FILE" ]]; then
+    pid="$(cat "$PID_FILE")"
+  fi
+  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    echo "process: running pid $pid"
+  else
+    echo "process: stopped"
+  fi
+  if [[ -f "$STATE_FILE" ]]; then
+    cat "$STATE_FILE"
+  fi
+  health="$(curl -sf --max-time 2 "http://127.0.0.1:$PORT/health" 2>/dev/null || true)"
+  if [[ -n "$health" ]]; then
+    echo "health: $health"
+  else
+    echo "health: not reachable on $PORT"
+  fi
+}
+
+cmd_add() {
+  local name="$1" model_dir="$2"
+  if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "Name must contain only letters, numbers, dots, underscores, or dashes." >&2
+    exit 1
+  fi
+  if [[ ! -f "$model_dir/config.json" ]]; then
+    echo "No config.json in $model_dir" >&2
+    exit 1
+  fi
+  model_dir="$(cd "$model_dir" && pwd -P)"
+  mkdir -p "$MODELS_ROOT/etc"
+  touch "$REGISTRY"
+  if grep -q "^${name}"$'\t' "$REGISTRY"; then
+    local tmp
+    tmp="$(mktemp)"
+    awk -F '\t' -v name="$name" -v model_dir="$model_dir" 'BEGIN{OFS="\t"} $1==name {$2=model_dir} {print}' "$REGISTRY" > "$tmp"
+    mv "$tmp" "$REGISTRY"
+  else
+    printf '%s\t%s\n' "$name" "$model_dir" >> "$REGISTRY"
+  fi
+  echo "Registered $name -> $model_dir"
+}
+
+main() {
+  local cmd="${1:-}"
+  case "$cmd" in
+    list) list_models ;;
+    status) cmd_status ;;
+    add)
+      [[ $# -eq 3 ]] || { usage; exit 1; }
+      with_lock cmd_add "$2" "$3"
+      ;;
+    stop) with_lock stop_server ;;
+    unlock) cmd_unlock ;;
+    rotate-logs) shift; cmd_rotate_logs "$@" ;;
+    remove) shift; cmd_remove "$@" ;;
+    download-preview)
+      (( $# == 2 || $# == 3 )) || { usage; exit 1; }
+      download_helper preview "$2" "${3:-main}"
+      ;;
+    download) shift; cmd_download "$@" ;;
+    profile) shift; cmd_profile "$@" ;;
+    download-resume) shift; cmd_download_resume "$@" ;;
+    download-status)
+      (( $# <= 2 )) || { usage; exit 1; }
+      download_helper status "${@[2,-1]}"
+      ;;
+    download-cancel)
+      (( $# == 2 )) && valid_run_id "$2" || { usage; exit 1; }
+      download_helper cancel "$2"
+      ;;
+    publish-download)
+      (( $# == 3 )) && valid_run_id "$2" && valid_dest "$3" || { usage; exit 1; }
+      with_lock publish_download "$2" "$3"
+      ;;
+    remove-recover)
+      [[ $# -eq 1 ]] || { usage; exit 1; }
+      with_lock recover_removals
+      ;;
+    start)
+      local name="${2:-}"
+      if [[ -z "$name" && -f "$STATE_FILE" ]]; then
+        name="$(sed -n 's/^MLX_ACTIVE_NAME=//p' "$STATE_FILE" | tail -1)"
+      fi
+      [[ -n "$name" ]] || { echo "No model selected." >&2; exit 1; }
+      with_lock start_server "$name"
+      ;;
+    switch)
+      [[ $# -eq 2 ]] || { usage; exit 1; }
+      with_lock switch_model "$2"
+      ;;
+    select)
+      [[ $# -eq 2 ]] || { usage; exit 1; }
+      with_lock select_model "$2"
+      ;;
+    *) usage; exit 1 ;;
+  esac
+}
+
+trap cleanup EXIT
+# zsh skips the EXIT trap when errexit fires inside a function (seen on 5.8 and 5.9), so
+# a failure such as an unknown model name would leave run/mlx.lock behind. ZERR runs
+# exactly where errexit is about to exit; command substitutions must not clean up.
+trap '(( ZSH_SUBSHELL )) || cleanup' ZERR
+# Clean up, then die from the same signal (exit status 143/130 to the caller). Neither
+# `trap '...; exit 143' TERM` nor a trap function's non-zero return reliably stops zsh:
+# depending on where the signal lands it leaves only the current loop, or exits 1.
+TRAPTERM() { cleanup; trap - TERM; kill -TERM $$; }
+TRAPINT() { cleanup; trap - INT; kill -INT $$; }
+main "$@"

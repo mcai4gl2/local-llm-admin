@@ -1,0 +1,9 @@
+===== 2026-09-20 09:00:01 start Qwen3.8-27B-4bit =====
+2026-09-20 09:00:05,120 INFO Loading model /Volumes/Models/models/active
+2026-09-20 09:01:10,002 INFO Request started id=a1
+2026-09-20 09:01:11,500 INFO Prefill completed id=a1 prompt_tokens=1200 rate=392.5 tok/s
+2026-09-20 09:01:20,000 INFO Decode completed id=a1 generated_tokens=150 rate=17.8 tok/s
+===== 2026-09-25 12:00:00 start qwen3.8-27b =====
+2026-09-25 12:00:30,000 WARNING slow load
+2026-09-28 10:00:00,000 INFO Request started id=b2
+2026-09-28 10:00:01,000 INFO Prefill completed id=b2 prompt_tokens=800 rate=410.0 tok/s

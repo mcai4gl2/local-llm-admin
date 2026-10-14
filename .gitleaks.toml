@@ -1,0 +1,12 @@
+# gitleaks configuration: the default rules plus an allowlist for test fakes.
+title = "local-llm-admin"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake credentials used only by tests and docs placeholders"
+regexes = [
+  '''sk-viewer-SECRET-123''',
+  '''sk-abcdef123456''',  # tests/test_performance_api.py: redaction fixture
+]

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · LLM Admin</title>
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="login-body">
+<div class="login-theme"><label class="theme"><span class="sr-only">Theme</span>
+      <select id="theme-select" aria-label="Theme">
+        <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
+      </select>
+    </label></div>
+<form method="post" action="/login" class="card login">
+  <h1>LLM Admin</h1>
+  <p class="muted">Mac mini model server</p>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <label>Password <input type="password" name="password" autocomplete="current-password" autofocus required></label>
+  <button type="submit" class="primary">Log in</button>
+</form>
+<script src="/static/theme.js"></script>
+</body>
+</html>

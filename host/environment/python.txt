@@ -1,0 +1,4 @@
+# Python used by both venvs (recorded 2026-09-30)
+install: uv-managed CPython 3.12.14 at /Volumes/Models/python (UV_PYTHON_INSTALL_DIR)
+uv: 0.12.19 (Homebrew, internal disk)
+venvs: /Volumes/Models/venvs/mlx (MLX), /Volumes/Models/comfyui/venv (ComfyUI)

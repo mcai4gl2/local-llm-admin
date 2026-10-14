@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Embeddings{% endblock %}
+{% block content %}
+<p class="warn-note">Requests go through the admin and share the gateway's in-flight limit. Text is never stored; history keeps counts and timings only.</p>
+<div id="embed-disabled" class="error" hidden></div>
+<div class="decision-layout">
+  <section class="card">
+    <form id="embed-sim-form">
+      <div class="card-head"><h2>Similarity</h2><span class="muted" id="embed-dims"></span></div>
+      <p class="muted">One text per line (2–8). Related lines should score close to 1, unrelated ones much lower.</p>
+      <textarea id="embed-texts" rows="8" required placeholder="how do I deploy the admin&#10;Run ops/deploy-mac.sh from the dev container.&#10;Paris is the capital of France."></textarea>
+      <label class="check"><input type="checkbox" id="embed-query-first"> Treat the first line as a query (adds Qwen3's retrieval instruction)</label>
+      <div class="actions"><button type="submit" id="embed-sim-run" class="primary">Compare</button></div>
+    </form>
+    <div id="embed-sim-error" class="error" hidden></div>
+    <div class="table-wrap"><table id="embed-matrix"><tbody></tbody></table></div>
+  </section>
+  <section class="card">
+    <form id="embed-rr-form">
+      <div class="card-head"><h2>Rerank</h2></div>
+      <label>Query <input id="embed-rr-query" required></label>
+      <textarea id="embed-rr-docs" rows="6" required placeholder="One document per line"></textarea>
+      <div class="actions">
+        <button type="button" id="embed-curl">Copy as curl</button>
+        <button type="submit" id="embed-rr-run" class="primary">Rerank</button>
+      </div>
+    </form>
+    <div id="embed-rr-error" class="error" hidden></div>
+    <ol id="embed-rr-results"></ol>
+  </section>
+</div>
+<section class="card" id="embed-history">
+  <div class="card-head"><h2>History</h2><span class="muted" id="embed-availability"></span></div>
+  <div class="table-wrap"><table id="embed-daily">
+    <thead><tr><th>Day</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Inputs</th><th class="num">Characters</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
+  </table></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/embed.js"></script>{% endblock %}

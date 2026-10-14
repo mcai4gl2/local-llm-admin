@@ -1,0 +1,277 @@
+#!/bin/zsh
+# Start, stop, and status for the OpenJev decision sidecar (DiffusionGemma on MLX).
+# Runs next to the MLX LLM server, never next to ComfyUI. Listens on loopback only.
+# Does not touch /Volumes/Models/models, /Volumes/Models/bin, or the MLX venv.
+set -euo pipefail
+
+VOLUME="/Volumes/Models"
+ROOT="$VOLUME/decision"
+APP="$ROOT/app"
+VENV="$ROOT/venv"
+MODEL_DIR="$ROOT/models/diffusiongemma-26B-A4B-it-4bit"
+ENV_FILE="$ROOT/etc/openjev.env"
+LOG_FILE="$ROOT/logs/openjev.log"
+PID_FILE="$ROOT/run/openjev.pid"
+COMFY_PID_FILE="$VOLUME/comfyui/run/comfyui.pid"
+TTS_PID_FILE="$VOLUME/tts/run/qwen-tts.pid"
+TTS_PORT=8083
+HOST="127.0.0.1"
+PORT=8081
+COMFY_PORT=8188
+STOP_TRIES=80  # x 0.25 s: OpenJev finishes in-flight reads before it exits
+LOG_ROTATE_MAX=52428800  # 50 MiB; rotated only by start, while the sidecar is stopped
+LOG_ROTATE_KEEP=8
+
+usage() {
+  cat <<'EOF'
+Usage:
+  /Volumes/Models/decision/bin/openjev status
+  /Volumes/Models/decision/bin/openjev start
+  /Volumes/Models/decision/bin/openjev stop
+
+Serves POST /v1/systemone on http://127.0.0.1:8081 (loopback only; the admin's
+gateway on :8082 is the LAN entry point). Clients need OPENJEV_API_KEY from
+/Volumes/Models/decision/etc/openjev.env (mode 600).
+Stop ComfyUI and the TTS sidecar before starting this. The MLX server may keep running.
+EOF
+}
+
+require_volume() {
+  if [[ ! -d "$VOLUME" ]]; then
+    echo "External volume is not mounted at $VOLUME" >&2
+    exit 1
+  fi
+}
+
+require_install() {
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    echo "Missing venv at $VENV" >&2
+    exit 1
+  fi
+  if [[ ! -f "$APP/openjev/__init__.py" ]]; then
+    echo "Missing OpenJev checkout at $APP" >&2
+    exit 1
+  fi
+}
+
+port_listening() {
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+pid_running() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+# The pid file's process, only if it really is the sidecar: a reused pid is never signalled.
+current_pid() {
+  local pid=""
+  [[ -f "$PID_FILE" ]] || return 1
+  pid="$(<"$PID_FILE")"
+  pid="${pid//$'\n'/}"
+  [[ "$pid" == <-> ]] || return 1
+  pid_running "$pid" || return 1
+  [[ "$(ps -o command= -p "$pid" 2>/dev/null)" == *"-m openjev"* ]] || return 1
+  print -r -- "$pid"
+}
+
+comfy_running() {
+  local pid=""
+  if [[ -f "$COMFY_PID_FILE" ]]; then
+    pid="$(<"$COMFY_PID_FILE")"
+    pid="${pid//$'\n'/}"
+    pid_running "$pid" && return 0
+  fi
+  port_listening "$COMFY_PORT"
+}
+
+tts_running() {
+  local pid=""
+  if [[ -f "$TTS_PID_FILE" ]]; then
+    pid="$(<"$TTS_PID_FILE")"
+    pid="${pid//$'\n'/}"
+    pid_running "$pid" && return 0
+  fi
+  port_listening "$TTS_PORT"
+}
+
+# Shards named in the index exist and add up to at least metadata.total_size.
+weights_state() {
+  /usr/bin/python3 - "$MODEL_DIR" <<'PY'
+import json, os, sys
+d = sys.argv[1]
+try:
+    idx = json.load(open(os.path.join(d, "model.safetensors.index.json")))
+    files = set(idx["weight_map"].values())
+    total = int(idx["metadata"]["total_size"])
+except (OSError, ValueError, KeyError, TypeError):
+    print("incomplete (no readable model.safetensors.index.json)")
+    sys.exit(1)
+missing = sorted(f for f in files if not os.path.isfile(os.path.join(d, f)))
+if missing or not os.path.isfile(os.path.join(d, "config.json")):
+    print(f"incomplete (missing {', '.join(missing) or 'config.json'})")
+    sys.exit(1)
+size = sum(os.path.getsize(os.path.join(d, f)) for f in files)
+if size < total:
+    print(f"incomplete ({size} of {total} bytes)")
+    sys.exit(1)
+print(f"complete ({len(files)} shards, {size} bytes)")
+PY
+}
+
+file_mode() {
+  stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"
+}
+
+# Reads only allow-listed KEY=VALUE lines; the file is parsed, never sourced.
+load_env() {
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "Missing $ENV_FILE (needs OPENJEV_API_KEY=...)" >&2
+    exit 1
+  fi
+  if [[ "$(file_mode "$ENV_FILE")" != 600 ]]; then
+    echo "$ENV_FILE must be mode 600" >&2
+    exit 1
+  fi
+  local line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == *=* ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      OPENJEV_API_KEY)
+        # length checked apart: macOS regex rejects repetition counts above 255
+        if [[ "$value" =~ '^[A-Za-z0-9_-]+$' ]] && (( ${#value} >= 32 && ${#value} <= 256 )); then
+          export OPENJEV_API_KEY="$value"
+        fi ;;
+      OPENJEV_MLX_CACHE_LIMIT_GB)
+        [[ "$value" =~ '^[0-9]+(\.[0-9]+)?$' ]] && export OPENJEV_MLX_CACHE_LIMIT_GB="$value" ;;
+      OPENJEV_MLX_PROMPT_CACHE)
+        [[ "$value" =~ '^[0-9]+$' ]] && export OPENJEV_MLX_PROMPT_CACHE="$value" ;;
+      OPENJEV_LOG_LEVEL)
+        [[ "$value" =~ '^(debug|info|warning|error)$' ]] && export OPENJEV_LOG_LEVEL="$value" ;;
+    esac
+  done <"$ENV_FILE"
+  if [[ -z "${OPENJEV_API_KEY:-}" ]]; then
+    echo "$ENV_FILE has no valid OPENJEV_API_KEY (32-256 chars of A-Z a-z 0-9 _ -)" >&2
+    exit 1
+  fi
+  # fixed here, whatever the file says: loopback only, this port, this model
+  export OPENJEV_BACKEND=mlx OPENJEV_HOST="$HOST" OPENJEV_PORT="$PORT" OPENJEV_MLX_MODEL="$MODEL_DIR"
+  export HF_HOME="$ROOT/cache/hf" HF_HUB_OFFLINE=1 PYTHONUNBUFFERED=1
+}
+
+# Rename a log over the size limit to openjev.log.<stamp> and keep the newest
+# LOG_ROTATE_KEEP archives. Runs only from start, after every refusal check, so the
+# writer is known to be stopped. A failure here never stops the start.
+rotate_log() {
+  [[ -f "$LOG_FILE" ]] || return 0
+  local size
+  size=$(wc -c <"$LOG_FILE" 2>/dev/null | tr -d ' ') || return 0
+  (( size > LOG_ROTATE_MAX )) || return 0
+  mv "$LOG_FILE" "$LOG_FILE.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || return 0
+  local -a archives
+  archives=("$LOG_FILE".<->-<->(N.On))  # newest first by name
+  local old
+  for old in "${archives[@]:$LOG_ROTATE_KEEP}"; do
+    rm -f "$old"
+  done
+}
+
+cmd_status() {
+  local pid="" w=""
+  if pid="$(current_pid)"; then
+    echo "openjev: running pid $pid"
+  else
+    echo "openjev: stopped"
+    rm -f "$PID_FILE"
+  fi
+  if comfy_running; then
+    echo "comfyui: running (stop it before openjev start)"
+  else
+    echo "comfyui: stopped"
+  fi
+  if tts_running; then
+    echo "tts: running (stop it before openjev start)"
+  else
+    echo "tts: stopped"
+  fi
+  echo "listen: http://${HOST}:${PORT}"
+  echo "model: $MODEL_DIR"
+  w="$(weights_state)" || true
+  echo "weights: $w"
+  echo "log: $LOG_FILE"
+}
+
+cmd_start() {
+  local pid="" w=""
+  if pid="$(current_pid)"; then
+    echo "OpenJev is already running (pid $pid)" >&2
+    exit 1
+  fi
+  rm -f "$PID_FILE"
+  require_install
+  if comfy_running; then
+    echo "ComfyUI is running. Stop it first: /Volumes/Models/comfyui/bin/comfyui stop" >&2
+    exit 1
+  fi
+  if tts_running; then
+    echo "The TTS sidecar is running. Stop it first: /Volumes/Models/tts/bin/qwen-tts stop" >&2
+    exit 1
+  fi
+  if port_listening "$PORT"; then
+    echo "Port $PORT is already in use" >&2
+    exit 1
+  fi
+  if ! w="$(weights_state)"; then
+    echo "DiffusionGemma weights are $w: $MODEL_DIR" >&2
+    exit 1
+  fi
+  load_env
+  mkdir -p "$ROOT/logs" "$ROOT/run" "$HF_HOME"
+  rotate_log || true
+  cd "$APP"
+  echo "===== $(date '+%Y-%m-%d %H:%M:%S') start openjev =====" >>"$LOG_FILE"
+  nohup "$VENV/bin/python" -m openjev >>"$LOG_FILE" 2>&1 &
+  pid=$!
+  print -r -- "$pid" >"$PID_FILE"
+  sleep 0.5
+  if ! pid_running "$pid"; then
+    echo "OpenJev exited immediately. See $LOG_FILE" >&2
+    rm -f "$PID_FILE"
+    exit 1
+  fi
+  echo "OpenJev started (pid $pid)"
+  echo "Listening on http://${HOST}:${PORT} once the model has loaded (GET /health)"
+  echo "Log: $LOG_FILE"
+}
+
+cmd_stop() {
+  local pid=""
+  if ! pid="$(current_pid)"; then
+    echo "OpenJev is not running"
+    rm -f "$PID_FILE"
+    return 0
+  fi
+  kill "$pid" 2>/dev/null || true
+  local i
+  for i in {1..$STOP_TRIES}; do
+    pid_running "$pid" || break
+    sleep 0.25
+  done
+  if pid_running "$pid"; then
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    echo "OpenJev did not exit after SIGTERM; killed (pid $pid)"
+    return 0
+  fi
+  rm -f "$PID_FILE"
+  echo "OpenJev stopped"
+}
+
+case "${1:-}" in
+  start) require_volume; cmd_start ;;
+  stop) require_volume; cmd_stop ;;
+  status) require_volume; cmd_status ;;
+  *) usage; exit 2 ;;
+esac

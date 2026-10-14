@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.homelab.local-llm-admin</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@DEST@/.venv/bin/local-llm-admin</string>
+    <string>--host</string><string>0.0.0.0</string>
+    <string>--port</string><string>8090</string>
+  </array>
+  <key>WorkingDirectory</key><string>@DEST@</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>LOCAL_LLM_ADMIN_ENV</key><string>@HOME@/.config/local-llm-admin/env</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <!-- the MLX server that mlx-model starts must survive admin restarts -->
+  <key>AbandonProcessGroup</key><true/>
+  <key>StandardOutPath</key><string>@DEST@/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>@DEST@/logs/launchd.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,19 @@
+# Versioned Mac-side files: <kind> <path>. The path is the same under host/ and under
+# /Volumes/Models on the Mac. "code" is deployed by ops/deploy-host.sh and must match;
+# "registry" is state the CLI changes (mlx-model add), compared but never deployed.
+code bin/mlx-model
+code bin/mlx-download
+code bin/mlx-profile
+code bin/mlx-env.sh
+code bin/chat-qwen.sh
+code bin/serve-qwen.sh
+code bin/download-models.sh
+code bin/README.md
+code comfyui/bin/comfyui
+code decision/bin/openjev
+code decision/README.md
+code tts/bin/qwen-tts
+code tts/README.md
+code embed/bin/qwen-embed
+code embed/README.md
+registry etc/models.conf

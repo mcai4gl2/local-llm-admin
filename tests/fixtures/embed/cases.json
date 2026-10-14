@@ -1,0 +1,22 @@
+{
+  "query_prefix": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
+  "pairs": [
+    ["how do I deploy the admin to the mac", "Run ops/deploy-mac.sh from the dev container; it rsyncs the admin and restarts the LaunchAgent."],
+    ["what port does comfyui listen on", "ComfyUI serves its web UI and API on port 8188 on all interfaces."],
+    ["why did the tts chunk get cut off", "mlx-audio stops a chunk at max_tokens, so long text without an end is cut at the cap."],
+    ["which embedding model does cortex use", "Cortex embeds chunks with Qwen3-Embedding-4B served from the Mac through LiteLLM."],
+    ["how much memory does the chat model take", "Qwen3.6-35B-A3B needs about 24 GB of unified memory with its KV cache."],
+    ["what is the capital of france", "Paris is the capital and largest city of France."],
+    ["how to make sourdough starter", "Mix equal weights of flour and water and feed it daily until it doubles reliably."],
+    ["symptoms of dehydration", "Thirst, dark urine, dizziness and fatigue are common signs of dehydration."],
+    ["python list comprehension example", "squares = [x * x for x in range(10)] builds a list of squares in one line."],
+    ["when was the eiffel tower built", "The Eiffel Tower was completed in 1889 for the World's Fair in Paris."]
+  ],
+  "rerank": [
+    {"query": "restart the tts sidecar", "documents": ["Start it again from the Models page Sidecar card.", "ComfyUI keeps its outputs under comfyui/output.", "Paris is in France."]},
+    {"query": "memory budget limit", "documents": ["The limit is RAM minus headroom, or the GPU wired limit when set.", "Sourdough needs flour and water.", "The gateway listens on 8082."]},
+    {"query": "dehydration signs", "documents": ["The Eiffel Tower is in Paris.", "Dark urine and dizziness can mean dehydration.", "Drink water when thirsty."]},
+    {"query": "list comprehension", "documents": ["[x for x in xs] is a list comprehension.", "for x in xs: out.append(x) builds the same list.", "Tea is a drink."]},
+    {"query": "who built the eiffel tower", "documents": ["Gustave Eiffel's company designed and built the tower.", "The tower opened in 1889.", "Python has list comprehensions."]}
+  ]
+}

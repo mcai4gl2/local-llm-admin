@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Quality{% endblock %}
+{% block content %}
+<section class="card" id="start-card">
+  <div class="card-head"><h2>Run a check</h2><span class="muted" id="engine-now"></span></div>
+  <div class="toolbar">
+    <label>Kind
+      <select id="q-kind">
+        <option value="benchmark">Benchmark (speed and memory)</option>
+        <option value="compatibility">Compatibility (API features)</option>
+      </select>
+    </label>
+    <label>Models
+      <select id="q-scope">
+        <option value="current">Current model</option>
+        <option value="all">All registered models</option>
+        <option value="model">One model…</option>
+      </select>
+    </label>
+    <label id="q-model-label" hidden>Model <select id="q-model"></select></label>
+    <button id="quality-start" class="primary">Start</button>
+  </div>
+  <p class="warn-note" id="q-effect"></p>
+  <details>
+    <summary class="muted">What a benchmark sends</summary>
+    <p class="muted" id="q-params"></p>
+    <div class="table-wrap"><table id="q-cases">
+      <thead><tr><th>Case</th><th class="num">Target prompt</th><th>Description</th></tr></thead><tbody></tbody>
+    </table></div>
+  </details>
+</section>
+
+<section class="card" id="active-card" hidden>
+  <div class="card-head">
+    <h2>Run <span id="active-id"></span></h2>
+    <div class="actions"><span class="badge" id="active-status" data-state="running">running</span><button id="active-cancel" class="danger">Cancel</button></div>
+  </div>
+  <p id="active-progress"></p>
+  <p class="muted" id="active-warning"></p>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Latest compatibility</h2><span class="muted">newest result per model and case</span></div>
+  <div class="table-wrap"><table id="compat-table"><thead></thead><tbody></tbody></table></div>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Runs</h2><span class="muted">details kept 90 days; baselines are kept</span></div>
+  <div class="table-wrap"><table id="runs-table">
+    <thead><tr><th>Started</th><th>Kind</th><th>Models</th><th>Status</th><th>Restoration</th><th>Measurements</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="card" id="detail-card" hidden>
+  <div class="card-head"><h2>Run <span id="detail-id"></span></h2><span class="badge" id="detail-status"></span></div>
+  <dl class="facts" id="detail-facts"></dl>
+  <p class="error" id="detail-error" hidden></p>
+  <div class="table-wrap"><table id="detail-bench" hidden>
+    <thead><tr><th>Model</th><th>Case</th><th>Status</th><th>Cache</th><th class="num">Valid</th>
+      <th class="num">TTFT</th><th class="num">Prefill</th><th class="num">Decode</th>
+      <th class="num">Client decode</th><th class="num">Peak RSS</th><th class="num">MLX peak</th><th class="num">Load</th><th>Against baseline</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="table-wrap"><table id="detail-compat" hidden>
+    <thead><tr><th>Model</th><th>Case</th><th>Outcome</th><th>Detail</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<dialog id="confirm">
+  <form method="dialog">
+    <h3 id="confirm-title"></h3>
+    <p id="confirm-body"></p>
+    <div class="actions"><button value="cancel">Cancel</button><button value="ok" class="primary">Start</button></div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/quality.js"></script>{% endblock %}

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Fake /Volumes/Models/decision/bin/openjev. Shares $FAKE_MLX_STATE with the other fakes.
+set -u
+S="${FAKE_MLX_STATE:?}"; ROOT="${FAKE_DECISION_ROOT:?}"; COMFYROOT="${FAKE_COMFY_ROOT:-/nonexistent}"
+TTSROOT="${FAKE_TTS_ROOT:-/nonexistent}"
+PID="$ROOT/run/openjev.pid"
+printf 'openjev %s\n' "$*" >> "$S/calls.log"
+alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+case "${1:-}" in
+  status)
+    if alive "$PID"; then echo "openjev: running pid $(cat "$PID")"; else echo "openjev: stopped"; fi
+    echo "weights: $(cat "$S/decision_weights" 2>/dev/null || echo complete) (4 shards)" ;;
+  start)
+    if alive "$PID"; then echo "OpenJev is already running" >&2; exit 1; fi
+    if alive "$COMFYROOT/run/comfyui.pid"; then echo "ComfyUI is running. Stop it first" >&2; exit 1; fi
+    if alive "$TTSROOT/run/qwen-tts.pid"; then echo "The TTS sidecar is running. Stop it first" >&2; exit 1; fi
+    [ -f "$S/decision_start_exit" ] && { echo "OpenJev exited immediately" >&2; exit 1; }
+    (exec -a "python -m openjev" sleep 60) >/dev/null 2>&1 &
+    echo $! > "$PID"
+    [ -f "$S/decision_never_ready" ] || touch "$S/decision_ready"
+    echo "OpenJev started (pid $(cat "$PID"))" ;;
+  stop)
+    [ -f "$S/decision_stop_fails" ] && { echo "could not stop" >&2; exit 1; }
+    if alive "$PID"; then kill "$(cat "$PID")"; fi
+    rm -f "$PID" "$S/decision_ready"; echo "OpenJev stopped" ;;
+  *) echo usage >&2; exit 2 ;;
+esac

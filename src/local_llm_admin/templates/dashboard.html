@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<p class="error" id="access-error" hidden></p>
+<section class="card" id="problems-card" hidden>
+  <div class="card-head"><h2>Problems</h2><a href="/alerts" class="muted">All checks and alerts</a></div>
+  <ul class="checks" id="problems"></ul>
+</section>
+<section class="card" id="status-card">
+  <div class="card-head"><h2>Model</h2><span class="muted" id="status-checked"></span></div>
+  <div class="hero">
+    <div><div class="label">Selected</div><div class="hero-value" id="st-selected">—</div></div>
+    <div><div class="label">State</div><div class="hero-value" id="st-state">—</div></div>
+    <div><div class="label">Last decode</div><div class="hero-value" id="st-decode">—</div></div>
+    <div><div class="label">Last prefill</div><div class="hero-value" id="st-prefill">—</div></div>
+  </div>
+  <dl class="facts" id="st-facts"></dl>
+</section>
+
+<section class="tiles" id="metric-tiles"></section>
+
+<section class="card">
+  <div class="card-head">
+    <h2>History</h2>
+    <div class="seg" role="group" aria-label="Window">
+      <button data-window="15m" aria-pressed="true">15 min</button>
+      <button data-window="1h" aria-pressed="false">1 hour</button>
+    </div>
+  </div>
+  <div class="charts">
+    <figure><figcaption>CPU %</figcaption><div class="chart" id="chart-cpu"></div></figure>
+    <figure><figcaption>Memory used %</figcaption><div class="chart" id="chart-mem"></div></figure>
+    <figure id="gpu-figure" hidden><figcaption>GPU utilisation %</figcaption><div class="chart" id="chart-gpu"></div></figure>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/dashboard.js"></script>{% endblock %}

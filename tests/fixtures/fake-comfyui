@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Fake /Volumes/Models/comfyui/bin/comfyui. Shares $FAKE_MLX_STATE with fake-mlx-model.
+set -u
+S="${FAKE_MLX_STATE:?}"; ROOT="${FAKE_COMFY_ROOT:?}"; MLXROOT="${FAKE_MLX_ROOT:?}"
+PID="$ROOT/run/comfyui.pid"
+printf 'comfyui %s\n' "$*" >> "$S/calls.log"
+alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+case "${1:-}" in
+  status)
+    if alive "$PID"; then echo "comfyui: running pid $(cat "$PID")"; else echo "comfyui: stopped"; fi ;;
+  start)
+    if alive "$MLXROOT/run/mlx-server.pid"; then echo "MLX server is running. Stop it first" >&2; exit 1; fi
+    [ -f "$S/comfy_start_exit" ] && { echo "ComfyUI exited immediately"; exit "$(cat "$S/comfy_start_exit")"; }
+    sleep 60 >/dev/null 2>&1 & echo $! > "$PID"
+    [ -f "$S/comfy_never_ready" ] || touch "$S/comfy_ready"
+    echo "ComfyUI started (pid $(cat "$PID"))" ;;
+  stop)
+    [ -f "$S/comfy_stop_fails" ] && { echo "could not stop ComfyUI" >&2; exit 1; }
+    if alive "$PID"; then kill "$(cat "$PID")"; fi
+    rm -f "$PID" "$S/comfy_ready"; echo "ComfyUI stopped" ;;
+  *) echo usage >&2; exit 2 ;;
+esac

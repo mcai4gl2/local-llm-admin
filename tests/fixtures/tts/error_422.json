@@ -1,0 +1,19 @@
+{
+  "status": 422,
+  "response": {
+    "detail": [
+      {
+        "type": "missing",
+        "loc": [
+          "body",
+          "input"
+        ],
+        "msg": "Field required",
+        "input": {
+          "model": "/Volumes/Models/tts/models/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+          "voice": "Vivian"
+        }
+      }
+    ]
+  }
+}

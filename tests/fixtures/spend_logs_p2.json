@@ -1,0 +1,60 @@
+{
+ "_note": "SYNTHETIC: shaped after the LiteLLM v1.99.1 OpenAPI schema with the totals seen on 2026-09-28. Replace with the real recording in Phase 0.",
+ "data": [
+  {
+   "request_id": "r4",
+   "call_type": "acompletion",
+   "api_key": "hashed",
+   "spend": 0.0,
+   "total_tokens": 505,
+   "prompt_tokens": 500,
+   "completion_tokens": 5,
+   "startTime": "2026-09-27T04:00:00",
+   "endTime": "2026-09-27T04:00:00",
+   "completionStartTime": "2026-09-27T04:00:00",
+   "model": "openai//Volumes/Models/models/active",
+   "model_id": "x",
+   "model_group": "local-qwen",
+   "custom_llm_provider": "openai",
+   "api_base": "http://mac-mini.local:8080/v1",
+   "user": "u2",
+   "metadata": {
+    "user_api_key_alias": null,
+    "status": "failure"
+   },
+   "session_id": "s-2",
+   "status": "failure",
+   "session_total_count": 1
+  },
+  {
+   "request_id": "r5",
+   "call_type": "acompletion",
+   "api_key": "hashed",
+   "spend": 0.0,
+   "total_tokens": 202,
+   "prompt_tokens": 200,
+   "completion_tokens": 2,
+   "startTime": "2026-09-27T05:00:00",
+   "endTime": "2026-09-27T05:00:00",
+   "completionStartTime": "2026-09-27T05:00:00",
+   "model": "/Volumes/Models/models/active",
+   "model_id": "x",
+   "model_group": "local-qwen",
+   "custom_llm_provider": "openai",
+   "api_base": "http://mac-mini.local:8080/v1",
+   "user": "app-user",
+   "metadata": {
+    "user_api_key_alias": "app-e-agent",
+    "status": "success"
+   },
+   "session_id": null,
+   "status": "success",
+   "session_total_count": 1
+  }
+ ],
+ "total": 5,
+ "page": 2,
+ "page_size": 3,
+ "total_pages": 2,
+ "total_is_capped": false
+}

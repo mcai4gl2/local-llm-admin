@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf }}">
+<title>{% block title %}LLM Admin{% endblock %} · Mac mini</title>
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-page="{{ page }}">
+<header class="top">
+  <div class="brand">LLM Admin <span class="muted">Mac mini</span></div>
+  <nav>
+    {% for href, name, label in [("/", "dashboard", "Dashboard"), ("/models", "models", "Models"), ("/outputs", "outputs", "Outputs"), ("/chat", "chat", "Chat"), ("/decision", "decision", "Decision"), ("/tts", "tts", "TTS"), ("/embed", "embed", "Embeddings"), ("/logs", "logs", "Logs"), ("/usage", "usage", "Usage"), ("/performance", "performance", "Performance"), ("/quality", "quality", "Quality"), ("/alerts", "alerts", "Alerts")] if (name != "decision" or decision_enabled) and (name != "tts" or tts_enabled) and (name != "embed" or embed_enabled) %}
+    <a href="{{ href }}" {% if page == name %}aria-current="page"{% endif %}>{{ label }}{% if name == "alerts" %} <span id="nav-alerts" class="count" hidden></span>{% endif %}</a>
+    {% endfor %}
+  </nav>
+  <div class="top-right">
+    <span id="state-badge" class="badge" data-state="unknown">…</span>
+    <label class="theme"><span class="sr-only">Theme</span>
+      <select id="theme-select" aria-label="Theme">
+        <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
+      </select>
+    </label>
+    <form method="post" action="/logout" id="logout-form"><button type="submit" class="link">Log out</button></form>
+  </div>
+</header>
+<main>
+<div class="error" id="conflict-banner" hidden>
+  Both the MLX server and ComfyUI are running and competing for memory. Keep one:
+  <button data-keep="mlx">Keep MLX</button> <button data-keep="comfyui">Keep ComfyUI</button> <button data-keep="off">Stop both</button>
+</div>
+{% block content %}{% endblock %}
+</main>
+<footer class="muted">local-llm-admin {{ version }}</footer>
+<script src="/static/theme.js"></script>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

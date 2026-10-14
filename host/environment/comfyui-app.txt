@@ -1,0 +1,6 @@
+# ComfyUI checkout at /Volumes/Models/comfyui/app (recorded 2026-09-30)
+repo: https://github.com/comfyanonymous/ComfyUI.git
+commit: a7169322485d0049380fb207fa17e9fb3ec40486
+version: 0.37.0
+local changes: none (git status clean)
+custom_nodes: none

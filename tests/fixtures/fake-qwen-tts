@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Fake /Volumes/Models/tts/bin/qwen-tts. Shares $FAKE_MLX_STATE with the other fakes.
+set -u
+S="${FAKE_MLX_STATE:?}"; ROOT="${FAKE_TTS_ROOT:?}"; COMFYROOT="${FAKE_COMFY_ROOT:-/nonexistent}"
+DJROOT="${FAKE_DECISION_ROOT:-/nonexistent}"
+PID="$ROOT/run/qwen-tts.pid"
+printf 'qwen-tts %s\n' "$*" >> "$S/calls.log"
+alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+case "${1:-}" in
+  status)
+    if alive "$PID"; then echo "qwen-tts: running pid $(cat "$PID")"; else echo "qwen-tts: stopped"; fi
+    echo "weights: $(cat "$S/tts_weights" 2>/dev/null || echo complete) (3100000000 bytes)" ;;
+  start)
+    if alive "$PID"; then echo "qwen-tts is already running" >&2; exit 1; fi
+    if alive "$COMFYROOT/run/comfyui.pid"; then echo "ComfyUI is running. Stop it first" >&2; exit 1; fi
+    if alive "$DJROOT/run/openjev.pid"; then echo "The decision sidecar is running. Stop it first" >&2; exit 1; fi
+    [ -f "$S/tts_start_exit" ] && { echo "qwen-tts exited immediately" >&2; exit 1; }
+    (exec -a "python -m mlx_audio.server" sleep 60) >/dev/null 2>&1 &
+    echo $! > "$PID"
+    [ -f "$S/tts_never_ready" ] || touch "$S/tts_ready"
+    echo "qwen-tts started (pid $(cat "$PID"))" ;;
+  stop)
+    [ -f "$S/tts_stop_fails" ] && { echo "could not stop" >&2; exit 1; }
+    if alive "$PID"; then kill "$(cat "$PID")"; fi
+    rm -f "$PID" "$S/tts_ready"; echo "qwen-tts stopped" ;;
+  *) echo usage >&2; exit 2 ;;
+esac

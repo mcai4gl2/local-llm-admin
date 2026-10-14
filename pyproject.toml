@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "local-llm-admin"
+version = "0.1.0"
+description = "Web admin page for the Mac mini MLX LLM server"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "jinja2>=3.1,<4",
+  "httpx>=0.28,<1",
+  "psutil>=6,<8",
+  "pydantic-settings>=2.7,<3",
+  "argon2-cffi>=23.1,<26",
+  "itsdangerous>=2.2,<3",
+  "python-multipart>=0.0.20,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<10",
+  "pytest-cov>=6,<8",
+  "pytest-asyncio>=0.25,<2",
+  "respx>=0.22,<1",
+  "ruff>=0.11,<1",
+  "mypy>=1.13,<2",
+  "types-psutil",
+]
+
+[project.scripts]
+local-llm-admin = "local_llm_admin.__main__:main"
+local-llm-admin-hash = "local_llm_admin.auth:hash_password_cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/local_llm_admin"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["local_llm_admin"]
+branch = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ANN"]
+ignore = ["ANN401", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"

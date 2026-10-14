@@ -1,0 +1,18 @@
+{
+ "apc_enabled": false,
+ "configured_context_limit": null,
+ "continuous_batching_enabled": true,
+ "effective_context_limit": 262144,
+ "loaded_adapter": null,
+ "loaded_context_size": 262144,
+ "loaded_model": "/Volumes/Models/models/active",
+ "loaded_models": {
+  "text_generation": {
+   "adapter": null,
+   "model": "/Volumes/Models/models/active",
+   "model_kind": "text_generation"
+  }
+ },
+ "loaded_tool_parser": "qwen3_coder",
+ "status": "healthy"
+}

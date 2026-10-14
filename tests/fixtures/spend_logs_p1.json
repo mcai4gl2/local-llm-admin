@@ -1,0 +1,85 @@
+{
+ "_note": "SYNTHETIC: shaped after the LiteLLM v1.99.1 OpenAPI schema with the totals seen on 2026-09-28. Replace with the real recording in Phase 0.",
+ "data": [
+  {
+   "request_id": "r1",
+   "call_type": "acompletion",
+   "api_key": "hashed",
+   "spend": 0.0,
+   "total_tokens": 1020,
+   "prompt_tokens": 1000,
+   "completion_tokens": 20,
+   "startTime": "2026-09-27T02:00:00",
+   "endTime": "2026-09-27T02:00:00",
+   "completionStartTime": "2026-09-27T02:00:00",
+   "model": "/Volumes/Models/models/active",
+   "model_id": "x",
+   "model_group": "local-qwen",
+   "custom_llm_provider": "openai",
+   "api_base": "http://mac-mini.local:8080/v1",
+   "user": "app-user",
+   "metadata": {
+    "user_api_key_alias": "app-d-key",
+    "status": "success"
+   },
+   "session_id": "s-1",
+   "status": "success",
+   "session_total_count": 1
+  },
+  {
+   "request_id": "r2",
+   "call_type": "acompletion",
+   "api_key": "hashed",
+   "spend": 0.0,
+   "total_tokens": 1530,
+   "prompt_tokens": 1500,
+   "completion_tokens": 30,
+   "startTime": "2026-09-27T02:05:00",
+   "endTime": "2026-09-27T02:05:00",
+   "completionStartTime": "2026-09-27T02:05:00",
+   "model": "/Volumes/Models/models/active",
+   "model_id": "x",
+   "model_group": "local-qwen",
+   "custom_llm_provider": "openai",
+   "api_base": "http://mac-mini.local:8080/v1",
+   "user": "app-user",
+   "metadata": {
+    "user_api_key_alias": "app-d-key",
+    "status": "success"
+   },
+   "session_id": "s-1",
+   "status": "success",
+   "session_total_count": 1
+  },
+  {
+   "request_id": "r3",
+   "call_type": "acompletion",
+   "api_key": "hashed",
+   "spend": 0.0,
+   "total_tokens": 100998,
+   "prompt_tokens": 99999,
+   "completion_tokens": 999,
+   "startTime": "2026-09-27T03:00:00",
+   "endTime": "2026-09-27T03:00:00",
+   "completionStartTime": "2026-09-27T03:00:00",
+   "model": "gpt-5",
+   "model_id": "x",
+   "model_group": "gpt",
+   "custom_llm_provider": "openai",
+   "api_base": "http://mac-mini.local:8080/v1",
+   "user": "app-user",
+   "metadata": {
+    "user_api_key_alias": "app-d-key",
+    "status": "success"
+   },
+   "session_id": "s-9",
+   "status": "success",
+   "session_total_count": 1
+  }
+ ],
+ "total": 5,
+ "page": 1,
+ "page_size": 3,
+ "total_pages": 2,
+ "total_is_capped": false
+}

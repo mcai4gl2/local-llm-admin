@@ -1,0 +1,5 @@
+repo https://github.com/razorback16/openjev
+commit dcd20947b5ddad5be4a8f5aed6aa6dd245653823
+version 0.5.0
+installed 2026-10-01 into /Volumes/Models/decision/venv (uv, cpython 3.12.14) with extras [mlx]
+weights mlx-community/diffusiongemma-26B-A4B-it-4bit -> /Volumes/Models/decision/models/diffusiongemma-26B-A4B-it-4bit (16,543,055,405 bytes, 4 shards, matches index)

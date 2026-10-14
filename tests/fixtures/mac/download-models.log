@@ -1,0 +1,55 @@
+===== 2026-09-28 22:15:01 start =====
+GET mlx-community/Qwen3.8-27B-8bit/.gitattributes
+GET mlx-community/gemma-4-26B-A4B-it-4bit/.gitattributes
+  % Total    % Received % Xferd  Average Speed   Time      % Total Time     % Received % Xferd     Time Averag Current
+                                 Dloe Speed  ad  Upload   Total   Spent    Left  Speed
+ Time    T
+  ime     Time  Current
+             0     0    0     0    0     0                 0              0 - Dload-:--:-- --:--:--  Uplo --:--:--  ad   T   0otal   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100   101  100   101    0     0    366      0 --:--:-- --:--:-- --:--:--   367
+
+100   270  100   270    0     0    977      0 --:--:-- --:--:-- --:--:--   978
+
+100  1570  100  1570    0     0   5271      0 --:--:-- --:--:-- --:--:--  5271
+GET mlx-community/Qwen3.8-27B-8bit/README.md
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100   284  100   284    0     0    562      0 --:--:-- --:--:-- --:--:--   562
+
+100  1570  100  1570    0     0   3015      0 --:--:-- --:--:-- --:--:--  3015
+GET mlx-community/gemma-4-26B-A4B-it-4bit/README.md
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100   260  100   260    0     0    982      0 --:--:-- --:--:-- --:--:--   984
+
+100   632  100   632    0     0   2258      0 --:--:-- --:--:-- --:--:--  2258
+GET mlx-community/Qwen3.8-27B-8bit/chat_template.jinja
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100    96  100    96    0     0    383      0 --:--:-- --:--:-- --:--:--   384
+
+100   280  100   280    0     0    987      0 --:--:-- --:--:-- --:--:--   985
+100   280  100   280    0     0    980      0 --:--:-- --:--:-- --:--:--   979
+
+100  8952  100  8952    0     0  28920      0 --:--:-- --:--:-- --:--:-- 28920
+GET mlx-community/Qwen3.8-27B-8bit/config.json
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+            
+ 0:04:50  0:00:08 10.4M
+ 97 2713M   97 2651M    0     0  9325k      0  0:04:57  0:04:51  0:00:06 10.2M
+ 98 2713M   98 2661M    0     0  9328k      0  0:04:57  0:04:52  0:00:05 10.1M
+ 98 2713M   98 2672M    0     0  9335k      0  0:04:57  0:04:53  0:00:04 10.2M
+ 98 2713M   98 2681M    0     0  9336k      0  0:04:57  0:04:54  0:00:03  9.9M
+ 99 2713M   99 2691M    0     0  9338k      0  0:04:57  0:04:55  0:00:02  9.9M
+ 99 2713M   99 2702M    0     0  9345k      0  0:04:57  0:04:56  0:00:01 10.2M
+ 99 2713M   99 2712M    0     0  9349k      0  0:04:57  0:04:57 --:--:-- 10.2M
+100 2713M  100 2713M    0     0  9351k      0  0:04:57  0:04:57 --:--:-- 10.2M
+===== 2026-09-29 00:00:05 done fail=0 =====

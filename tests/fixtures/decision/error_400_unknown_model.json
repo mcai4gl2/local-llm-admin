@@ -1,0 +1,28 @@
+{
+  "request": {
+    "state": {
+      "ticket": "My card was charged twice for the October invoice and the app now shows a sync error when I open billing settings. Please refund the duplicate charge.",
+      "customer_tier": "pro",
+      "previous_tickets": 2
+    },
+    "model": "nope",
+    "questions": {
+      "is_billing": {
+        "type": "noul",
+        "instructions": "Is this mainly a billing issue?"
+      }
+    }
+  },
+  "status": 400,
+  "headers": {
+    "content-type": "application/json",
+    "server-timing": "model;dur=0.0, server;dur=0.3, total;dur=0.3",
+    "x-request-id": "req_d90e24095fcdda297a7721e199afcc53"
+  },
+  "response": {
+    "detail": {
+      "error_type": "api_usage_error",
+      "message": "Unknown model: nope"
+    }
+  }
+}

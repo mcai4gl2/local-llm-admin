@@ -1,0 +1,32 @@
+# pip/pipx install pre-commit, then: pre-commit install
+# The denylist hook reads ~/.config/local-llm-admin/public-denylist.txt and passes when it
+# is absent; CI runs the same check with the PUBLIC_DENYLIST secret.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.3
+    hooks:
+      - id: gitleaks
+  - repo: local
+    hooks:
+      # the project's own ruff (uv.lock), so the hook and CI never disagree
+      - id: ruff
+        name: ruff (uv run)
+        language: system
+        entry: uv run ruff check src tests scripts
+        pass_filenames: false
+        types: [python]
+      - id: public-denylist
+        name: public denylist (scripts/check_public.py)
+        language: system
+        entry: bash -c 'python3 scripts/check_public.py --optional --patterns-file "$HOME/.config/local-llm-admin/public-denylist.txt" "$@"' --
+        types: [text]

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <h2>Open alerts</h2>
+    <div class="actions"><span class="muted" id="alert-summary"></span><button id="ack-all">Acknowledge all</button></div>
+  </div>
+  <p class="muted" id="alert-empty" hidden>No open alerts.</p>
+  <ul class="alerts" id="alert-list"></ul>
+</section>
+<section class="card">
+  <div class="card-head"><h2>Diagnostics</h2><button id="diag-refresh">Check again</button></div>
+  <ul class="checks" id="diag-list"></ul>
+</section>
+<section class="card">
+  <div class="card-head"><h2>History</h2><span class="muted">resolved alerts and events, kept 90 days</span></div>
+  <ul class="alerts" id="history-list"></ul>
+  <div class="pager"><button id="history-more" hidden>Older</button></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/alerts.js"></script>{% endblock %}
