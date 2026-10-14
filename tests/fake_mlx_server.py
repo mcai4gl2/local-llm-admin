@@ -1,6 +1,6 @@
 """A fake mlx_vlm.server (httpx transport): health, metrics, settings, cache stats and
 chat completions, streaming or not. Shapes follow tests/fixtures/quality/*.json and
-plans/20260930_m2-capabilities.md."""
+the M2 capability survey (pre-split design notes, private)."""
 
 from __future__ import annotations
 

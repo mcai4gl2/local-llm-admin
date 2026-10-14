@@ -1,7 +1,7 @@
 # TTS sidecar (Qwen3-TTS on mlx-audio)
 
 Text to speech for LAN clients and the admin TTS page. Plan:
-`plans/20261003_sidecar-slot-tts-plan.md`.
+pre-split design notes (private).
 
 | Path | What |
 |---|---|

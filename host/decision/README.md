@@ -2,8 +2,8 @@
 
 Typed questions about a state (yes/no `noul`, `choice`, `score`), answered with
 probabilities from one read-only denoising pass of DiffusionGemma 26B-A4B. No text
-is generated. Plan and measurements: `plans/20261001_decision-sidecar-plan.md`
-in the repo.
+is generated. Plan and measurements: pre-split design notes
+(private).
 
 | Path | What |
 |---|---|

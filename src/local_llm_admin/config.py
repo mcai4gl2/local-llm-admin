@@ -104,7 +104,7 @@ class Settings(BaseSettings):
 
     # TTS sidecar (M7): Qwen3-TTS on mlx-audio, driven only through tts/bin/qwen-tts and
     # its loopback API; off unless TTS_ENABLED=true. Values marked (Phase 0) come from the
-    # survey record in plans/20261003_sidecar-slot-tts-plan.md (mlx-audio 0.5.7, 2026-10-04).
+    # M7 survey record (pre-split design notes; mlx-audio 0.5.7, 2026-10-04).
     tts_enabled: bool = False
     tts_root: Path = Path("/Volumes/Models/tts")
     tts_bin: Path | None = None
@@ -136,8 +136,8 @@ class Settings(BaseSettings):
 
     # Embedding service (M8): Qwen3-Embedding-4B + Qwen3-Reranker-0.6B in their own MLX-VLM
     # process, driven only through embed/bin/qwen-embed and its loopback API. Always on (not
-    # a slot sidecar); off unless EMBED_ENABLED=true. (Phase 0) values come from the survey
-    # record in plans/20261010_embed-service-plan.md.
+    # a slot sidecar); off unless EMBED_ENABLED=true. (Phase 0) values come from the M8
+    # survey record (pre-split design notes).
     embed_enabled: bool = False
     embed_root: Path = Path("/Volumes/Models/embed")
     embed_bin: Path | None = None

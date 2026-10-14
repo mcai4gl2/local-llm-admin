@@ -1,7 +1,7 @@
 """M2 measurement contract: benchmark cases, one measured request, summaries, comparison.
 
-Token counts and rates come only from the server's ``usage``/``timings`` (see
-``plans/20260930_m2-capabilities.md``). A stream without them yields null counts and
+Token counts and rates come only from the server's ``usage``/``timings`` (M2
+capability survey, pre-split design notes). A stream without them yields null counts and
 rates: SSE chunks are never counted as tokens. Every numeric field of ``Measurement``
 has an entry in ``METRICS`` saying its unit, where it comes from and what null means.
 """

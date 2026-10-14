@@ -1,7 +1,7 @@
 # Embedding service (Qwen3-Embedding + Qwen3-Reranker on MLX-VLM)
 
 Always-on embeddings and rerank for LAN clients (Cortex first) and the admin `/embed` page.
-Plan: `plans/20261010_embed-service-plan.md`.
+Plan: pre-split design notes (private).
 
 | Path | What |
 |---|---|

@@ -293,7 +293,7 @@ local-llm-admin/
 3. ✅ 2026-09-29 **Model control:** switch/start/stop, jobs, switch history with backfill.
 4. ✅ 2026-09-29 **Chat window.**
 5. ⏳ **Deploy to the Mac** *(scripts written in `ops/`, not run)* (LaunchAgent), smoke tests, update `LOCAL_LLM_SETUP.md` and `HOMELAB_SETUP.md`, update Cortex.
-7. ✅ 2026-09-29 **ComfyUI support:** global engine control (MLX / ComfyUI / Off), ComfyUI card, weights and log, `mlx-model` :8188 guard. Spec [20260929_comfyui-support.md](20260929_comfyui-support.md), plan [20260929_comfyui-support-plan.md](20260929_comfyui-support-plan.md). Verified live on the Mac 2026-09-29.
+7. ✅ 2026-09-29 **ComfyUI support:** global engine control (MLX / ComfyUI / Off), ComfyUI card, weights and log, `mlx-model` :8188 guard. Spec and plan: pre-split design notes (private). Verified live on the Mac 2026-09-29.
 6. **Later:** auto-start the last model, optional log rotation proposal for `mlx-server.log`. (Registering downloaded models was pulled forward on 2026-09-29, see §5.3.)
 
 ## 11. Decisions

@@ -1,6 +1,6 @@
 # local-llm-admin
 
-A self-hosted web admin for an Apple-silicon Mac mini that serves local LLMs with [MLX](https://github.com/ml-explore/mlx) (and ComfyUI, an optional decision/TTS sidecar slot and an embedding service). It covers: status, system metrics, model switching, a test chat, logs, and local-model token usage from LiteLLM. The design is in [docs/DESIGN.md](docs/DESIGN.md). Plans written before the project left its original monorepo are kept privately; references to `plans/2026…` files name those records. New plans go in [plans/](plans/README.md).
+A self-hosted web admin for an Apple-silicon Mac mini that serves local LLMs with [MLX](https://github.com/ml-explore/mlx) (and ComfyUI, an optional decision/TTS sidecar slot and an embedding service). It covers: status, system metrics, model switching, a test chat, logs, and local-model token usage from LiteLLM. The design is in [docs/DESIGN.md](docs/DESIGN.md). Design notes written before this repository existed are not published (cited below as "pre-split design notes"); [docs/DESIGN.md](docs/DESIGN.md) is the design reference. New plans go in [plans/](plans/README.md).
 
 It assumes one Mac with the MLX tooling under `/Volumes/Models` (see [host/](host/README.md)), a LaunchAgent for the admin, and optionally a [LiteLLM](https://github.com/BerriAI/litellm) gateway for usage reports. Addresses in this repository are placeholders: `mac-mini.local` for the Mac, `192.0.2.x` (RFC 5737) for other LAN hosts.
 
@@ -95,7 +95,7 @@ Built on the routes of the installed ComfyUI 0.37.0 (commit `a716932`, see `host
 
 ## Decision sidecar (M6)
 
-A Jev-style decision model next to the chat model: OpenJev serving DiffusionGemma 26B-A4B (4-bit, MLX) answers typed questions about a state (`noul` yes/no, `choice`, `score`) with probabilities, from one read-only denoising pass. Off unless `DECISION_ENABLED=true`. Plan and measurements: `plans/20261001_decision-sidecar-plan.md`.
+A Jev-style decision model next to the chat model: OpenJev serving DiffusionGemma 26B-A4B (4-bit, MLX) answers typed questions about a state (`noul` yes/no, `choice`, `score`) with probabilities, from one read-only denoising pass. Off unless `DECISION_ENABLED=true`. Plan and measurements: pre-split design notes (private).
 
 - **Host**: `/Volumes/Models/decision/bin/openjev {status,start,stop}` (versioned in `host/decision/`). Loopback `:8081` only, with `OPENJEV_API_KEY` from `decision/etc/openjev.env` (mode 600; set the same value as `DECISION_API_KEY` for the admin). It refuses to start next to ComfyUI, and ComfyUI refuses to start next to it.
 - **Models page card**: start/stop as jobs after a memory check (RAM − `DECISION_HEADROOM_GB`, or the GPU wired limit when set; the MLX model's weights + full-attention KV at its `max_kv_size` or full context; `DECISION_FOOTPRINT_GB` for the sidecar; memory pressure must be normal) and only next to `DECISION_ALLOWED_MLX`. Switching to ComfyUI stops the sidecar first; switching MLX to a model not allowed needs confirmation. A sidecar that dies raises `decision_down` and is never restarted automatically. Quality runs refuse while it runs.
@@ -222,7 +222,7 @@ if route["confidence"] < 0.5:
 
 ## Sidecar slot and TTS (M7)
 
-One small model at a time runs next to the chat model: the **sidecar slot**. Today it holds OpenJev (the M6 decision sidecar) or **Qwen3-TTS** (`Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit` on mlx-audio 0.5.7). TTS is off unless `TTS_ENABLED=true`. Plan, Phase 0 measurements and decisions: `plans/20261003_sidecar-slot-tts-plan.md` (spec `plans/20261003_sidecar-slot-tts-design.md`).
+One small model at a time runs next to the chat model: the **sidecar slot**. Today it holds OpenJev (the M6 decision sidecar) or **Qwen3-TTS** (`Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit` on mlx-audio 0.5.7). TTS is off unless `TTS_ENABLED=true`. Plan, Phase 0 measurements and decisions: pre-split design notes (private).
 
 - **Rules**: at most one sidecar runs, never next to ComfyUI, and only next to an MLX model on that sidecar's allow-list (`DECISION_ALLOWED_MLX`, `TTS_ALLOWED_MLX`). Starting one while the other runs is a 409 naming it; confirming turns it into one job that stops the old one, checks memory for the new one alone and starts it. If the new one fails, the old one stays stopped (never restarted), the intent is `stopped`, and no `*_down` alert fires. If two run at once (a start by hand on the Mac), every start, swap and engine switch is refused until one is stopped by hand; diagnostics show `sidecar_conflict`.
 - **Host**: `/Volumes/Models/tts/bin/qwen-tts {status,start,stop}` (versioned in `host/tts/`), loopback `:8083` only, no key (mlx-audio has none). OpenJev, ComfyUI and qwen-tts each refuse to start next to the others.
@@ -296,7 +296,7 @@ An **always-on embedding and rerank service** for LAN clients, Cortex first:
 - **Qwen3-Embedding-4B**, 8-bit, quantized locally from `Qwen/Qwen3-Embedding-4B`; 2560 dimensions, last-token pooling, unit-norm.
 - **Qwen3-Reranker-0.6B**.
 
-One MLX-VLM 0.7.3 process on loopback `:8084` serves both. It is off unless `EMBED_ENABLED=true`. Spec, plan, Phase 0 record and deploy record: `plans/20261010_embed-service-design.md`, `plans/20261010_embed-service-plan.md`, `plans/20261010_embed-service-deploy-plan.md`.
+One MLX-VLM 0.7.3 process on loopback `:8084` serves both. It is off unless `EMBED_ENABLED=true`. Spec, plan, Phase 0 record and deploy record: pre-split design notes (private).
 
 - **Not a sidecar.** It runs next to the chat model *and* whichever sidecar holds the slot (TTS or OpenJev). Slot swaps never touch it.
 - **ComfyUI:** switching the engine to ComfyUI stops it first, and its intent stays `running`. Switching back restores it in the same job (start, ready, warm up); a failed restore doesn't fail the switch. `qwen-embed` and `comfyui` each refuse to start next to the other.
