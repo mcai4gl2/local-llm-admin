@@ -14,6 +14,7 @@ import base64
 import json
 import struct
 import zlib
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,6 +23,11 @@ import httpx
 from .chat import ACTIVE_MODEL_ID
 
 MAX_DETAIL = 300
+# the model id every case sends: MLX's full active path, or the id another engine serves
+_MODEL_ID: ContextVar[str] = ContextVar("compat_model_id", default=ACTIVE_MODEL_ID)
+# Strata reads thinking only from chat_template_kwargs / reasoning_effort, never a top-level
+# enable_thinking (MLX's spelling); without it every case thinks at xhigh into max_tokens
+_TEMPLATE_KWARGS: ContextVar[bool] = ContextVar("compat_template_kwargs", default=False)
 CASES = (
     "plain",
     "stream",
@@ -115,8 +121,8 @@ def red_png(size: int = 8) -> bytes:
 
 
 def _base(messages: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
-    return {
-        "model": ACTIVE_MODEL_ID,
+    payload = {
+        "model": _MODEL_ID.get(),
         "messages": messages,
         "max_tokens": 256,
         "temperature": 0,
@@ -124,6 +130,10 @@ def _base(messages: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
         "enable_thinking": False,
         **extra,
     }
+    if _TEMPLATE_KWARGS.get() and "reasoning_effort" not in payload:
+        # an "off" next to reasoning_effort would override the effort under test
+        payload["chat_template_kwargs"] = {"enable_thinking": payload["enable_thinking"]}
+    return payload
 
 
 def _user(text: str) -> list[dict[str, Any]]:
@@ -260,7 +270,7 @@ async def _json(http: httpx.AsyncClient, key: str, info: dict[str, Any], d: floa
 
 
 async def _option(http: httpx.AsyncClient, key: str, d: float, **extra: Any) -> CompatResult:
-    msg = await _post(http, key, {**_base(_user("What is 2 + 2?")), **extra}, d)
+    msg = await _post(http, key, _base(_user("What is 2 + 2?"), **extra), d)
     if isinstance(msg, CompatResult):
         return msg
     reasoning = msg.get("reasoning_content") or msg.get("reasoning")
@@ -325,6 +335,14 @@ _RUNNERS = {
 async def run_case(
     http: httpx.AsyncClient, key: str, info: dict[str, Any], *, deadline_s: float
 ) -> CompatResult:
-    """``info``: ``tool_parser`` (from /health) and ``vision`` (weights have a
-    ``vision_config``). Cancellation propagates."""
-    return await _RUNNERS[key](http, key, info, deadline_s)
+    """``info``: ``tool_parser`` (from /health), ``vision`` (weights have a
+    ``vision_config``), optionally ``model_id`` (default: MLX's active path) and
+    ``engine`` (``strata`` sends thinking in ``chat_template_kwargs``).
+    Cancellation propagates."""
+    token = _MODEL_ID.set(info.get("model_id") or ACTIVE_MODEL_ID)
+    kw_token = _TEMPLATE_KWARGS.set(info.get("engine") == "strata")
+    try:
+        return await _RUNNERS[key](http, key, info, deadline_s)
+    finally:
+        _TEMPLATE_KWARGS.reset(kw_token)
+        _MODEL_ID.reset(token)

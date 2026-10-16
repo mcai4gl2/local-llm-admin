@@ -114,8 +114,37 @@ list_models() {
   done < "$REGISTRY"
 }
 
+# The Strata engine (strata/bin/strata) serves on this same :8080 when it is the engine, so
+# LiteLLM's one route reaches whichever engine runs. Its server is told apart by its command line.
+is_strata() {
+  [[ "$(ps -o command= -p "$1" 2>/dev/null)" == *"serve/server.py --engine strata"* ]]
+}
+
+# Strata's server pid, from its pid file or the :8080 listener; never a reused pid
+strata_pid() {
+  local pid=""
+  if [[ -f "$MODELS_ROOT/strata/run/strata.pid" ]]; then
+    pid="$(<"$MODELS_ROOT/strata/run/strata.pid")"
+    pid="${pid//$'\n'/}"
+    if [[ "$pid" == <-> ]] && is_strata "$pid"; then
+      echo "$pid"
+      return 0
+    fi
+  fi
+  for pid in $(lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null); do
+    if is_strata "$pid"; then
+      echo "$pid"
+      return 0
+    fi
+  done
+  return 1
+}
+
 listeners() {
-  lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null || true
+  local pid
+  for pid in $(lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null); do
+    is_strata "$pid" || echo "$pid"
+  done
   lsof -nP -tiTCP:7860 -sTCP:LISTEN 2>/dev/null || true
 }
 
@@ -152,7 +181,7 @@ stop_server() {
     sleep 1
   fi
   rm -f "$PID_FILE"
-  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1; then
+  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 && ! strata_pid >/dev/null; then
     echo "Port 8080 is still in use." >&2
     exit 1
   fi
@@ -211,9 +240,18 @@ profile_args() {  # name; sets PROFILE_FP and PROFILE_ARGS
   echo "mlx-model: profile for $1 not applied: ${why:-helper failed}" >> "$LOG_FILE"
 }
 
+# The Strata engine holds most of memory and MLX's port: never start beside it.
+strata_guard() {
+  if strata_pid >/dev/null; then
+    echo "The Strata engine is running. Stop it first: /Volumes/Models/strata/bin/strata stop" >&2
+    exit 1
+  fi
+}
+
 start_server() {
   local name="$1" model_dir
   model_dir="$(lookup "$name")"
+  strata_guard
   if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:7860 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:8188 -sTCP:LISTEN >/dev/null 2>&1; then
     echo "An MLX or ComfyUI process is already running. Use switch or stop first (ComfyUI: /Volumes/Models/comfyui/bin/comfyui stop)." >&2
     exit 1
@@ -913,6 +951,7 @@ switch_model() {
 select_model() {
   local name="$1" model_dir
   model_dir="$(lookup "$name")"
+  strata_guard
   if [[ -n "$(mlx_pids | awk 'NF')" ]] || lsof -nP -iTCP:8188 -sTCP:LISTEN >/dev/null 2>&1; then
     echo "An MLX or ComfyUI process is running; select only works while stopped. Use switch." >&2
     exit 1
@@ -933,6 +972,10 @@ cmd_status() {
   fi
   if [[ -f "$STATE_FILE" ]]; then
     cat "$STATE_FILE"
+  fi
+  if strata_pid >/dev/null; then
+    echo "health: not reachable on $PORT (Strata serves there; /Volumes/Models/strata/bin/strata status)"
+    return 0
   fi
   health="$(curl -sf --max-time 2 "http://127.0.0.1:$PORT/health" 2>/dev/null || true)"
   if [[ -n "$health" ]]; then

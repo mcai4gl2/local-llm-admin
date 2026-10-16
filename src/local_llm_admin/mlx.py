@@ -409,13 +409,23 @@ class MlxClient:
     def engine_running(self) -> bool:
         """MLX owns the GPU if its pid is alive, :8080 is listening, or Chat UI mode
         (chat-qwen.sh on :7860, a loaded model with the API down) is up. CLI-independent;
-        ``mlx-model stop`` stops all three."""
+        ``mlx-model stop`` stops all three. Strata serves on the same port when it is the
+        engine: while its pid file names a live process, the port is Strata's."""
         pid = self.pid_from_file()
         if pid is not None and psutil.pid_exists(pid):
             return True
-        return self.port_listening(self.settings.mlx_port) or self.port_listening(
-            self.settings.chat_ui_port
-        )
+        if self.port_listening(self.settings.chat_ui_port):
+            return True
+        if self.settings.strata_port == self.settings.mlx_port and self.strata_pid_alive():
+            return False
+        return self.port_listening(self.settings.mlx_port)
+
+    def strata_pid_alive(self) -> bool:
+        try:
+            pid = int((self.settings.strata_root / "run" / "strata.pid").read_text().strip())
+        except (OSError, ValueError):
+            return False
+        return psutil.pid_exists(pid)
 
     def lock_exists(self) -> bool:
         # mlx-model takes the lock with `mkdir run/mlx.lock`
@@ -494,7 +504,9 @@ class MlxClient:
             data = resp.json()
         except (httpx.HTTPError, ValueError):
             return None
-        return data if isinstance(data, dict) else None
+        if not isinstance(data, dict) or data.get("service") == "strata":
+            return None  # Strata on the shared port is not the MLX server
+        return data
 
     @staticmethod
     def port_listening(port: int, host: str = "127.0.0.1") -> bool:

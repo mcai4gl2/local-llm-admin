@@ -59,6 +59,9 @@ CODE = [
     "tts/README.md",
     "embed/bin/qwen-embed",
     "embed/README.md",
+    "strata/bin/strata",
+    "strata/README.md",
+    "strata/etc/strata.env.example",
 ]
 
 
@@ -368,6 +371,7 @@ def test_manifest_lists_every_versioned_host_file():
                 HOST / "decision/README.md",
                 HOST / "tts/README.md",
                 HOST / "embed/README.md",
+                HOST / "strata/README.md",
             )
         )
     }

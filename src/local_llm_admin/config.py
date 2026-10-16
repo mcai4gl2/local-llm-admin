@@ -9,7 +9,11 @@ from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Entries ending in "/" are prefixes: every weights dir behind the local route counts.
-DEFAULT_LOCAL_MODELS = "openai//Volumes/Models/models/"
+# The other entries are the model ids Strata serves for its two installed packs (Q2_0, IQ3_XXS).
+DEFAULT_LOCAL_MODELS = (
+    "openai//Volumes/Models/models/,openai/qwen3.8-flash-next-q2_0,"
+    "openai/qwen3.8-flash-next-iq3_xxs"
+)
 
 
 class Settings(BaseSettings):
@@ -37,6 +41,17 @@ class Settings(BaseSettings):
     comfyui_output_cache_s: Annotated[float, Field(ge=0.0, le=600.0)] = 15.0
     comfyui_history_items: Annotated[int, Field(ge=0, le=1000)] = 100
     engine_stop_timeout_s: float = 30.0
+
+    # Strata (Qwen3.8-Flash-Next on Metal; driven only through its wrapper and HTTP API)
+    strata_enabled: bool = False
+    strata_root: Path = Path("/Volumes/Models/strata")
+    strata_bin: Path | None = None
+    # MLX's port: LiteLLM's one route reaches whichever engine runs
+    strata_api_base: str = "http://127.0.0.1:8080"
+    strata_port: int = 8080
+    strata_ready_timeout_s: float = 300.0  # a cold start reads ~38-47 GB
+    # STRATA_API_KEY from strata/etc/strata.env; empty when Strata runs without a key, like MLX
+    strata_api_key: SecretStr = SecretStr("")
 
     # Admin
     admin_password_hash: SecretStr = SecretStr("")
@@ -184,6 +199,10 @@ class Settings(BaseSettings):
     @property
     def comfyui_path(self) -> Path:
         return self.comfyui_bin or self.comfyui_root / "bin" / "comfyui"
+
+    @property
+    def strata_path(self) -> Path:
+        return self.strata_bin or self.strata_root / "bin" / "strata"
 
     @property
     def decision_path(self) -> Path:

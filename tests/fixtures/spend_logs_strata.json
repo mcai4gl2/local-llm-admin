@@ -1,0 +1,31 @@
+{
+  "_note": "Synthetic row shaped like spend_logs_recorded.json for the Strata route (LiteLLM upstream openai/qwen3.8-flash-next-q2_0). Replace with a scrubbed recorded row once the route is live (Strata Phase 6).",
+  "data": [
+    {
+      "request_id": "req-strata-0001",
+      "call_type": "acompletion",
+      "startTime": "2026-10-16T01:10:00.000+00:00",
+      "endTime": "2026-10-16T01:10:09.000+00:00",
+      "model": "openai/qwen3.8-flash-next-q2_0",
+      "model_group": "local-strata",
+      "custom_llm_provider": "openai",
+      "user": "app-a",
+      "session_id": "session-strata-001",
+      "status": "success",
+      "prompt_tokens": 1200,
+      "completion_tokens": 300,
+      "total_tokens": 1500,
+      "spend": 0.0,
+      "metadata": {
+        "user_api_key_alias": "app-a-key",
+        "user_api_key_user_id": "app-a",
+        "status": "success"
+      }
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 100,
+  "total_pages": 1,
+  "total_is_capped": false
+}

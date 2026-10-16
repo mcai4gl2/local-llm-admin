@@ -1,11 +1,14 @@
-"""Engines that own the Mac's GPU and memory: the MLX LLM server or ComfyUI, never both.
+"""Engines that own the Mac's GPU and memory: the MLX LLM server, ComfyUI or Strata, one
+at a time.
 
-ComfyUI is driven only through ``comfyui/bin/comfyui`` and its HTTP API; the admin never
-imports it or uses its venv.
+ComfyUI and Strata are driven only through their host wrappers (``comfyui/bin/comfyui``,
+``strata/bin/strata``) and their HTTP APIs; the admin never imports them or uses their venvs.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 import re
 import time
@@ -24,9 +27,14 @@ from .mlx import _RECENT_WRITE_S, MlxClient, ProcessStatus, validate_name
 if TYPE_CHECKING:
     from .sidecars import SidecarSpec
 
-EngineKind = Literal["mlx", "comfyui", "off"]
+EngineKind = Literal["mlx", "comfyui", "strata", "off"]
+EXCLUSIVE: tuple[EngineKind, ...] = ("comfyui", "strata")  # no sidecar or service beside them
 _COMFY_STATUS_RE = re.compile(r"^comfyui:\s*(running|stopped)(?:\s+pid\s+(\d+))?", re.M)
 _COMFY_ACTIONS = ("start", "stop", "status")
+_STRATA_ACTIONS = ("start", "stop", "status")
+# Strata's packs, in the order the engine control lists them (bin/strata accepts the same)
+STRATA_PACKS = ("Q2_0", "IQ2_XS", "IQ3_XXS", "IQ3_S")
+STRATA_MODEL_PREFIX = "qwen3.8-flash-next-"
 
 
 @dataclass(frozen=True)
@@ -36,12 +44,22 @@ class Target:
 
 
 def parse_target(raw: str) -> Target:
-    """``off`` | ``comfyui`` | ``mlx:<registered name>``."""
-    if raw in ("off", "comfyui"):
+    """``off`` | ``comfyui`` | ``strata`` | ``strata:<pack>`` | ``mlx:<registered name>``."""
+    if raw in ("off", "comfyui", "strata"):
         return Target(raw)  # type: ignore[arg-type]
     if raw.startswith("mlx:"):
         return Target("mlx", validate_name(raw[4:]))
+    if raw.startswith("strata:") and raw[7:] in STRATA_PACKS:
+        return Target("strata", raw[7:])
     raise ValueError(f"unknown engine target: {raw!r}")
+
+
+def strata_pack_of(model: str | None) -> str | None:
+    """The pack of a model id Strata serves (``qwen3.8-flash-next-iq3_xxs`` → ``IQ3_XXS``)."""
+    if not model or not model.startswith(STRATA_MODEL_PREFIX):
+        return None
+    pack = model[len(STRATA_MODEL_PREFIX) :].upper()
+    return pack if pack in STRATA_PACKS else None
 
 
 def parse_comfy_status(text: str) -> ProcessStatus:
@@ -76,20 +94,26 @@ def queue_counts(d: dict[str, Any]) -> tuple[int, int]:
     )
 
 
-def resolve_active(mlx_running: bool, comfy_running: bool) -> str:
-    if mlx_running and comfy_running:
+def resolve_active(mlx_running: bool, comfy_running: bool, strata_running: bool = False) -> str:
+    """``mlx`` | ``comfyui`` | ``strata`` | ``none``, or ``conflict`` when more than one runs."""
+    running = [
+        k for k, up in (("mlx", mlx_running), ("comfyui", comfy_running), ("strata", strata_running)) if up
+    ]
+    if len(running) > 1:
         return "conflict"
-    return "mlx" if mlx_running else "comfyui" if comfy_running else "none"
+    return running[0] if running else "none"
 
 
-def badge_state(mlx_state: str, active: str, comfy_ready: bool) -> str:
-    """Header badge: MLX states, plus comfyui / comfyui-starting / conflict."""
+def badge_state(mlx_state: str, active: str, comfy_ready: bool, strata_ready: bool = False) -> str:
+    """Header badge: MLX states, plus comfyui / strata (and their -starting) / conflict."""
     if mlx_state in ("switching", "drive-missing"):
         return mlx_state
     if active == "conflict":
         return "conflict"
     if active == "comfyui":
         return "comfyui" if comfy_ready else "comfyui-starting"
+    if active == "strata":
+        return "strata" if strata_ready else "strata-starting"
     return mlx_state
 
 
@@ -287,9 +311,145 @@ class ComfyClient:
         return output_summary(self.settings.comfyui_root / "output")
 
 
+def _num(d: dict[str, Any], key: str) -> float | None:
+    v = d.get(key)
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def parse_strata_metrics(d: dict[str, Any]) -> dict[str, Any]:
+    """Strata's ``GET /metrics`` JSON, reduced to what the admin shows. Every field is read
+    with ``dict.get``: a field a Strata version drops hides its tile instead of failing."""
+    raw_live, raw_totals, raw_engine = d.get("live"), d.get("totals"), d.get("engine")
+    live: dict[str, Any] = raw_live if isinstance(raw_live, dict) else {}
+    totals: dict[str, Any] = raw_totals if isinstance(raw_totals, dict) else {}
+    engine: dict[str, Any] = raw_engine if isinstance(raw_engine, dict) else {}
+    prompt, reused = _num(totals, "prompt_tokens"), _num(totals, "reused") or 0.0
+    read = prompt - reused if prompt is not None else None  # what was read, as llama.cpp counts it
+    out = _num(totals, "output_tokens")
+    prompt_ms, decode_ms = _num(totals, "prompt_ms"), _num(totals, "decode_ms")
+    requests = _num(totals, "requests")
+    state = live.get("state")
+    return {
+        "model": engine.get("model"),
+        "max_context": _num(engine, "max_context"),
+        "state": state if isinstance(state, str) else None,
+        "queued": int(_num(live, "queued") or 0),
+        "tok_s": _num(live, "tok_s"),
+        "prefill_tok_s": _num(live, "prefill_tok_s_mean"),
+        "requests": int(requests) if requests is not None else None,
+        "prompt_tokens": int(read) if read is not None else None,
+        "output_tokens": int(out) if out is not None else None,
+        "prompt_tok_s": round(read / prompt_ms * 1000, 1) if read and prompt_ms else None,
+        "decode_tok_s": round(out / decode_ms * 1000, 1) if out and decode_ms else None,
+    }
+
+
+class StrataClient:
+    """The Strata engine through ``strata/bin/strata`` and its HTTP API (MLX's ``:8080``)."""
+
+    def __init__(self, settings: Settings, transport: httpx.MockTransport | None = None) -> None:
+        self.settings = settings
+        self._transport = transport
+
+    def argv(self, action: str, pack: str | None = None) -> list[str]:
+        if action not in _STRATA_ACTIONS:
+            raise ValueError(f"unsupported strata action: {action}")
+        if pack is None:
+            return [str(self.settings.strata_path), action]
+        if action != "start" or pack not in STRATA_PACKS:
+            raise ValueError(f"unsupported strata pack for {action}: {pack!r}")
+        return [str(self.settings.strata_path), action, pack]
+
+    def packs(self) -> list[dict[str, Any]]:
+        """Installed packs: the ``app/strata-<pack>.json`` run configs Strata's setup wrote,
+        with the context each was set up for (read only)."""
+        out: list[dict[str, Any]] = []
+        for pack in STRATA_PACKS:
+            path = self.settings.strata_root / "app" / f"strata-{pack.lower()}.json"
+            if not path.is_file():
+                continue
+            ctx: int | None = None
+            try:
+                args = json.loads(path.read_text()).get("args")
+                if isinstance(args, list) and "--max-context" in args:
+                    ctx = int(args[args.index("--max-context") + 1])
+            except (OSError, ValueError, AttributeError, IndexError, TypeError):
+                ctx = None
+            out.append({"pack": pack, "max_context": ctx})
+        return out
+
+    def pid_from_file(self) -> int | None:
+        try:
+            return int((self.settings.strata_root / "run" / "strata.pid").read_text().strip())
+        except (OSError, ValueError):
+            return None
+
+    def running(self) -> ProcessStatus:
+        pid = self.pid_from_file()
+        if pid is not None and psutil.pid_exists(pid):
+            return ProcessStatus(True, pid)
+        if self.settings.strata_port == self.settings.mlx_port:
+            return ProcessStatus(False, None)  # a listener on the shared port may be MLX
+        return ProcessStatus(MlxClient.port_listening(self.settings.strata_port), None)
+
+    def down_sync(self) -> bool:
+        return not self.running().running
+
+    def _client(self) -> httpx.Client:
+        return httpx.Client(
+            base_url=self.settings.strata_api_base, timeout=2.0, transport=self._transport
+        )
+
+    def ready_sync(self) -> bool:
+        """``GET /health`` from Strata itself (not another server on the port) with the model loaded."""
+        try:
+            with self._client() as http:
+                resp = http.get("/health")
+            d = resp.json() if resp.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return False
+        return isinstance(d, dict) and d.get("service") == "strata" and d.get("loaded") is True
+
+    async def _get(self, path: str) -> dict[str, Any] | None:
+        headers = {}
+        key = self.settings.strata_api_key.get_secret_value()
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.settings.strata_api_base,
+                timeout=2.0,
+                transport=self._transport,
+                headers=headers,
+            ) as http:
+                resp = await http.get(path)
+            data = resp.json() if resp.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    async def status(self) -> dict[str, Any]:
+        proc = self.running()
+        health = await self._get("/health") if proc.running else None
+        ok = health is not None and health.get("service") == "strata"
+        metrics = await self._get("/metrics") if ok else None
+        return {
+            "running": proc.running,
+            "pid": proc.pid,
+            "ready": ok and health is not None and health.get("loaded") is True,
+            "model": health.get("model") if ok and health else None,
+            "pack": strata_pack_of(health.get("model")) if ok and health else None,
+            "packs": await asyncio.to_thread(self.packs),
+            "max_context": health.get("max_context") if ok and health else None,
+            "metrics": parse_strata_metrics(metrics) if metrics is not None else None,
+            "checked_at": time.time(),
+        }
+
+
 class EngineOps(Protocol):
     stop_timeout_s: float
     ready_timeout_s: float
+    strata_ready_timeout_s: float
     job_timeout_s: float
 
     def mlx_argv(self, action: str, name: str | None) -> list[str]: ...
@@ -298,6 +458,9 @@ class EngineOps(Protocol):
     def comfy_down(self) -> bool: ...
     def comfy_ready(self) -> bool: ...
     def comfy_cancel_all(self) -> None: ...
+    def strata_argv(self, action: str, pack: str | None = None) -> list[str]: ...
+    def strata_down(self) -> bool: ...
+    def strata_ready(self) -> bool: ...
     def sidecar_argv(self, name: str, action: str) -> list[str]: ...
     def sidecar_down(self, name: str) -> bool: ...
     def sidecar_ready(self, name: str) -> bool: ...
@@ -346,6 +509,39 @@ def _stop_mlx(ops: EngineOps, optional: bool = False) -> list[Step]:
         # never optional: nothing may start until the engine is confirmed down
         Step("wait for MLX to exit", wait=ops.mlx_down, timeout_s=ops.stop_timeout_s),
     ]
+
+
+def _stop_strata(ops: EngineOps, optional: bool = False) -> list[Step]:
+    return [
+        Step(
+            "strata stop",
+            argv=ops.strata_argv("stop"),
+            timeout_s=ops.job_timeout_s,
+            optional=optional,
+        ),
+        # never optional: nothing may start until the engine is confirmed down
+        Step("wait for Strata to exit", wait=ops.strata_down, timeout_s=ops.stop_timeout_s),
+    ]
+
+
+def _start_strata(ops: EngineOps, pack: str | None = None) -> list[Step]:
+    label = f"strata start {pack}" if pack else "strata start"
+    return [
+        Step(label, argv=ops.strata_argv("start", pack), timeout_s=ops.job_timeout_s),
+        Step(
+            "wait for Strata to be ready",
+            wait=ops.strata_ready,
+            timeout_s=ops.strata_ready_timeout_s,
+        ),
+    ]
+
+
+def _stop_engine(ops: EngineOps, kind: str, optional: bool = False) -> list[Step]:
+    if kind == "comfyui":
+        return _stop_comfy(ops, optional)
+    if kind == "strata":
+        return _stop_strata(ops, optional)
+    return _stop_mlx(ops, optional)
 
 
 def _stop_sidecar(ops: EngineOps, spec: SidecarSpec) -> list[Step]:
@@ -413,6 +609,8 @@ def plan_transition(
     sidecar: SidecarSpec | None = None,
     services: Sequence[SidecarSpec] = (),
     restore: Sequence[SidecarSpec] = (),
+    strata_running: bool = False,
+    strata_pack: str | None = None,
 ) -> Transition:
     """Ordered steps from the detected state to ``target``, plus rollback (D-C2).
 
@@ -423,15 +621,24 @@ def plan_transition(
     ``MLX_ACTIVE_NAME``, the last active model (D-C5).
 
     The running sidecar (M6/M7) is not an engine: it may run next to MLX models it allows,
-    never next to ComfyUI. Going to ComfyUI stops it first; switching to a model it does
-    not allow needs ``force`` and stops it first. Rollback never restarts it.
+    never next to ComfyUI or Strata. Going to either stops it first; switching to a model it
+    does not allow needs ``force`` and stops it first. Rollback never restarts it.
 
-    Always-on services (M8) stop for ComfyUI and for a forced switch to a model they do not
-    allow; leaving ComfyUI restores those meant to run (optional steps).
+    Always-on services (M8) stop for ComfyUI and Strata (``EXCLUSIVE``) and for a forced
+    switch to a model they do not allow; leaving an exclusive engine for MLX or off restores
+    those meant to run (optional steps).
+
+    ``strata:<pack>`` while another (or an unknown) pack runs restarts Strata with it;
+    plain ``strata`` takes whichever pack runs, or the one ``bin/strata`` remembers.
     """
-    active = resolve_active(mlx_running, comfy_running)
+    active = resolve_active(mlx_running, comfy_running, strata_running)
     stop_comfy = comfy_running and target.kind != "comfyui"
+    repack = (
+        strata_running and target.kind == "strata" and target.name not in (None, strata_pack)
+    )
+    stop_strata = strata_running and (target.kind != "strata" or repack)
     stop_mlx = mlx_running and target.kind != "mlx"
+    exclusive = target.kind in EXCLUSIVE
     if stop_comfy and comfy_queue is None and not force:
         raise TransitionRefused(
             409,
@@ -444,7 +651,7 @@ def plan_transition(
             f"ComfyUI has {comfy_queue} queued or running generation(s); confirm to cancel them",
         )
     stop_sidecar = sidecar is not None and (
-        target.kind == "comfyui" or (target.kind == "mlx" and not sidecar.allows(target.name))
+        exclusive or (target.kind == "mlx" and not sidecar.allows(target.name))
     )
     if sidecar is not None and target.kind == "mlx" and not sidecar.allows(target.name) and not force:
         raise TransitionRefused(
@@ -459,12 +666,12 @@ def plan_transition(
             f"{blocked[0].noun} is running and {target.name} is not allowed next to it;"
             " confirm to stop it first",
         )
-    for_comfy = list(services) if target.kind == "comfyui" else []
+    for_exclusive = list(services) if exclusive else []
     steps: list[Step] = []
     if stop_sidecar:
         assert sidecar is not None
         steps += _stop_sidecar(ops, sidecar)
-    for spec in [*for_comfy, *blocked]:
+    for spec in [*for_exclusive, *blocked]:
         steps += _stop_sidecar(ops, spec)
     if stop_comfy:
         if comfy_queue is None:
@@ -480,6 +687,8 @@ def plan_transition(
         elif comfy_queue > 0:
             steps.append(Step("cancel ComfyUI queue", call=ops.comfy_cancel_all))
         steps += _stop_comfy(ops)
+    if stop_strata:
+        steps += _stop_strata(ops)
     if stop_mlx:
         steps += _stop_mlx(ops)
     source_stopped_at = len(steps)
@@ -496,8 +705,10 @@ def plan_transition(
             )
     if target.kind == "comfyui" and not comfy_running:
         steps += _start_comfy(ops)
+    if target.kind == "strata" and (not strata_running or repack):
+        steps += _start_strata(ops, target.name)
     unrestored: list[str] = []
-    if stop_comfy:
+    if (stop_comfy or stop_strata) and not exclusive:
         for spec in restore:
             if target.kind == "mlx" and not spec.allows(target.name):
                 unrestored.append(spec.name)
@@ -508,16 +719,20 @@ def plan_transition(
             409, f"{target.kind if target.kind != 'mlx' else target.name} is already active"
         )
     rollback: list[Step] = []
-    if active == "mlx" and target.kind == "comfyui":
-        rollback = _stop_comfy(ops, optional=True) + _start_mlx(ops, mlx_name)
-        for spec in for_comfy:
-            rollback += _start_service(ops, spec)
-    elif active == "comfyui" and target.kind == "mlx":
-        rollback = _stop_mlx(ops, optional=True) + _start_comfy(ops)
-    from_label = {"mlx": mlx_name, "comfyui": "comfyui", "conflict": "conflict"}.get(active)
-    to_label = (
-        target.name if target.kind == "mlx" else "comfyui" if target.kind == "comfyui" else None
+    if active in ("mlx", *EXCLUSIVE) and (target.kind not in (active, "off") or repack):
+        rollback = _stop_engine(ops, target.kind, optional=True)
+        if active == "mlx":
+            rollback += _start_mlx(ops, mlx_name)
+            for spec in for_exclusive:
+                rollback += _start_service(ops, spec)
+        elif active == "comfyui":
+            rollback += _start_comfy(ops)
+        else:
+            rollback += _start_strata(ops, strata_pack)
+    from_label = {"mlx": mlx_name, "comfyui": "comfyui", "strata": "strata", "conflict": "conflict"}.get(
+        active
     )
+    to_label = target.name if target.kind == "mlx" else None if target.kind == "off" else target.kind
     return Transition(
         steps,
         rollback,

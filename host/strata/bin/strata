@@ -1,0 +1,323 @@
+#!/bin/zsh
+# Start, stop, and status for the Strata engine (Qwen3.8-Flash-Next on Metal).
+# An engine like MLX and ComfyUI: it holds most of memory, so nothing else that uses the GPU
+# may run beside it. Serves on the MLX server's 0.0.0.0:8080, so LiteLLM's one route reaches
+# whichever engine runs; without STRATA_API_KEY it is open on the LAN, like the MLX server.
+# Does not touch /Volumes/Models/models, /Volumes/Models/bin, or the MLX venv.
+set -euo pipefail
+
+VOLUME="/Volumes/Models"
+ROOT="$VOLUME/strata"
+APP="$ROOT/app"
+PYTHON="$APP/.venv/bin/python"
+ENV_FILE="$ROOT/etc/strata.env"
+LOG_FILE="$ROOT/logs/strata.log"
+PID_FILE="$ROOT/run/strata.pid"
+PACK_FILE="$ROOT/run/strata.pack"  # the pack the last start used: a plain start runs it again
+PACKS='^(Q2_0|IQ2_XS|IQ3_XXS|IQ3_S)$'
+MLX_LOCK="$VOLUME/run/mlx.lock"
+GATE="$VOLUME/run/maintenance.lock"
+HOST="0.0.0.0"
+PORT=8080
+STOP_TRIES=240  # x 0.25 s: Strata unmaps a 40+ GB model before it exits
+LOG_ROTATE_MAX=52428800  # 50 MiB; rotated only by start, while the engine is stopped
+LOG_ROTATE_KEEP=8
+
+STRATA_MODEL="Q2_0"
+STRATA_CONTEXT="262144"  # display only: the real limit is setup's --context, in the run config
+
+usage() {
+  cat <<'EOF'
+Usage:
+  /Volumes/Models/strata/bin/strata status
+  /Volumes/Models/strata/bin/strata start [Q2_0|IQ2_XS|IQ3_XXS|IQ3_S]
+  /Volumes/Models/strata/bin/strata stop
+
+Serves an OpenAI-compatible API on http://0.0.0.0:8080, the MLX server's address, so
+LiteLLM's route reaches it unchanged. /Volumes/Models/strata/etc/strata.env (mode 600) picks
+the default pack (STRATA_MODEL=Q2_0|IQ3_XXS|...) set up by Strata's ./setup.sh; start <pack> picks
+another, and a plain start then keeps it; with STRATA_API_KEY
+set, clients need that key, without it the API is open on the LAN like the MLX server.
+Stop the MLX server, ComfyUI, the sidecars and the embedding service before starting this.
+EOF
+}
+
+require_volume() {
+  if [[ ! -d "$VOLUME" ]]; then
+    echo "External volume is not mounted at $VOLUME" >&2
+    exit 1
+  fi
+}
+
+port_listening() {
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+pid_running() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+# The pid file's process, only if it really is Strata's server: a reused pid is never signalled.
+current_pid() {
+  local pid=""
+  [[ -f "$PID_FILE" ]] || return 1
+  pid="$(<"$PID_FILE")"
+  pid="${pid//$'\n'/}"
+  [[ "$pid" == <-> ]] || return 1
+  pid_running "$pid" || return 1
+  [[ "$(ps -o command= -p "$pid" 2>/dev/null)" == *"serve/server.py --engine strata"* ]] || return 1
+  print -r -- "$pid"
+}
+
+file_mode() {
+  stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"
+}
+
+# Reads only allow-listed KEY=VALUE lines; the file is parsed, never sourced.
+# strict=1 (start) needs mode 600 and refuses a bad value; status reads the pack, context
+# and whether a key is set. A key in the caller's environment is never used.
+read_env() {
+  local strict="$1" line key value
+  unset STRATA_API_KEY STRATA_ALLOWED_HOSTS
+  AUTH="none (open on the LAN, like the MLX server)"
+  if [[ ! -f "$ENV_FILE" ]]; then
+    (( strict )) || return 0
+    echo "Missing $ENV_FILE (needs STRATA_MODEL=...; see strata.env.example)" >&2
+    exit 1
+  fi
+  if (( strict )) && [[ "$(file_mode "$ENV_FILE")" != 600 ]]; then
+    echo "$ENV_FILE must be mode 600" >&2
+    exit 1
+  fi
+  [[ -r "$ENV_FILE" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == *=* ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      STRATA_API_KEY)
+        [[ -n "$value" ]] || continue
+        AUTH="api key"
+        (( strict )) || continue
+        # length checked apart: macOS regex rejects repetition counts above 255
+        if [[ "$value" =~ '^[A-Za-z0-9_-]+$' ]] && (( ${#value} >= 32 && ${#value} <= 256 )); then
+          export STRATA_API_KEY="$value"
+        else
+          echo "$ENV_FILE has an invalid STRATA_API_KEY (32-256 chars of A-Z a-z 0-9 _ -)" >&2
+          exit 1
+        fi ;;
+      STRATA_ALLOWED_HOSTS)
+        # extra Host names Strata answers to without a key (its IPs and own name always pass)
+        (( strict )) || continue
+        if [[ "$value" =~ '^[A-Za-z0-9.-]+(,[A-Za-z0-9.-]+)*$' ]]; then
+          export STRATA_ALLOWED_HOSTS="$value"
+        else
+          echo "$ENV_FILE: STRATA_ALLOWED_HOSTS must be comma-separated host names" >&2
+          exit 1
+        fi ;;
+      STRATA_MODEL)
+        if [[ "$value" =~ $PACKS ]]; then
+          STRATA_MODEL="$value"
+        elif (( strict )); then
+          echo "$ENV_FILE: STRATA_MODEL must be one of Q2_0 IQ2_XS IQ3_XXS IQ3_S" >&2
+          exit 1
+        fi ;;
+      STRATA_CONTEXT)
+        [[ "$value" =~ '^[0-9]+$' ]] && STRATA_CONTEXT="$value" ;;
+    esac
+  done <"$ENV_FILE"
+}
+
+# The pack the last start used wins over the env file's default
+use_remembered_pack() {
+  local pack=""
+  [[ -f "$PACK_FILE" ]] || return 0
+  pack="$(<"$PACK_FILE")"
+  pack="${pack//$'\n'/}"
+  [[ "$pack" =~ $PACKS ]] && STRATA_MODEL="$pack"
+  return 0
+}
+
+# setup.sh writes one run config per pack next to the checkout
+config_file() {
+  print -r -- "$APP/strata-${(L)STRATA_MODEL}.json"
+}
+
+# the context the pack was set up with (its run config's --max-context), else STRATA_CONTEXT
+config_context() {
+  local cfg ctx=""
+  cfg="$(config_file)"
+  if [[ -r "$cfg" ]]; then
+    ctx="$(grep -A1 -- '"--max-context"' "$cfg" 2>/dev/null | tail -n 1 | tr -dc '0-9')" || ctx=""
+  fi
+  print -r -- "${ctx:-$STRATA_CONTEXT}"
+}
+
+# Rename a log over the size limit to strata.log.<stamp> and keep the newest
+# LOG_ROTATE_KEEP archives. Runs only from start, after every refusal check.
+rotate_log() {
+  [[ -f "$LOG_FILE" ]] || return 0
+  local size
+  size=$(wc -c <"$LOG_FILE" 2>/dev/null | tr -d ' ') || return 0
+  (( size > LOG_ROTATE_MAX )) || return 0
+  mv "$LOG_FILE" "$LOG_FILE.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || return 0
+  local -a archives
+  archives=("$LOG_FILE".<->-<->(N.On))  # newest first by name
+  local old
+  for old in "${archives[@]:$LOG_ROTATE_KEEP}"; do
+    rm -f "$old"
+  done
+}
+
+refuse_if_busy() {
+  if port_listening 8080 || port_listening 7860; then
+    echo "The MLX server is running. Stop it first: $VOLUME/bin/mlx-model stop" >&2
+    exit 1
+  fi
+  if port_listening 8188; then
+    echo "ComfyUI is running. Stop it first: $VOLUME/comfyui/bin/comfyui stop" >&2
+    exit 1
+  fi
+  if port_listening 8081; then
+    echo "The decision sidecar is running. Stop it first: $VOLUME/decision/bin/openjev stop" >&2
+    exit 1
+  fi
+  if port_listening 8083; then
+    echo "The TTS sidecar is running. Stop it first: $VOLUME/tts/bin/qwen-tts stop" >&2
+    exit 1
+  fi
+  if port_listening 8084; then
+    echo "The embedding service is running. Stop it first: $VOLUME/embed/bin/qwen-embed stop" >&2
+    exit 1
+  fi
+  if [[ -e "$MLX_LOCK" ]]; then
+    echo "$MLX_LOCK exists: an mlx-model command is running. Try again when it finishes." >&2
+    exit 1
+  fi
+  if [[ -e "$GATE" ]]; then
+    echo "$GATE exists: maintenance is in progress. Try again later." >&2
+    exit 1
+  fi
+}
+
+cmd_status() {
+  local pid=""
+  read_env 0
+  use_remembered_pack
+  if pid="$(current_pid)"; then
+    echo "strata: running pid $pid"
+  else
+    echo "strata: stopped"
+    rm -f "$PID_FILE"
+  fi
+  echo "model: $STRATA_MODEL"
+  echo "context: $(config_context)"
+  echo "listen: http://${HOST}:${PORT}"
+  echo "auth: $AUTH"
+  echo "config: $(config_file)"
+  echo "log: $LOG_FILE"
+}
+
+cmd_start() {
+  local pid="" cfg="" pack=""
+  if (( $# )); then
+    pack="$1"
+    if [[ ! "$pack" =~ $PACKS ]]; then
+      echo "Unknown pack '$pack' (one of Q2_0 IQ2_XS IQ3_XXS IQ3_S)" >&2
+      exit 2
+    fi
+  fi
+  if pid="$(current_pid)"; then
+    echo "Strata is already running (pid $pid)" >&2
+    exit 1
+  fi
+  rm -f "$PID_FILE"
+  if [[ ! -x "$PYTHON" || ! -f "$APP/serve/server.py" ]]; then
+    echo "Missing Strata checkout or its .venv under $APP (run its ./setup.sh first)" >&2
+    exit 1
+  fi
+  refuse_if_busy
+  read_env 1
+  use_remembered_pack
+  [[ -n "$pack" ]] && STRATA_MODEL="$pack"
+  cfg="$(config_file)"
+  if [[ ! -f "$cfg" ]]; then
+    echo "Missing $cfg: run Strata's ./setup.sh --model $STRATA_MODEL --no-start first" >&2
+    exit 1
+  fi
+  mkdir -p "$ROOT/logs" "$ROOT/run" "$ROOT/home/tmp"
+  rotate_log || true
+  {
+    echo
+    echo "===== $(date '+%Y-%m-%d %H:%M:%S') start $STRATA_MODEL ====="
+  } >>"$LOG_FILE"
+  cd "$APP"
+  # Strata's per-user files (settings, caches) stay under $ROOT/home, never the real home
+  HOME="$ROOT/home" XDG_CONFIG_HOME="$ROOT/home/.config" XDG_CACHE_HOME="$ROOT/home/.cache" \
+    TMPDIR="$ROOT/home/tmp/" PYTHONUNBUFFERED=1 PYTHONNOUSERSITE=1 \
+    nohup "$PYTHON" "$APP/serve/server.py" \
+    --engine strata \
+    --config "$cfg" \
+    --host "$HOST" \
+    --port "$PORT" \
+    </dev/null >>"$LOG_FILE" 2>&1 &
+  pid=$!
+  print -r -- "$pid" >"$PID_FILE"
+  sleep 0.5
+  if ! pid_running "$pid"; then
+    echo "Strata exited immediately. See $LOG_FILE" >&2
+    rm -f "$PID_FILE"
+    exit 1
+  fi
+  print -r -- "$STRATA_MODEL" >"$PACK_FILE"
+  echo "Strata started (pid $pid, $STRATA_MODEL); loading the model takes a few minutes"
+  echo "API: http://${HOST}:${PORT}/v1"
+  echo "Log: $LOG_FILE"
+}
+
+cmd_stop() {
+  local pid="" i
+  local -a children
+  if ! pid="$(current_pid)"; then
+    echo "Strata is not running"
+    rm -f "$PID_FILE"
+    return 0
+  fi
+  # the server runs the Metal engine as a child: remember it, it must not outlive the server
+  children=(${(f)"$(pgrep -P "$pid" 2>/dev/null || true)"})
+  kill "$pid" 2>/dev/null || true
+  for i in {1..$STOP_TRIES}; do
+    pid_running "$pid" || break
+    sleep 0.25
+  done
+  local killed=0
+  if pid_running "$pid"; then
+    kill -9 "$pid" 2>/dev/null || true
+    killed=1
+  fi
+  local c
+  for c in "${children[@]}"; do
+    [[ "$c" == <-> ]] || continue
+    pid_running "$c" || continue
+    kill "$c" 2>/dev/null || true
+    for i in {1..20}; do
+      pid_running "$c" || break
+      sleep 0.25
+    done
+    pid_running "$c" && kill -9 "$c" 2>/dev/null || true
+  done
+  rm -f "$PID_FILE"
+  if (( killed )); then
+    echo "Strata did not exit after SIGTERM; killed (pid $pid)"
+  else
+    echo "Strata stopped"
+  fi
+}
+
+case "${1:-}" in
+  start) require_volume; cmd_start "${@:2}" ;;
+  stop) require_volume; cmd_stop ;;
+  status) require_volume; cmd_status ;;
+  *) usage; exit 2 ;;
+esac

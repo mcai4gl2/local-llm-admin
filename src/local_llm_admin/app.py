@@ -35,7 +35,7 @@ from . import quality as quality_mod
 from .alerts import AlertStore, Snapshot
 from .auth import COOKIE_NAME, LoginLimiter, SessionManager, csrf_ok, verify_password
 from .availability import AvailabilityRecorder, AvailabilityStore, summarize
-from .chat import ChatRequest, stream_chat
+from .chat import STRATA_CHAT, ChatRequest, ChatTarget, stream_chat
 from .comfy_outputs import (
     ID_RE,
     Entry,
@@ -58,7 +58,7 @@ from .download_store import DownloadStore
 from .downloads import DownloadError, DownloadService
 from .embed import QUERY_INSTRUCTION, EmbedClient, EmbedError, validate_embed, validate_rerank
 from .embed_store import EmbedStore
-from .engines import ComfyClient, badge_state, resolve_active
+from .engines import ComfyClient, StrataClient, badge_state, resolve_active
 from .ingestion import HostLogs, IngestStore
 from .inventory import InventoryStore, build_inventory
 from .jobs import JobRunner, JobStore, ops_tz
@@ -238,10 +238,12 @@ def create_app(
     decision_transport: httpx.MockTransport | None = None,
     tts_transport: httpx.MockTransport | None = None,
     embed_transport: httpx.MockTransport | None = None,
+    strata_transport: httpx.MockTransport | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     mlx = MlxClient(settings)
     comfy = ComfyClient(settings, transport=comfy_transport)
+    strata = StrataClient(settings, transport=strata_transport)
     store = JobStore(settings.admin_data_dir / "admin.sqlite")
     runner = JobRunner(
         settings, store, current_name=lambda: mlx.active_env().get("MLX_ACTIVE_NAME")
@@ -256,10 +258,20 @@ def create_app(
     sidecar_registry.set_warmup("qwen-tts", tts.warmup_sync)
     sidecar_registry.set_warmup("qwen-embed", embed.warmup_sync)
     control = ControlService(
-        settings, store, runner, mlx, comfy, decision=decision, sidecars=sidecar_registry
+        settings,
+        store,
+        runner,
+        mlx,
+        comfy,
+        decision=decision,
+        sidecars=sidecar_registry,
+        strata=strata,
     )
     # the metrics "engine process" tile follows whichever engine owns the GPU
-    sampler = Sampler(settings, mlx_pid=lambda: mlx.pid_from_file() or comfy.pid_from_file())
+    sampler = Sampler(
+        settings,
+        mlx_pid=lambda: mlx.pid_from_file() or comfy.pid_from_file() or strata.pid_from_file(),
+    )
     usage = LiteLLMUsage(settings)
     db_path = settings.admin_data_dir / "admin.sqlite"
     events = IngestStore(db_path)
@@ -300,7 +312,7 @@ def create_app(
 
     def embed_reason() -> str | None:
         return service_unavailable_reason(
-            sidecar_registry, store, "qwen-embed", lambda: comfy.running().running
+            sidecar_registry, store, "qwen-embed", control.exclusive_running
         )
     supervisor.add_listener(
         SidecarMonitor(
@@ -503,9 +515,19 @@ def create_app(
         st = await mlx.status(job_running=job is not None)
         mlx_running = await asyncio.to_thread(mlx.engine_running)
         comfy_st = await comfy.status()
-        active = resolve_active(mlx_running, comfy_st["running"])
-        st["state"] = badge_state(st["state"], active, comfy_st["ready"])
-        st["engine"] = {"active": active, "comfyui": comfy_st}
+        # a deployment without Strata never probes its port or pid file
+        strata_st = await strata.status() if settings.strata_enabled else None
+        strata_running = bool(strata_st and strata_st["running"])
+        active = resolve_active(mlx_running, comfy_st["running"], strata_running)
+        st["state"] = badge_state(
+            st["state"], active, comfy_st["ready"], bool(strata_st and strata_st["ready"])
+        )
+        st["engine"] = {
+            "active": active,
+            "comfyui": comfy_st,
+            "strata": strata_st,
+            "strata_enabled": settings.strata_enabled,
+        }
         st["job"] = job
         st["intent"] = await asyncio.to_thread(control.intent)
         st["recovery_blocked"] = await asyncio.to_thread(control.recovery_blocked)
@@ -1371,6 +1393,20 @@ def create_app(
             raise HTTPException(409, "a quality run is in progress; test chat is paused")
         if (await asyncio.to_thread(comfy.running)).running:
             raise HTTPException(409, "ComfyUI owns the GPU; the LLM is stopped")
+        if settings.strata_enabled and (await asyncio.to_thread(strata.running)).running:
+            st = await strata.status()
+            if not st["ready"] or not st["model"]:
+                raise HTTPException(409, "Strata is still loading the model")
+            target = ChatTarget(
+                settings.strata_api_base, st["model"], settings.strata_api_key.get_secret_value()
+            )
+            return StreamingResponse(
+                stream_chat(
+                    settings, req, transport=chat_transport, defaults=STRATA_CHAT, target=target
+                ),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
         if not is_serving(await mlx.health()):
             raise HTTPException(409, "model server is not serving")
         name = (await asyncio.to_thread(mlx.active_env)).get("MLX_ACTIVE_NAME")

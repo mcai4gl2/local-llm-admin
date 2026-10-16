@@ -226,3 +226,25 @@ def test_decision_log_is_a_source_only_when_enabled(tmp_path):
     s.decision_enabled = True
     assert "decision" in logs.source_ids(s)
     assert logs.resolve_source(s, "decision") == tmp_path / "decision/logs/openjev.log"
+
+
+def test_strata_log_is_a_source_only_when_enabled(tmp_path):
+    s = Settings(mlx_root=tmp_path / "Models", strata_root=tmp_path / "strata")
+    assert "strata" not in logs.source_ids(s)
+    with pytest.raises(KeyError):
+        logs.resolve_source(s, "strata")
+    s.strata_enabled = True
+    assert "strata" in logs.source_ids(s)
+    assert logs.resolve_source(s, "strata") == tmp_path / "strata/logs/strata.log"
+
+
+@pytest.mark.parametrize(
+    ("line", "level"),
+    [
+        ("[strata] LOW: requests may stall (free memory 2.1 GB)", "WARNING"),
+        ("[strata] non-finite logits at step 812", "ERROR"),
+        ("[strata] ready on http://127.0.0.1:8086", None),
+    ],
+)
+def test_strata_warning_lines_have_a_level(line, level):
+    assert logs.line_level(line) == level

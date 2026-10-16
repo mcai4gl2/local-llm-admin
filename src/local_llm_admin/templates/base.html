@@ -28,8 +28,9 @@
 </header>
 <main>
 <div class="error" id="conflict-banner" hidden>
-  Both the MLX server and ComfyUI are running and competing for memory. Keep one:
-  <button data-keep="mlx">Keep MLX</button> <button data-keep="comfyui">Keep ComfyUI</button> <button data-keep="off">Stop both</button>
+  More than one engine (MLX, ComfyUI, Strata) is running and they compete for memory. Keep one:
+  <button data-keep="mlx">Keep MLX</button> <button data-keep="comfyui">Keep ComfyUI</button>
+  <button data-keep="strata" hidden>Keep Strata</button> <button data-keep="off">Stop all</button>
 </div>
 {% block content %}{% endblock %}
 </main>

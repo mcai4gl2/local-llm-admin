@@ -180,3 +180,13 @@ def test_service_may_run_with_the_engine_off():
 def test_service_budget_respects_wired_limit():
     b = service_budget(wired_limit_gb=30.0)
     assert not b.ok and b.limit_gb == 30.0 and b.lines[-1] == "limit 30.0 GB (GPU wired limit)"
+
+
+def test_sidecar_never_starts_beside_strata():
+    b = budget(strata_running=True, mlx_running=False, mlx_name=None, mlx_gb=None)
+    assert not b.ok and any("Strata is running" in r for r in b.reasons)
+
+
+def test_service_never_starts_beside_strata():
+    b = service_budget(strata_running=True, mlx_running=False, mlx_name=None, mlx_gb=None)
+    assert not b.ok and any("Strata is running" in r for r in b.reasons)

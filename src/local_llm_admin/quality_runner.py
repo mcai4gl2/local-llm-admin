@@ -99,7 +99,7 @@ class RunPlan:
     kind: str
     targets: list[str]
     dirs: dict[str, str]
-    original: dict[str, Any]  # {"engine": "mlx"|"none", "name": str}
+    original: dict[str, Any]  # {"engine": "mlx"|"none"|"strata", "name": str}
     deadline: float
     controlled: bool = True
     switched: bool = False
@@ -243,6 +243,8 @@ class QualityRunner:
             raise QualityError(exc.code, exc.message) from None
         observed = await asyncio.to_thread(self.control.observe)
         engine = observed["engine"]
+        if engine == "strata":
+            return self._plan_strata(kind, scope)
         sidecar = await asyncio.to_thread(self.control.sidecar_running)
         if sidecar is not None:
             raise QualityError(
@@ -293,6 +295,24 @@ class QualityRunner:
             deadline=time.monotonic() + self.settings.quality_run_deadline_s,
         )
         return plan, warning
+
+    def _plan_strata(self, kind: str, scope: str) -> tuple[RunPlan, str]:
+        """Strata serves one model and is never switched by a run: only the compatibility
+        cases of the running engine (Strata Phase 4). Sidecars cannot run beside it."""
+        if kind != "compatibility" or scope != "current":
+            raise QualityError(
+                409, "Strata is running; only compatibility checks of the current engine run on it"
+            )
+        plan = RunPlan(
+            run_id=uuid.uuid4().hex[:12],
+            job_id="",
+            kind=kind,
+            targets=["strata"],
+            dirs={},
+            original={"engine": "strata", "name": "strata"},
+            deadline=time.monotonic() + self.settings.quality_run_deadline_s,
+        )
+        return plan, EXTERNAL_WARNING
 
     # --- cancellation --------------------------------------------------------------
     async def cancel(self, run_id: str) -> dict[str, Any]:
@@ -418,6 +438,12 @@ class QualityRunner:
 
     async def _owned(self, name: str, generation: Any) -> None:
         obs = await self._observe()
+        if name == "strata":
+            if obs["engine"] != "strata" or obs["generation"] != generation:
+                raise InterventionRequired(
+                    f"the engine changed outside the run (expected Strata; observed {obs['engine']})"
+                )
+            return
         if obs["engine"] != "mlx" or obs["mlx_name"] != name or obs["generation"] != generation:
             raise InterventionRequired(
                 f"the engine changed outside the run (expected MLX {name}; observed"
@@ -428,8 +454,13 @@ class QualityRunner:
     async def _execute(self, plan: RunPlan) -> None:
         status, error = "failed", None
         shutdown = False
+        strata = plan.original["engine"] == "strata"
+        key = self.settings.strata_api_key.get_secret_value() if strata else ""
         async with httpx.AsyncClient(
-            base_url=self.settings.mlx_api_base, timeout=REQUEST_TIMEOUT, transport=self.transport
+            base_url=self.settings.strata_api_base if strata else self.settings.mlx_api_base,
+            timeout=REQUEST_TIMEOUT,
+            transport=self.transport,
+            headers={"Authorization": f"Bearer {key}"} if key else None,
         ) as http:
             try:
                 version = await self._get(http, "/openapi.json")
@@ -554,10 +585,19 @@ class QualityRunner:
             raise ModelLoadFailed(f"{name} is not the serving model after {act}")
         return load_s, obs["generation"]
 
+    async def _strata_ready(self, http: httpx.AsyncClient) -> tuple[float | None, Any]:
+        doc = await self._get(http, "/health")
+        if not (isinstance(doc, dict) and doc.get("service") == "strata" and doc.get("loaded")):
+            raise ModelLoadFailed("Strata is not loaded")
+        return None, (await self._observe())["generation"]
+
     async def _model(self, http: httpx.AsyncClient, plan: RunPlan, name: str, index: int) -> None:
         path = plan.dirs.get(name)
         try:
-            load_s, generation = await self._serve(http, name)
+            if plan.original["engine"] == "strata":
+                load_s, generation = await self._strata_ready(http)
+            else:
+                load_s, generation = await self._serve(http, name)
         except ModelLoadFailed as exc:
             case_id = self.store.add_case(
                 plan.run_id,
@@ -741,10 +781,17 @@ class QualityRunner:
         index: int,
     ) -> None:
         health = await self._get(http, "/health")
-        probe_info = {
-            "tool_parser": health.get("loaded_tool_parser") if isinstance(health, dict) else None,
-            "vision": info["vision"],
-        }
+        h: dict[str, Any] = health if isinstance(health, dict) else {}
+        if plan.original["engine"] == "strata":
+            # Strata parses tool calls itself and says whether it reads images
+            probe_info = {
+                "tool_parser": "strata",
+                "vision": h.get("images") is True,
+                "model_id": h.get("model"),
+                "engine": "strata",
+            }
+        else:
+            probe_info = {"tool_parser": h.get("loaded_tool_parser"), "vision": info["vision"]}
         profile = self._profile_fingerprint()
         for key in self.compat_cases:
             self._check(plan)
@@ -779,6 +826,13 @@ class QualityRunner:
         detail = ""
         try:
             obs = await self._observe()
+            if want["engine"] == "strata":  # never switched: only confirm it still runs
+                ok = obs["engine"] == "strata"
+                return {
+                    "outcome": "not_needed" if ok else "failed",
+                    "detail": "" if ok else f"engine is {obs['engine']}",
+                    "observed": obs,
+                }
             if want["engine"] == "mlx":
                 if obs["engine"] == "mlx" and obs["mlx_name"] == want["name"]:
                     ok = True

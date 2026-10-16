@@ -43,7 +43,7 @@ async def gw(fake_embed, fake_decision, fake_comfy):
         embed=embed,
         embed_history=EmbedStore(db),
         embed_reason=lambda: service_unavailable_reason(
-            reg, store, "qwen-embed", lambda: comfy.running().running
+            reg, store, "qwen-embed", lambda: "comfyui" if comfy.running().running else None
         ),
     )
     app.state.test = {"embed": embed, "store": store, "history": EmbedStore(db)}

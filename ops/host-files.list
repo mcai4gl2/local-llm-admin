@@ -16,4 +16,7 @@ code tts/bin/qwen-tts
 code tts/README.md
 code embed/bin/qwen-embed
 code embed/README.md
+code strata/bin/strata
+code strata/README.md
+code strata/etc/strata.env.example
 registry etc/models.conf

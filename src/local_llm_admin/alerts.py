@@ -228,7 +228,9 @@ class Evaluator:
 
     def _engine_down(self, s: Snapshot) -> None:
         intent = s.intent or ""
-        wanted = "mlx" if intent.startswith("mlx:") else intent if intent == "comfyui" else None
+        wanted = (
+            "mlx" if intent.startswith("mlx:") else intent if intent in ("comfyui", "strata") else None
+        )
         if s.engine == "unknown" and wanted:
             return
         mismatch = wanted is not None and s.engine not in (wanted, "conflict")
@@ -236,10 +238,10 @@ class Evaluator:
         if not mismatch:
             self.store.resolve_condition("engine_down", s.wall)
         elif held > ENGINE_DOWN_S:
-            name = "ComfyUI" if wanted == "comfyui" else f"MLX ({intent[4:]})"
+            name = {"comfyui": "ComfyUI", "strata": "Strata"}.get(wanted or "", f"MLX ({intent[4:]})")
             detail = f"Intended engine is {intent}; observed: {s.engine}."
-            if wanted == "comfyui":
-                detail += " ComfyUI is not restarted automatically."
+            if wanted != "mlx":
+                detail += f" {name} is not restarted automatically."
             self.store.raise_condition(
                 "engine_down", "critical", f"{name} is not running", detail, s.wall
             )

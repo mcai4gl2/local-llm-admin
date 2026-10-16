@@ -200,4 +200,15 @@ def test_unavailable_reason_for_a_disabled_service(tmp_path):
     s = _embed_settings(tmp_path, embed_enabled=False)
     reg = SidecarRegistry(s)
     store = JobStore(s.admin_data_dir / "admin.sqlite")
-    assert service_unavailable_reason(reg, store, "qwen-embed", lambda: True) == "stopped"
+    assert service_unavailable_reason(reg, store, "qwen-embed", lambda: "comfyui") == "stopped"
+
+
+def test_unavailable_reason_names_the_exclusive_engine(tmp_path):
+    from local_llm_admin.sidecars import service_unavailable_reason
+
+    s = _embed_settings(tmp_path)
+    reg = SidecarRegistry(s)
+    store = JobStore(s.admin_data_dir / "admin.sqlite")
+    assert service_unavailable_reason(reg, store, "qwen-embed", lambda: "strata") == "strata_active"
+    assert service_unavailable_reason(reg, store, "qwen-embed", lambda: "comfyui") == "comfyui_active"
+    assert service_unavailable_reason(reg, store, "qwen-embed", lambda: None) == "stopped"

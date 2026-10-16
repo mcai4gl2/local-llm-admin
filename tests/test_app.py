@@ -401,7 +401,7 @@ async def test_chat_refused_when_not_serving(client):
 
 async def test_chat_validation(client, mlx_health):
     r = await client.post(
-        "/api/chat", json={"messages": [{"role": "user", "content": "x"}], "max_tokens": 5000}
+        "/api/chat", json={"messages": [{"role": "user", "content": "x"}], "max_tokens": 32769}
     )
     assert r.status_code == 422
 

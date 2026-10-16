@@ -51,6 +51,8 @@ GEN = {"pid": 7, "started": MIDNIGHT - 3600}
         ({"mlx_serving": False, "job_running": True}, GEN, ("loading", 1)),
         ({"mlx_serving": False}, None, ("down", 1)),
         ({"engine": "comfyui", "intent": "comfyui"}, None, ("comfyui", 0)),
+        ({"engine": "strata", "intent": "strata"}, None, ("strata", 0)),
+        ({"engine": "none", "intent": "strata"}, None, ("off", 0)),
         ({"engine": "none", "intent": "off"}, None, ("off", 0)),
         ({"engine": "none", "intent": "mlx:a"}, None, ("down", 1)),
         ({"engine": "none", "intent": "mlx:a", "job_running": True}, None, ("loading", 1)),

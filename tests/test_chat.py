@@ -20,12 +20,22 @@ async def _collect(gen):
     return [e async for e in gen]
 
 
+def test_strata_chat_default_leaves_room_to_think():
+    """Strata thinks at xhigh by default: 512 tokens can end before any answer."""
+    req = chat.ChatRequest(messages=[{"role": "user", "content": "hi"}])
+    assert chat.effective_chat(req, chat.STRATA_CHAT)["max_tokens"] == 8192
+    req = chat.ChatRequest(messages=[{"role": "user", "content": "hi"}], max_tokens=100)
+    assert chat.effective_chat(req, chat.STRATA_CHAT)["max_tokens"] == 100
+
+
 def test_request_validation_limits():
     ok = chat.ChatRequest(messages=[{"role": "user", "content": "hi"}])
     assert ok.max_tokens is None and ok.thinking is None  # resolved by effective_chat
     assert chat.effective_chat(ok) == {"temperature": 0.7, "max_tokens": 512}
     with pytest.raises(ValidationError):
-        chat.ChatRequest(messages=[{"role": "user", "content": "hi"}], max_tokens=4097)
+        chat.ChatRequest(messages=[{"role": "user", "content": "hi"}], max_tokens=32769)
+    big = chat.ChatRequest(messages=[{"role": "user", "content": "hi"}], max_tokens=8192)
+    assert chat.effective_chat(big)["max_tokens"] == 8192
     with pytest.raises(ValidationError):
         chat.ChatRequest(messages=[{"role": "system", "content": "sneaky"}])
     with pytest.raises(ValidationError):
@@ -137,3 +147,22 @@ def test_profile_chat_defaults_sit_between_built_ins_and_explicit_fields():
     p = chat.build_payload(req, defaults)
     assert p["temperature"] == 1.5 and p["chat_template_kwargs"] == {"enable_thinking": True}
     assert chat.build_payload(req)["max_tokens"] == 512
+
+
+async def test_stream_to_another_engine_uses_its_base_model_and_key():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        body = b"".join(sse_chunks(["ok"]))
+        return httpx.Response(200, content=body, headers={"content-type": "text/event-stream"})
+
+    target = chat.ChatTarget(base_url="http://strata.test", model="Qwen3.8-Flash-Next", api_key="k")
+    req = chat.ChatRequest(messages=[{"role": "user", "content": "hi"}])
+    ev = _events(
+        await _collect(chat.stream_chat(S, req, transport=httpx.MockTransport(handler), target=target))
+    )
+    assert ev[-1]["type"] == "done"
+    assert str(seen[0].url) == "http://strata.test/v1/chat/completions"
+    assert seen[0].headers["authorization"] == "Bearer k"
+    assert json.loads(seen[0].content)["model"] == "Qwen3.8-Flash-Next"

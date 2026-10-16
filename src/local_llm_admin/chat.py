@@ -1,10 +1,12 @@
-"""Streaming chat proxy to the MLX server's OpenAI API (bypasses LiteLLM)."""
+"""Streaming chat proxy to the active engine's OpenAI API (bypasses LiteLLM): the MLX
+server, or Strata when it owns the GPU."""
 
 from __future__ import annotations
 
 import json
 import time
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any, Literal
 
 import httpx
@@ -13,6 +15,15 @@ from pydantic import BaseModel, Field
 from .config import Settings
 
 ACTIVE_MODEL_ID = "/Volumes/Models/models/active"
+
+
+@dataclass(frozen=True)
+class ChatTarget:
+    """Where a chat goes when it is not the MLX server (whose settings are the default)."""
+
+    base_url: str
+    model: str
+    api_key: str = ""
 
 
 class ChatMessage(BaseModel):
@@ -25,11 +36,13 @@ class ChatRequest(BaseModel):
     system: str | None = Field(default=None, max_length=50_000)
     # None: use the model's saved admin-chat default (M3c), else the built-in one
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    max_tokens: int | None = Field(default=None, ge=1, le=4096)
+    max_tokens: int | None = Field(default=None, ge=1, le=32768)
     thinking: bool | None = None
 
 
 BUILTIN_CHAT: dict[str, Any] = {"temperature": 0.7, "max_tokens": 512}
+# Strata thinks at xhigh unless told otherwise: 512 tokens can end before any answer
+STRATA_CHAT: dict[str, Any] = {"max_tokens": 8192}
 _PROFILE_CHAT = (
     "temperature",
     "top_p",
@@ -54,14 +67,16 @@ def effective_chat(req: ChatRequest, defaults: dict[str, Any] | None = None) -> 
     return out
 
 
-def build_payload(req: ChatRequest, defaults: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_payload(
+    req: ChatRequest, defaults: dict[str, Any] | None = None, model: str = ACTIVE_MODEL_ID
+) -> dict[str, Any]:
     messages: list[dict[str, str]] = []
     if req.system:
         messages.append({"role": "system", "content": req.system})
     messages.extend(m.model_dump() for m in req.messages)
     eff = effective_chat(req, defaults)
     payload: dict[str, Any] = {
-        "model": ACTIVE_MODEL_ID,
+        "model": model,
         "messages": messages,
         "stream": True,
         "stream_options": {"include_usage": True},
@@ -83,6 +98,7 @@ async def stream_chat(
     req: ChatRequest,
     transport: httpx.AsyncBaseTransport | None = None,
     defaults: dict[str, Any] | None = None,
+    target: ChatTarget | None = None,
 ) -> AsyncIterator[str]:
     """Yield SSE events: reasoning/delta chunks, then one ``done`` (or one ``error``).
 
@@ -95,12 +111,15 @@ async def stream_chat(
     finish: str | None = None
     n_deltas = 0
     timeout = httpx.Timeout(connect=5.0, read=300.0, write=30.0, pool=5.0)
+    base_url = target.base_url if target else settings.mlx_api_base
+    payload = build_payload(req, defaults, target.model) if target else build_payload(req, defaults)
+    headers = {"Authorization": f"Bearer {target.api_key}"} if target and target.api_key else None
     try:
         async with (
             httpx.AsyncClient(
-                base_url=settings.mlx_api_base, timeout=timeout, transport=transport
+                base_url=base_url, timeout=timeout, transport=transport, headers=headers
             ) as http,
-            http.stream("POST", "/v1/chat/completions", json=build_payload(req, defaults)) as resp,
+            http.stream("POST", "/v1/chat/completions", json=payload) as resp,
         ):
             if resp.status_code != 200:
                 yield _event(

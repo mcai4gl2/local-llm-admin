@@ -231,6 +231,22 @@ async def test_engine_conflict(diag, fake_comfy):
     assert _by_id(await diag.run())["engine_conflict"]["status"] == "fail"
 
 
+async def test_engine_conflict_with_strata(diag):
+    pid = diag.settings.strata_root / "run/strata.pid"
+    pid.parent.mkdir(parents=True)
+    pid.write_text(f"{os.getpid()}\n")
+    subprocess.run(
+        [
+            "sh",
+            "-c",
+            f"sleep 60 >/dev/null 2>&1 & echo $! > {diag.settings.run_dir}/mlx-server.pid",
+        ],
+        check=False,
+    )
+    c = _by_id(await diag.run())["engine_conflict"]
+    assert c["status"] == "fail" and "Strata" in c["evidence"]
+
+
 # --- M6: the decision sidecar ------------------------------------------------------------
 
 

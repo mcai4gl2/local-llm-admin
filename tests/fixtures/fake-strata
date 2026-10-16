@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Fake /Volumes/Models/strata/bin/strata. Shares $FAKE_MLX_STATE with fake-mlx-model.
+set -u
+S="${FAKE_MLX_STATE:?}"; ROOT="${FAKE_STRATA_ROOT:?}"; MLXROOT="${FAKE_MLX_ROOT:?}"
+PID="$ROOT/run/strata.pid"
+printf 'strata %s\n' "$*" >> "$S/calls.log"
+alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+case "${1:-}" in
+  status)
+    if alive "$PID"; then echo "strata: running pid $(cat "$PID")"; else echo "strata: stopped"; fi
+    echo "model: Q2_0"; echo "context: 32768" ;;
+  start)
+    if alive "$MLXROOT/run/mlx-server.pid"; then echo "MLX server is running. Stop it first" >&2; exit 1; fi
+    [ -f "$S/strata_start_exit" ] && { echo "Strata exited immediately"; exit "$(cat "$S/strata_start_exit")"; }
+    [ -n "${2:-}" ] && echo "$2" > "$S/strata_pack"
+    sleep 60 >/dev/null 2>&1 & echo $! > "$PID"
+    [ -f "$S/strata_never_ready" ] || touch "$S/strata_ready"
+    echo "Strata started (pid $(cat "$PID"))" ;;
+  stop)
+    [ -f "$S/strata_stop_fails" ] && { echo "could not stop Strata" >&2; exit 1; }
+    if alive "$PID"; then kill "$(cat "$PID")"; fi
+    rm -f "$PID" "$S/strata_ready"; echo "Strata stopped" ;;
+  *) echo usage >&2; exit 2 ;;
+esac

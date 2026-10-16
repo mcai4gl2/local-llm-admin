@@ -55,8 +55,20 @@ def test_contract_recorded_spend_logs_local_totals():
     assert sum(r["completion_tokens"] for r in local) == 283
 
 
-def test_default_local_models_is_the_models_prefix():
-    assert Settings().local_model_strings == [PREFIX]
+STRATA_MODEL = "openai/qwen3.8-flash-next-q2_0"
+STRATA_IQ3_MODEL = "openai/qwen3.8-flash-next-iq3_xxs"
+
+
+def test_default_local_models_is_the_models_prefix_and_both_strata_packs():
+    assert Settings().local_model_strings == [PREFIX, STRATA_MODEL, STRATA_IQ3_MODEL]
+
+
+def test_contract_strata_route_row_counts_as_local_by_default():
+    (row,) = _fx("spend_logs_strata.json")["data"]
+    assert lu.is_local(row["model"], Settings().local_model_strings)
+    assert lu.is_local("qwen3.8-flash-next-q2_0", Settings().local_model_strings)
+    assert lu.is_local("qwen3.8-flash-next-iq3_xxs", Settings().local_model_strings)
+    assert not lu.is_local("openai/qwen3.8-flash-next-iq3_s", Settings().local_model_strings)
 
 
 @pytest.mark.parametrize(

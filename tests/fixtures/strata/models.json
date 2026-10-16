@@ -1,0 +1,23 @@
+{
+ "object": "list",
+ "data": [
+  {
+   "id": "qwen3.8-flash-next-q2_0",
+   "object": "model",
+   "status": {
+    "value": "loaded"
+   },
+   "meta": {
+    "n_ctx": 32768
+   },
+   "architecture": {
+    "input_modalities": [
+     "text"
+    ],
+    "output_modalities": [
+     "text"
+    ]
+   }
+  }
+ ]
+}

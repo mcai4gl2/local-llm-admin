@@ -260,3 +260,178 @@ def test_inventory_skips_entries_that_cannot_be_stat(tmp_path):
     (out / "gone.png").symlink_to(tmp_path / "missing")
     assert engines.comfy_weights(models, hub, now=NOW) == []
     assert engines.output_summary(out) == {"files": 0, "bytes": 0}
+
+
+def test_resolve_active_with_strata():
+    from local_llm_admin.engines import resolve_active
+
+    assert resolve_active(False, False, True) == "strata"
+    assert resolve_active(True, False, True) == "conflict"
+    assert resolve_active(False, True, True) == "conflict"
+    assert resolve_active(False, False, False) == "none"
+
+
+def test_badge_state_strata():
+    from local_llm_admin.engines import badge_state
+
+    assert badge_state("stopped", "strata", False, strata_ready=True) == "strata"
+    assert badge_state("stopped", "strata", False, strata_ready=False) == "strata-starting"
+    assert badge_state("switching", "strata", False, strata_ready=True) == "switching"
+
+
+# --- Strata ------------------------------------------------------------------------------
+def test_strata_settings_defaults():
+    s = Settings()
+    assert s.strata_enabled is False
+    assert s.strata_root == Path("/Volumes/Models/strata")
+    assert s.strata_path == Path("/Volumes/Models/strata/bin/strata")
+    # the MLX URL: LiteLLM's one route reaches whichever engine runs
+    assert (s.strata_api_base, s.strata_port) == ("http://127.0.0.1:8080", 8080)
+    assert s.strata_port == s.mlx_port
+    assert s.strata_ready_timeout_s == 300.0
+
+
+def _strata(tmp_path, transport=None, **kw):
+    s = Settings(strata_root=tmp_path / "strata", strata_port=1, **kw)
+    return engines.StrataClient(s, transport=transport)
+
+
+def test_strata_argv_only_known_actions(tmp_path):
+    c = _strata(tmp_path)
+    assert c.argv("start") == [str(tmp_path / "strata/bin/strata"), "start"]
+    with pytest.raises(ValueError):
+        c.argv("rm")
+
+
+def test_strata_running_from_pid_file_then_port(tmp_path):
+    c = _strata(tmp_path)
+    assert c.running().running is False and c.down_sync() is True
+    run = tmp_path / "strata/run"
+    run.mkdir(parents=True)
+    (run / "strata.pid").write_text(f"{os.getpid()}\n")
+    st = c.running()
+    assert (st.running, st.pid) == (True, os.getpid()) and c.down_sync() is False
+    (run / "strata.pid").write_text("garbage")
+    assert c.running().running is False
+
+
+def test_strata_on_the_mlx_port_is_found_by_its_pid_file_only(tmp_path):
+    """On the shared port a listener may be MLX: only the pid file says Strata runs."""
+    import socket
+
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen()
+    try:
+        port = srv.getsockname()[1]
+        shared = _strata(tmp_path, mlx_port=port)
+        shared.settings.strata_port = port
+        assert shared.running().running is False
+        own = _strata(tmp_path, mlx_port=port + 1)
+        own.settings.strata_port = port
+        assert own.running().running is True  # its own port: a listener is Strata
+    finally:
+        srv.close()
+
+
+def test_strata_argv_takes_a_pack_for_start_only(tmp_path):
+    c = _strata(tmp_path)
+    assert c.argv("start", "IQ3_XXS") == [str(tmp_path / "strata/bin/strata"), "start", "IQ3_XXS"]
+    for action, pack in (("stop", "IQ3_XXS"), ("start", "iq3_xxs"), ("start", "Q2_0 x")):
+        with pytest.raises(ValueError):
+            c.argv(action, pack)
+
+
+def test_strata_packs_are_the_run_configs_setup_wrote(tmp_path):
+    import json
+
+    app = tmp_path / "strata/app"
+    app.mkdir(parents=True)
+    cfg = {"args": ["--pack", "/p", "--max-context", "131072", "--mmap-experts"]}
+    (app / "strata-iq3_xxs.json").write_text(json.dumps(cfg))
+    (app / "strata-q2_0.json").write_text(json.dumps({"args": ["--max-context", "262144"]}))
+    (app / "strata-q2_0.json.32k").write_text("{}")  # a backup, not a run config
+    (app / "strata-other.json").write_text("{}")
+    assert _strata(tmp_path).packs() == [
+        {"pack": "Q2_0", "max_context": 262144},
+        {"pack": "IQ3_XXS", "max_context": 131072},
+    ]
+    (app / "strata-q2_0.json").write_text("not json")
+    assert _strata(tmp_path).packs()[0] == {"pack": "Q2_0", "max_context": None}
+    assert _strata(tmp_path / "none").packs() == []
+
+
+def test_strata_pack_of_a_model_id():
+    assert engines.strata_pack_of("qwen3.8-flash-next-iq3_xxs") == "IQ3_XXS"
+    assert engines.strata_pack_of("qwen3.8-flash-next-q2_0") == "Q2_0"
+    for other in (None, "qwen3.8-flash-next-q9", "something-else"):
+        assert engines.strata_pack_of(other) is None
+
+
+STRATA_FIX = Path(__file__).parent / "fixtures" / "strata"
+
+
+def test_parse_strata_metrics_from_fixture():
+    import json
+
+    # recorded in Strata Phase 0 (Q2_0, 0.1.44.1-metal) after the bench's four requests
+    m = engines.parse_strata_metrics(json.loads((STRATA_FIX / "metrics.json").read_text()))
+    assert m["model"] == "qwen3.8-flash-next-q2_0" and m["max_context"] == 32768
+    assert m["state"] == "idle" and m["queued"] == 0 and m["tok_s"] is None
+    assert (m["requests"], m["prompt_tokens"], m["output_tokens"]) == (4, 32844, 2277)
+    assert m["prompt_tok_s"] == 643.5 and m["decode_tok_s"] == 55.7
+
+
+def test_parse_strata_metrics_totals_and_rates():
+    m = engines.parse_strata_metrics(
+        {
+            "engine": {"model": "x", "max_context": 4096},
+            "live": {"state": "generating", "queued": 1, "tok_s": 55.5},
+            "totals": {
+                "requests": 2,
+                "prompt_tokens": 1200,
+                "reused": 200,
+                "prompt_ms": 2000.0,
+                "output_tokens": 300,
+                "decode_ms": 6000.0,
+            },
+        }
+    )
+    assert m["state"] == "generating" and m["tok_s"] == 55.5 and m["queued"] == 1
+    assert (m["requests"], m["prompt_tokens"], m["output_tokens"]) == (2, 1000, 300)
+    assert m["prompt_tok_s"] == 500.0 and m["decode_tok_s"] == 50.0
+
+
+@pytest.mark.parametrize("raw", [{}, {"live": "x", "totals": None, "engine": []}])
+def test_parse_strata_metrics_tolerates_missing_fields(raw):
+    m = engines.parse_strata_metrics(raw)
+    assert m["state"] is None and m["requests"] is None and m["decode_tok_s"] is None
+
+
+async def test_strata_status_reads_health_and_metrics(tmp_path):
+    import json
+
+    health = json.loads((STRATA_FIX / "health.json").read_text())
+    metrics = json.loads((STRATA_FIX / "metrics.json").read_text())
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers.get("authorization"))
+        if request.url.path == "/health":
+            return httpx.Response(200, json=health)
+        return httpx.Response(200, json=metrics)
+
+    run = tmp_path / "strata/run"
+    run.mkdir(parents=True)
+    (run / "strata.pid").write_text(str(os.getpid()))
+    c = _strata(tmp_path, httpx.MockTransport(handler), strata_api_key="k-1")
+    st = await c.status()
+    assert st["running"] and st["ready"] and st["pid"] == os.getpid()
+    assert st["model"] == health["model"] and st["max_context"] == 32768
+    assert st["pack"] == "Q2_0" and st["packs"] == []
+    assert st["metrics"]["state"] == "idle" and "Bearer k-1" in seen
+
+
+async def test_strata_status_when_stopped(tmp_path):
+    st = await _strata(tmp_path).status()
+    assert st["running"] is False and st["ready"] is False and st["metrics"] is None

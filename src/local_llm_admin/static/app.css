@@ -54,6 +54,8 @@ code { font-size: 12px; }
 .badge[data-state="loading"]::before, .badge[data-state="switching"]::before,
 .badge[data-state="running"]::before, .badge[data-state="chat-ui"]::before,
 .badge[data-state="comfyui-starting"]::before { background: var(--warning); }
+.badge[data-state="strata"]::before { background: var(--good); }
+.badge[data-state="strata-starting"]::before { background: var(--warning); }
 .badge[data-state="stopped"]::before { background: var(--muted); }
 .badge[data-state="error"]::before, .badge[data-state="drive-missing"]::before,
 .badge[data-state="failed"]::before, .badge[data-state="timeout"]::before,
@@ -163,7 +165,7 @@ dialog form { display: grid; gap: 12px; }
 .strip { position: relative; height: 18px; border-radius: 4px; background: var(--grid); overflow: hidden; margin: 8px 0; }
 .strip > span { position: absolute; top: 0; bottom: 0; min-width: 1px; }
 .st-serving { background: var(--good); } .st-loading { background: var(--warning); }
-.st-down, .st-conflict { background: var(--critical); } .st-comfyui { background: var(--s1); }
+.st-down, .st-conflict { background: var(--critical); } .st-comfyui { background: var(--s1); } .st-strata { background: var(--s2); }
 .st-off { background: var(--axis); } .st-unknown { background: var(--grid); }
 .strip-legend { flex-wrap: wrap; }
 .strip-legend .key.st-unknown { border: 1px solid var(--axis); }

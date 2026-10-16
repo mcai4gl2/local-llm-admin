@@ -101,6 +101,25 @@ embed_running() {
   lsof -nP -iTCP:8084 -sTCP:LISTEN >/dev/null 2>&1
 }
 
+# The Strata engine (strata/bin/strata) holds most of memory and serves on MLX's :8080. Its
+# server is found by its pid file or the :8080 listener, and told apart by its command line.
+is_strata() {
+  [[ "$(ps -o command= -p "$1" 2>/dev/null)" == *"serve/server.py --engine strata"* ]]
+}
+
+strata_running() {
+  local pid=""
+  if [[ -f "/Volumes/Models/strata/run/strata.pid" ]]; then
+    pid="$(</Volumes/Models/strata/run/strata.pid)"
+    pid="${pid//$'\n'/}"
+    [[ "$pid" == <-> ]] && is_strata "$pid" && return 0
+  fi
+  for pid in $(lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null); do
+    is_strata "$pid" && return 0
+  done
+  return 1
+}
+
 cmd_status() {
   require_volume
   local pid=""
@@ -130,6 +149,11 @@ cmd_status() {
   else
     echo "embed: stopped"
   fi
+  if strata_running; then
+    echo "strata: running (stop it before comfyui start)"
+  else
+    echo "strata: stopped"
+  fi
   echo "listen: http://${HOST}:${PORT}"
   echo "models: $ROOT/models"
   echo "output: $ROOT/output"
@@ -149,6 +173,10 @@ cmd_start() {
     exit 1
   fi
   rm -f "$PID_FILE"
+  if strata_running; then
+    echo "The Strata engine is running. Stop it first: /Volumes/Models/strata/bin/strata stop" >&2
+    exit 1
+  fi
   if mlx_running; then
     echo "MLX server is running. Stop it first: /Volumes/Models/bin/mlx-model stop" >&2
     exit 1

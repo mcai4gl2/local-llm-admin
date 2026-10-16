@@ -72,7 +72,7 @@ function renderAvailability(a) {
     el("td", { text: d.date }), el("td", { class: "num", text: pctOrDash(d.availability) }),
     el("td", { class: "num", text: pctOrDash(d.coverage) }), el("td", { class: "num", text: hours(d.seconds.serving) }),
     el("td", { class: `num ${d.seconds.down ? "bad" : ""}`, text: hours(d.seconds.down + d.seconds.conflict) }),
-    el("td", { class: "num", text: hours(d.seconds.off + d.seconds.comfyui) }),
+    el("td", { class: "num", text: hours(d.seconds.off + d.seconds.comfyui + (d.seconds.strata || 0)) }),
     el("td", { class: "num muted", text: hours(d.unknown_s) }))),
     ...(unseen ? [el("tr", {}, el("td", { colspan: 7, class: "muted",
       text: `${unseen} day${unseen === 1 ? "" : "s"} in this range with no observations (not counted as up or down).` }))] : []));

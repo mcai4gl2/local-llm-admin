@@ -127,6 +127,13 @@ class Host:
         self.procs.append(p)
         return p
 
+    def strata_server(self) -> subprocess.Popen[str]:
+        """A process whose command line is Strata's server (``serve/server.py --engine strata``)."""
+        argv = ["bash", "-c", "while :; do sleep 0.2; done"]
+        p = subprocess.Popen([*argv, f"{self.root}/strata/app/serve/server.py", "--engine", "strata"])
+        self.procs.append(p)
+        return p
+
     def wait_for(self, path: Path, timeout: float = 10) -> None:
         end = time.monotonic() + timeout
         while time.monotonic() < end:

@@ -402,18 +402,20 @@ class SidecarRegistry:
 
 
 def service_unavailable_reason(
-    registry: SidecarRegistry, store: Any, name: str, comfy_running: Callable[[], bool]
+    registry: SidecarRegistry, store: Any, name: str, exclusive: Callable[[], str | None]
 ) -> str | None:
     """None while the service's process runs; otherwise why not (D-E12), so clients can
-    tell "wait" (comfyui_active) from "broken" (down) from "off" (stopped)."""
+    tell "wait" (comfyui_active, strata_active) from "broken" (down) from "off" (stopped).
+    ``exclusive`` names the engine that excludes every service, if one runs."""
     try:
         spec = registry.get_service(name)
     except KeyError:
         return "stopped"
     if registry.process(name).status().running:
         return None
-    if comfy_running():
-        return "comfyui_active"
+    engine = exclusive()
+    if engine:
+        return f"{engine}_active"
     return "down" if read_service_intent(store, spec) == "running" else "stopped"
 
 
@@ -454,6 +456,7 @@ def plan_sidecar_start(
     wired_limit_gb: float | None,
     pressure: str | None,
     services: Sequence[SidecarSpec] = (),
+    strata_running: bool = False,
 ) -> SidecarPlan:
     """Whether ``spec`` may start now, and every reason it may not (D-S2, D-S4).
 
@@ -472,6 +475,8 @@ def plan_sidecar_start(
         )
     if comfy_running:
         reasons.append("ComfyUI is running; the sidecar never runs next to it")
+    if strata_running:
+        reasons.append("Strata is running; the sidecar never runs next to it")
     if mlx_running and not spec.allows(mlx_name):
         listed = ", ".join(sorted(spec.allowed_mlx)) or "none"
         reasons.append(
@@ -523,12 +528,15 @@ def plan_service_start(
     ram_gb: float,
     wired_limit_gb: float | None,
     pressure: str | None,
+    strata_running: bool = False,
 ) -> SidecarPlan:
     """Whether the always-on service ``spec`` may start now (M8, D-E7). It counts MLX, the
     slot sidecar that is running, and itself. With the engine off it may run (MLX = 0 GB)."""
     reasons: list[str] = []
     if comfy_running:
         reasons.append(f"ComfyUI is running; {spec.noun} never runs next to it")
+    if strata_running:
+        reasons.append(f"Strata is running; {spec.noun} never runs next to it")
     if mlx_running and not spec.allows(mlx_name):
         listed = ", ".join(sorted(spec.allowed_mlx)) or "none"
         reasons.append(
@@ -600,8 +608,8 @@ class SidecarMonitor:
         running = {s.name for s in await asyncio.to_thread(self.registry.running)}
         svc_up = {s.name for s in await asyncio.to_thread(self.registry.services_running)}
         svc_meant = {s.name for s in services if read_service_intent(self.store, s) == "running"}
-        # ComfyUI stops the services on purpose (D-E4): not an outage, never an alert
-        paused = getattr(snap, "engine", None) == "comfyui"
+        # ComfyUI and Strata stop the services on purpose (D-E4): not an outage, never an alert
+        paused = getattr(snap, "engine", None) in ("comfyui", "strata")
         if self.history is not None:
             await self._sample(snap, intent, specs, running)
             await self._sample_services(snap, services, svc_up, svc_meant, paused)

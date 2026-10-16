@@ -55,7 +55,8 @@ const fmt = {
 
 const STATE_LABEL = { serving: "Serving", loading: "Loading", switching: "Switching", stopped: "Stopped",
   "chat-ui": "Chat UI mode (API down)", "drive-missing": "Drive missing", error: "Error", unknown: "…",
-  comfyui: "ComfyUI", "comfyui-starting": "ComfyUI starting", conflict: "Conflict: both running" };
+  comfyui: "ComfyUI", "comfyui-starting": "ComfyUI starting", strata: "Strata", "strata-starting": "Strata starting",
+  conflict: "Conflict: two engines running" };
 
 const statusListeners = [];
 async function refreshStatus() {
@@ -224,12 +225,15 @@ onStatus((st) => {
   if (!banner) return;
   banner.hidden = st.engine?.active !== "conflict";
   banner.dataset.mlx = st.selected || "";
+  const keepStrata = banner.querySelector('[data-keep="strata"]');
+  if (keepStrata) keepStrata.hidden = !st.engine?.strata?.running;
 });
 document.getElementById("conflict-banner")?.addEventListener("click", async (ev) => {
   const keep = ev.target?.dataset?.keep;
   if (!keep) return;
   const target = keep === "mlx" ? `mlx:${ev.currentTarget.dataset.mlx}` : keep;
-  const what = { mlx: "Keep MLX and stop ComfyUI?", comfyui: "Keep ComfyUI and stop MLX?", off: "Stop both engines?" }[keep];
+  const what = { mlx: "Keep MLX and stop the other engines?", comfyui: "Keep ComfyUI and stop the other engines?",
+    strata: "Keep Strata and stop the other engines?", off: "Stop every engine?" }[keep];
   if (!window.confirm(what)) return;
   try { await setEngineWithForce(target, nativeAsk); refreshStatus(); } catch (e) { alert(e.message); }
 });

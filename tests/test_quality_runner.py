@@ -698,3 +698,85 @@ async def test_embed_service_running_is_refused(running, fake_embed):
         await running.start("benchmark", "current")
     assert err.value.code == 409 and "embeddings service" in err.value.message
     assert running.control.runner.running() is None
+
+
+# --- Strata (Phase 4): compatibility of the current engine, no switching ------------------
+STRATA_HEALTH = {"status": "ok", "model": "Qwen3.8-Flash-Next", "max_context": 32768, "images": False,
+                 "loaded": True, "service": "strata"}
+
+
+@pytest.fixture
+def strata_env(fake_strata, fake_comfy, fake_mlx):
+    import httpx
+
+    from local_llm_admin.engines import StrataClient
+
+    s = fake_strata.settings
+    s.quality_request_timeout_s = 5
+    s.quality_ready_timeout_s = 1
+    s.strata_api_key = "k-strata"
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        if request.url.path == "/health":
+            return httpx.Response(200, json=STRATA_HEALTH)
+        if request.url.path == "/v1/chat/completions":
+            body = json.loads(request.content)
+            if body.get("stream"):
+                chunks = [
+                    {"choices": [{"index": 0, "delta": {"content": "one two"}}]},
+                    {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+                ]
+                text = "".join(f"data: {json.dumps(c)}\n\n" for c in chunks) + "data: [DONE]\n\n"
+                return httpx.Response(200, text=text, headers={"content-type": "text/event-stream"})
+            return httpx.Response(
+                200, json={"choices": [{"message": {"role": "assistant", "content": "ready"}}]}
+            )
+        return httpx.Response(404)
+
+    mlx = MlxClient(s)
+    path = s.admin_data_dir / "admin.sqlite"
+    jobs = JobStore(path)
+    runner = JobRunner(s, jobs, current_name=lambda: mlx.active_env().get("MLX_ACTIVE_NAME"))
+    transport = httpx.MockTransport(handler)
+    control = ControlService(
+        s,
+        jobs,
+        runner,
+        mlx,
+        ComfyClient(s, transport=fake_comfy.transport),
+        strata=StrataClient(s, transport=fake_strata.transport),
+    )
+    qr = QualityRunner(
+        s, control, QualityStore(path), AlertStore(path), Sampler(), transport=transport, cases=P128
+    )
+    qr.seen = seen
+    fake_strata.start()
+    control.store.set_kv("intent", {"value": "strata"})
+    return qr
+
+
+async def test_compatibility_against_strata(strata_env):
+    qr = strata_env
+    done = await _finish(qr, await qr.start("compatibility", "current"))
+    assert done["status"] in ("succeeded", "failed"), done
+    cases = {c["case_key"]: c for c in done["cases"]}
+    assert cases["plain"]["status"] == "pass" and cases["plain"]["model"] == "strata"
+    assert cases["vision"]["status"] == "unsupported"  # /health reports no image input
+    assert done["restoration"]["outcome"] == "not_needed"
+    posts = [json.loads(r.content) for r in qr.seen if r.url.path == "/v1/chat/completions"]
+    assert posts and all(p["model"] == "Qwen3.8-Flash-Next" for p in posts)
+    plain = next(p for p in posts if "ready" in p["messages"][0]["content"])
+    assert plain["chat_template_kwargs"] == {"enable_thinking": False}
+    assert all(r.headers.get("authorization") == "Bearer k-strata" for r in qr.seen)
+    assert str(qr.seen[0].url).startswith("http://strata.test/")
+    assert qr.control.strata.running().running and qr.control.intent()["value"] == "strata"
+
+
+@pytest.mark.parametrize(("kind", "scope"), [("benchmark", "current"), ("compatibility", "all")])
+async def test_strata_refuses_benchmarks_and_other_scopes(strata_env, kind, scope):
+    with pytest.raises(QualityError) as err:
+        await strata_env.start(kind, scope)
+    assert err.value.code == 409 and "Strata" in err.value.message
+    assert strata_env.control.runner.running() is None

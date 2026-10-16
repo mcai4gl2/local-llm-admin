@@ -14,6 +14,7 @@
     $("embed-disabled").hidden = cfg.running;
     $("embed-disabled").textContent = cfg.running ? "" : cfg.reason === "comfyui_active"
       ? "The embedding service is paused while ComfyUI runs."
+      : cfg.reason === "strata_active" ? "The embedding service is paused while Strata runs."
       : "The embedding service is stopped. Start it on the Models page (Embeddings card).";
     $("embed-sim-run").disabled = $("embed-rr-run").disabled = !cfg.running;
     const h = await api("/api/embed/history?days=14");

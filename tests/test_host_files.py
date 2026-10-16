@@ -40,6 +40,7 @@ def test_host_scripts_are_executable_and_zsh():
     scripts.append(HOST / "decision/bin/openjev")
     scripts.append(HOST / "tts/bin/qwen-tts")
     scripts.append(HOST / "embed/bin/qwen-embed")
+    scripts.append(HOST / "strata/bin/strata")
     for s in scripts:
         assert s.stat().st_mode & 0o111, f"{s} is not executable"
         assert s.read_text().startswith("#!/bin/zsh"), s

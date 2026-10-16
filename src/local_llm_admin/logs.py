@@ -19,6 +19,8 @@ FIXED_SOURCE_IDS = (*MLX_LOG_FILES, "admin", "comfyui")
 DOWNLOAD_ID_RE = re.compile(r"^download-[A-Za-z0-9_-]+$")
 _LEVELS = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
 _LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL)\b")
+# Strata's own warnings carry no level word: memory running low, a numerically broken step
+_STRATA_LEVELS = (("non-finite logits", "ERROR"), ("LOW: requests may stall", "WARNING"))
 
 
 def admin_log_path(settings: Settings) -> Path:
@@ -34,9 +36,10 @@ def download_log_ids(settings: Settings) -> list[str]:
 
 
 def source_ids(settings: Settings) -> list[str]:
-    """Fixed sources, the decision sidecar's log when enabled, and every
+    """Fixed sources, the decision sidecar's and Strata's logs when enabled, and every
     ``logs/download-*.log`` present now."""
     extra = ["decision"] if settings.decision_enabled else []
+    extra += ["strata"] if settings.strata_enabled else []
     return [*FIXED_SOURCE_IDS, *extra, *download_log_ids(settings)]
 
 
@@ -52,6 +55,8 @@ def resolve_source(settings: Settings, source_id: str) -> Path:
         return settings.comfyui_root / "logs" / "comfyui.log"
     if source_id == "decision" and settings.decision_enabled:
         return settings.decision_root / "logs" / "openjev.log"
+    if source_id == "strata" and settings.strata_enabled:
+        return settings.strata_root / "logs" / "strata.log"
     if source_id in MLX_LOG_FILES:
         return settings.mlx_log_dir / MLX_LOG_FILES[source_id]
     if DOWNLOAD_ID_RE.fullmatch(source_id):
@@ -97,7 +102,7 @@ def tail_lines(path: Path, n: int, block_size: int = 65536) -> list[str]:
 def line_level(line: str) -> str | None:
     m = _LEVEL_RE.search(line)
     if not m:
-        return None
+        return next((lvl for text, lvl in _STRATA_LEVELS if text in line), None)
     return "WARNING" if m.group(1) == "WARN" else m.group(1)
 
 

@@ -1,0 +1,10 @@
+# Strata checkout at /Volumes/Models/strata/app (recorded 2026-10-15, Phase 0 spike)
+repo: https://github.com/Niko1221/Strata
+commit: 296b59d2f73c8f04a805df29c2fa97655adace78
+date: 2026-10-14 (merge of f-1441-perf into f-1441)
+python: standalone CPython 3.12.15 (python-build-standalone 20261009), installed by setup.sh into app/.python
+setup: ./setup.sh --yes --model Q2_0 --context 262144 --port 8086 --host 127.0.0.1 --no-browser --no-start --vision no --data-dir <root>/data --models-dir <root>/data/models
+setup (IQ3_XXS, data on the internal SSD): ./setup.sh --yes --model IQ3_XXS --context 131072 --port 8086 --host 127.0.0.1 --no-browser --no-start --vision no --data-dir /Users/you/strata/data --models-dir /Users/you/strata/data/models
+third_party/metal-cpp: fetched by setup.sh (untracked in the checkout)
+serving: bin/strata passes --host 0.0.0.0 --port 8080 (MLX's address), whatever setup wrote
+local changes: none

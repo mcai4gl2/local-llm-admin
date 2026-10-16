@@ -21,7 +21,14 @@ import psutil
 from . import sidecars as sidecars_mod
 from .config import Settings
 from .decision import DecisionClient
-from .engines import ComfyClient, TransitionRefused, parse_target, plan_transition, resolve_active
+from .engines import (
+    ComfyClient,
+    StrataClient,
+    TransitionRefused,
+    parse_target,
+    plan_transition,
+    resolve_active,
+)
 from .inventory import build_remove_argv, removal_preview
 from .jobs import JobConflict, JobRunner, JobStorageError, JobStore, Step
 from .mlx import MlxClient, build_command, validate_name
@@ -61,13 +68,16 @@ class EngineOpsBinding:
         mlx: MlxClient,
         comfy: ComfyClient,
         sidecars: SidecarRegistry,
+        strata: StrataClient,
     ) -> None:
         self._settings = settings
         self._mlx = mlx
         self._comfy = comfy
         self._sidecars = sidecars
+        self._strata = strata
         self.stop_timeout_s = settings.engine_stop_timeout_s
         self.ready_timeout_s = settings.comfyui_ready_timeout_s
+        self.strata_ready_timeout_s = settings.strata_ready_timeout_s
         self.job_timeout_s = settings.admin_job_timeout_s
 
     def mlx_argv(self, action: str, name: str | None) -> list[str]:
@@ -87,6 +97,15 @@ class EngineOpsBinding:
 
     def comfy_cancel_all(self) -> None:
         self._comfy.cancel_all_sync()
+
+    def strata_argv(self, action: str, pack: str | None = None) -> list[str]:
+        return self._strata.argv(action, pack)
+
+    def strata_down(self) -> bool:
+        return self._strata.down_sync()
+
+    def strata_ready(self) -> bool:
+        return self._strata.ready_sync()
 
     def sidecar_argv(self, name: str, action: str) -> list[str]:
         return self._sidecars.argv(name, action)
@@ -121,7 +140,7 @@ def intent_after(job: dict[str, Any]) -> str | None:
     if action == "engine":
         if to_name is None:
             return "off"
-        return "comfyui" if to_name == "comfyui" else f"mlx:{to_name}"
+        return to_name if to_name in ("comfyui", "strata") else f"mlx:{to_name}"
     return None  # add (and later unlock) never change the intended engine
 
 
@@ -129,7 +148,7 @@ def adopted_intent(observed: dict[str, Any]) -> str:
     engine = observed["engine"]
     if engine == "mlx":
         return f"mlx:{observed['mlx_name']}" if observed["mlx_name"] else UNKNOWN
-    return {"comfyui": "comfyui", "none": "off"}.get(engine, UNKNOWN)
+    return {"comfyui": "comfyui", "strata": "strata", "none": "off"}.get(engine, UNKNOWN)
 
 
 class ControlService:
@@ -143,6 +162,7 @@ class ControlService:
         *,
         decision: DecisionClient | None = None,
         sidecars: SidecarRegistry | None = None,
+        strata: StrataClient | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
@@ -153,7 +173,8 @@ class ControlService:
         self.sidecars = sidecars or SidecarRegistry(
             settings, {"openjev": decision.transport} if decision else None
         )
-        self.ops = EngineOpsBinding(settings, mlx, comfy, self.sidecars)
+        self.strata = strata or StrataClient(settings)
+        self.ops = EngineOpsBinding(settings, mlx, comfy, self.sidecars, self.strata)
         # set when the database cannot record an outcome; blocks automatic recovery
         # for the life of this process even though nothing could be persisted
         self._unrecorded: str | None = None
@@ -271,7 +292,8 @@ class ControlService:
             return {"engine": UNKNOWN, "mlx_name": None, "generation": None}
         mlx_running = self.mlx.engine_running()
         comfy = self.comfy.running()
-        active = resolve_active(mlx_running, comfy.running)
+        strata = self.strata.running()
+        active = resolve_active(mlx_running, comfy.running, strata.running)
         name: str | None = None
         pid: int | None = None
         if active == "mlx":
@@ -279,7 +301,17 @@ class ControlService:
             pid = self.mlx.pid_from_file()
         elif active == "comfyui":
             pid = comfy.pid
+        elif active == "strata":
+            pid = strata.pid
         return {"engine": active, "mlx_name": name, "generation": process_generation(pid)}
+
+    def exclusive_running(self) -> str | None:
+        """``comfyui`` or ``strata`` when an engine that excludes every sidecar runs."""
+        if self.comfy.running().running:
+            return "comfyui"
+        if self.strata.running().running:
+            return "strata"
+        return None
 
     # --- startup -----------------------------------------------------------
     def reconcile(self) -> list[dict[str, Any]]:
@@ -399,13 +431,13 @@ class ControlService:
         claim = self._claim()
         try:
             await asyncio.to_thread(self._preflight)
-            if (
-                action in ("switch", "start")
-                and (await asyncio.to_thread(self.comfy.running)).running
-            ):
-                raise ControlError(
-                    409, "ComfyUI is running; use the Engine control to switch to MLX"
-                )
+            if action in ("switch", "start"):
+                other = await asyncio.to_thread(self.exclusive_running)
+                if other is not None:
+                    label = "ComfyUI" if other == "comfyui" else "Strata"
+                    raise ControlError(
+                        409, f"{label} is running; use the Engine control to switch to MLX"
+                    )
             if name is not None:
                 await self._known_name(name)
             if action in ("switch", "start"):
@@ -571,11 +603,18 @@ class ControlService:
         try:
             target = parse_target(target_raw)
         except ValueError:
-            raise ControlError(400, "target must be off, comfyui, or mlx:<name>") from None
+            raise ControlError(
+                400, "target must be off, comfyui, strata, strata:<pack>, or mlx:<name>"
+            ) from None
+        if target.kind == "strata" and not self.settings.strata_enabled:
+            raise ControlError(404, "the Strata engine is not enabled")
         claim = self._claim()
         try:
             mlx_running = await asyncio.to_thread(self.mlx.engine_running)
             comfy_running = (await asyncio.to_thread(self.comfy.running)).running
+            strata_running = (await asyncio.to_thread(self.strata.running)).running
+            # the running pack decides whether strata:<pack> is a restart or nothing to do
+            strata_pack = (await self.strata.status())["pack"] if strata_running else None
             # drive always; mlx.lock only when mlx-model will be called
             await asyncio.to_thread(self._preflight, target.kind == "mlx" or mlx_running)
             if target.kind == "mlx":
@@ -606,6 +645,8 @@ class ControlService:
                     sidecar=sidecar,
                     services=services,
                     restore=restore,
+                    strata_running=strata_running,
+                    strata_pack=strata_pack,
                 )
             except TransitionRefused as exc:
                 raise ControlError(exc.code, exc.message) from None
@@ -679,6 +720,7 @@ class ControlService:
             wired_limit_gb=sidecars_mod.wired_limit_gb(),
             pressure=pressure,
             services=self.sidecars.services_running(),
+            strata_running=self.strata.running().running,
         )
 
     def _sidecar_start_steps(self, spec: SidecarSpec) -> list[Step]:
@@ -806,6 +848,7 @@ class ControlService:
             ram_gb=sidecars_mod.system_ram_gb(),
             wired_limit_gb=sidecars_mod.wired_limit_gb(),
             pressure=pressure,
+            strata_running=self.strata.running().running,
         )
 
     async def service_budget(self, name: str, pressure: str | None) -> SidecarPlan:

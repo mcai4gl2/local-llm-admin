@@ -1,7 +1,13 @@
 # Strata engine with Qwen3.8-Flash-Next (Q2_0 first, IQ3_XXS gated)
 
 Date: 2026-10-15
-Status: Proposed. Nothing implemented; Phase 0 needs approval because it installs software on the Mac.
+Status: Done (2026-10-16). Phases 0–6 complete. Q2_0 was measured in a sandbox
+(`docs/DESIGN.md` §3b) and is the default pack at 262144. IQ3_XXS was tried at 131072 and
+failed the decision gate on speed (decode 26–32 tok/s, 4K prompt 427 tok/s); it is kept as a
+second live pack by the operator's choice (still faster than the 27B dense MLX models).
+Deployed 2026-10-16: Strata serves on MLX's port 8080, so the existing LiteLLM route reaches
+whichever engine is running (decision 4), and the Engine dropdown switches between the packs
+(decision 7). The sandbox was deleted after Phase 0.
 
 ## 1. Goal
 
@@ -76,21 +82,26 @@ rough guide): UD-Q2_K_XL top-1 82.7%, mean KLD 0.225; UD-IQ3_XXS top-1 85.4%, me
    once at start). If IQ3_XXS is adopted,
    its pack and experts' copy must move to the internal disk; the wrapper takes the data
    directory from its env file so this is a configuration change, not a code change.
-4. **Own port.** Strata defaults to 8080, the MLX server's port. The wrapper starts it with
-   `--host 127.0.0.1 --port <STRATA_PORT>` (proposal 8086; confirm free in Phase 0), so a
-   stray process is never mistaken for the MLX server and status checks stay unambiguous.
+4. **Same port as MLX** (revised 2026-10-16; first planned as its own loopback port 8086).
+   The operator's LiteLLM has one route to the MLX server's `:8080`, and switching engines
+   should change only what answers there. The wrapper starts Strata with
+   `--host 0.0.0.0 --port 8080`; it answers under any model name, so the route needs no
+   change. Status stays unambiguous without the port: host scripts recognise Strata's server
+   by its command line, the admin by its pid file and its `/health` (`service: "strata"`).
 5. **Pack selection is configuration.** The wrapper reads `STRATA_MODEL` (`Q2_0` or
-   `IQ3_XXS`) and `STRATA_CONTEXT` (default 32768) from its env file and runs the matching
-   `run-<model>.sh` settings. The admin target is `strata` (one pack active at a time);
-   switching packs is a later step if both get installed.
-6. **LiteLLM route.** A new route (e.g. `local-flash`) points at
-   `http://mac-mini.local:<STRATA_PORT>/v1`. It is configured on the gateway by the
-   operator, outside this repository. Its upstream model string is added to
-   `LITELLM_LOCAL_MODELS` so usage counts it, and the switch history records `strata` so
-   usage can say which engine answered.
-7. **No auth bypass.** Strata listens on loopback only; LAN access goes through the admin
-   (chat proxy) and LiteLLM. If LiteLLM must reach it over the LAN, bind to the LAN address
-   with `--api-key` from the env file and give the key to LiteLLM only.
+   `IQ3_XXS`) and `STRATA_CONTEXT` (default 262144) from its env file and runs the matching
+   `run-<model>.sh` settings. One pack runs at a time. Revised 2026-10-16 (both packs
+   installed): the Engine control has a `strata:<pack>` entry per installed pack and
+   switches between them; `bin/strata start <pack>` remembers the last pack.
+6. **LiteLLM route.** The existing local route (revised 2026-10-16): it sends the MLX
+   upstream string, which usage already counts as local; the switch history records
+   `strata`, so usage can say which engine answered. Strata's own ids stay in
+   `LITELLM_LOCAL_MODELS` for clients that name them.
+7. **Auth like MLX** (revised 2026-10-16; first planned as loopback plus a key). On the LAN
+   without a key, as the MLX server is, so LiteLLM's route needs no key; Strata's Host check
+   still refuses names it does not know. Strata adds a little MLX does not: a LAN client can
+   change its model settings or unload the model (no MCP tools are set up). `STRATA_API_KEY`
+   in its env file turns a key on; then LiteLLM must send it.
 
 ## 4. Phases
 
@@ -261,12 +272,12 @@ three cold starts without error. Otherwise ship Q2_0. Results go in the devlog a
 | Cold start of 40+ GB ties up the Mac for minutes | Long ready timeout; switch dialog warns; LiteLLM requests fail during the switch (same as MLX) |
 | `/metrics` or log formats change between Strata versions | Read with `dict.get`; fixtures from the pinned commit; missing fields hide tiles instead of failing |
 | Sidecars cannot run next to Strata | Same stop/restore rule as ComfyUI; the decision gateway and embedding users see "paused" |
-| 32K context instead of today's 262K | Document in the route; raise only after measuring memory at 64K |
+| 32K context instead of today's 262K | Resolved 2026-10-16: 262144 measured (needles found at 197.5K tokens, ~1 GB GPU memory left); `docs/DESIGN.md` §3b |
 
 ## 6. Open questions
 
-1. Is a 32K context enough for the clients that will use this route?
-2. Should Strata replace the 27B MLX model as the default `local-qwen` route, or sit beside
-   it as a separate route? (The plan assumes beside it.)
+1. ~~Is a 32K context enough for the clients that will use this route?~~ Runs at 262144 (§3b).
+2. ~~Should Strata replace the 27B MLX model as the default route, or sit beside it?~~
+   Neither: it shares MLX's URL, and the Engine control picks what serves behind it.
 3. Is Swift 1.5 (shorter thinking) wanted? Strata says it is not set up on Mac yet.
-4. How much internal disk is free? It decides whether IQ3_XXS can be tried at all.
+4. ~~How much internal disk is free?~~ Enough: IQ3_XXS data lives on the internal disk.

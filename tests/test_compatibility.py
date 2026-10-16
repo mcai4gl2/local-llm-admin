@@ -292,3 +292,21 @@ def test_backend_detail_extraction(text, expected):
 async def test_reasoning_field_alone_counts_as_an_answer(server):
     server.reply = lambda p: {"choices": [{"message": {"content": "", "reasoning": "2+2=4"}}]}
     assert (await _run(server, "thinking")).outcome == "pass"
+
+
+async def test_strata_gets_thinking_in_chat_template_kwargs(server):
+    # Strata ignores a top-level enable_thinking; without this it thinks at xhigh into max_tokens
+    for key in ("plain", "thinking", "reasoning_effort_low", "reasoning_effort_high"):
+        await _run(server, key, engine="strata", model_id="qwen3.8-flash-next-q2_0")
+    plain, thinking, low, high = server.requests
+    assert plain["chat_template_kwargs"] == {"enable_thinking": False}
+    assert thinking["chat_template_kwargs"] == {"enable_thinking": True}
+    # an "off" here would override the effort under test
+    assert "chat_template_kwargs" not in low and low["reasoning_effort"] == "low"
+    assert "chat_template_kwargs" not in high and high["reasoning_effort"] == "high"
+
+
+async def test_mlx_requests_carry_no_chat_template_kwargs(server):
+    for key in compat.CASES:
+        await _run(server, key)
+    assert server.requests and not any("chat_template_kwargs" in r for r in server.requests)

@@ -264,6 +264,49 @@ def test_select_refuses_while_comfyui_runs(host):
     assert r.returncode == 1 and not (host.root / "run/active.env").exists()
 
 
+@pytest.mark.parametrize("found_by", ["listener", "pidfile"])
+def test_start_and_select_refuse_while_strata_runs(host, found_by):
+    """Strata serves on :8080 when it is the engine; it is told apart by its command line."""
+    s = host.strata_server()
+    if found_by == "listener":
+        (host.state / "listen_8080").write_text(str(s.pid))
+    else:
+        (host.root / "strata/run").mkdir(parents=True)
+        (host.root / "strata/run/strata.pid").write_text(f"{s.pid}\n")
+    r = host.run("start", "a")
+    assert r.returncode == 1 and "Strata" in r.stderr and "strata stop" in r.stderr
+    assert not host.lock.exists()
+    r = host.run("select", "b")
+    assert r.returncode == 1 and "Strata" in r.stderr
+    assert not (host.root / "run/active.env").exists()
+
+
+def test_stop_never_kills_strata_on_the_shared_port(host):
+    s = host.strata_server()
+    (host.state / "listen_8080").write_text(str(s.pid))
+    r = host.run("stop")
+    assert r.returncode == 0 and "No MLX server is running." in r.stdout, r.stderr
+    assert s.poll() is None
+
+
+def test_status_does_not_report_strata_as_mlx_health(host):
+    s = host.strata_server()
+    (host.state / "listen_8080").write_text(str(s.pid))
+    (host.state / "healthy").write_text("")  # the fake curl would answer for the port
+    out = host.run("status").stdout
+    assert "process: stopped" in out and "health: not reachable on 8080 (Strata" in out
+
+
+def test_a_stale_strata_pid_file_does_not_block_mlx(host):
+    s = host.sleeper()  # some other process now has the pid
+    (host.root / "strata/run").mkdir(parents=True)
+    (host.root / "strata/run/strata.pid").write_text(f"{s.pid}\n")
+    (host.state / "healthy").write_text("")
+    r = host.run("start", "a")
+    assert r.returncode == 0, r.stderr
+    host.run("stop")
+
+
 def test_select_unknown_name_and_held_lock(host):
     r = host.run("select", "zzz")
     assert r.returncode == 1 and "Unknown model" in r.stderr

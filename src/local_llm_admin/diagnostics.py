@@ -279,13 +279,20 @@ class Diagnostics:
         )
 
     def _conflict(self) -> dict[str, Any]:
-        active = resolve_active(self.mlx.engine_running(), self.control.comfy.running().running)
+        up = {
+            "MLX": self.mlx.engine_running(),
+            "ComfyUI": self.control.comfy.running().running,
+            "Strata": self.control.strata.running().running,
+        }
+        active = resolve_active(*up.values())
         if active == "conflict":
             return _check(
                 "engine_conflict",
                 "Engines",
                 "fail",
-                "MLX and ComfyUI are both running",
+                " and ".join(k for k, v in up.items() if v) + " are all running"
+                if sum(up.values()) > 2
+                else " and ".join(k for k, v in up.items() if v) + " are both running",
                 "Keep one engine (banner at the top of the page).",
             )
         return _check("engine_conflict", "Engines", "ok", f"active: {active}")
@@ -315,9 +322,11 @@ class Diagnostics:
             meant = intent.get("name") == spec.name and intent.get("value") == "running"
         state = f"running pid {st.pid}" if st.running else "stopped"
         if meant and not st.running:
-            if spec.kind == "service" and self.control.comfy.running().running:
+            engine = self.control.exclusive_running() if spec.kind == "service" else None
+            if engine is not None:
+                label = "ComfyUI" if engine == "comfyui" else "Strata"
                 return _check(
-                    cid, title, "ok", "stopped while ComfyUI runs; restored when you switch back"
+                    cid, title, "ok", f"stopped while {label} runs; restored when you switch back"
                 )
             return _check(
                 cid,

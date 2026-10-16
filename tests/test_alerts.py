@@ -163,6 +163,21 @@ def test_comfyui_intent_mismatch_alerts(ev, store):
     assert "ComfyUI" in _open(store)["engine_down"]["title"]
 
 
+def test_strata_intent_mismatch_alerts(ev, store):
+    s = _snap(intent="strata", engine="none")
+    ev.evaluate(s)
+    ev.evaluate(_at(s, 31))
+    down = _open(store)["engine_down"]
+    assert "Strata" in down["title"] and "not restarted automatically" in down["detail"]
+
+
+def test_strata_running_as_intended_never_alerts(ev, store):
+    s = _snap(intent="strata", engine="strata")
+    ev.evaluate(s)
+    ev.evaluate(_at(s, 60))
+    assert "engine_down" not in _open(store)
+
+
 def test_intent_off_or_unknown_never_alerts_down(ev, store):
     for intent in ("off", "unknown", None):
         s = _snap(intent=intent, engine="none")

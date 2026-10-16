@@ -23,7 +23,7 @@ from .storage import Database
 
 log = logging.getLogger("local_llm_admin")
 
-STATES = ("serving", "loading", "down", "conflict", "comfyui", "off", "unknown")
+STATES = ("serving", "loading", "down", "conflict", "comfyui", "strata", "off", "unknown")
 PRUNE_BATCH = 5000
 PRUNE_BATCHES = 10
 
@@ -31,7 +31,7 @@ PRUNE_BATCHES = 10
 def _intended(intent: str | None) -> int | None:
     if intent and intent.startswith("mlx:"):
         return 1
-    if intent in ("off", "comfyui"):
+    if intent in ("off", "comfyui", "strata"):
         return 0
     return None  # unknown intent: excluded from the availability denominator
 
@@ -50,8 +50,8 @@ def classify(
             return "serving", intended
         young = generation is not None and snap.wall - generation["started"] < load_grace_s
         return ("loading" if snap.job_running or young else "down"), intended
-    if snap.engine == "comfyui":
-        return "comfyui", intended
+    if snap.engine in ("comfyui", "strata"):
+        return snap.engine, intended
     if intended == 1:
         return ("loading" if snap.job_running else "down"), intended
     return ("off" if intended == 0 else "unknown"), intended

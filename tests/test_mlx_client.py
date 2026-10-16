@@ -95,6 +95,15 @@ def test_model_details_bad_config(client, fake_mlx):
 
 
 @respx.mock
+async def test_health_from_strata_on_the_shared_port_is_not_mlx(client):
+    """Strata answers on :8080 when it is the engine; its /health never counts as MLX's."""
+    respx.get("http://mlx.test/health").mock(
+        return_value=httpx.Response(200, json={"status": "ok", "loaded": True, "service": "strata"})
+    )
+    assert await client.health() is None
+
+
+@respx.mock
 async def test_health_ok_and_down(client):
     respx.get("http://mlx.test/health").mock(
         return_value=httpx.Response(200, json={"status": "healthy", "loaded_model": "/m"})
@@ -176,6 +185,35 @@ def test_engine_running_counts_chat_ui_mode(client, fake_mlx):
     srv.listen()
     try:
         fake_mlx.settings.chat_ui_port = srv.getsockname()[1]
+        assert client.engine_running() is True
+    finally:
+        srv.close()
+
+
+def _listen():
+    import socket
+
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen()
+    return srv
+
+
+def test_shared_port_held_by_strata_is_not_mlx(client, fake_mlx, tmp_path):
+    """Strata serves on MLX's port: a live Strata pid file means the port is Strata's."""
+    import os
+
+    srv = _listen()
+    try:
+        port = srv.getsockname()[1]
+        s = fake_mlx.settings
+        s.mlx_port = s.strata_port = port
+        s.strata_root = tmp_path / "strata"
+        assert client.engine_running() is True  # no Strata: whatever listens is MLX
+        (s.strata_root / "run").mkdir(parents=True)
+        (s.strata_root / "run/strata.pid").write_text(f"{os.getpid()}\n")
+        assert client.engine_running() is False
+        s.strata_port = port + 1  # Strata on its own port: the MLX port is MLX's again
         assert client.engine_running() is True
     finally:
         srv.close()

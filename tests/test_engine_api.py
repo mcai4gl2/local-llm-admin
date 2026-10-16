@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import subprocess
 
@@ -349,3 +350,87 @@ async def test_admin_restart_reconciles_interrupted_job(fake_comfy, mlx_health):
             st = (await c.get("/api/status")).json()
             assert st["intent"]["value"] == "unknown" and "interrupted" in st["recovery_blocked"]
     assert set(fake_comfy.calls()) <= {"status", "list"}  # read-only CLI calls; no replay
+
+
+@pytest.fixture
+async def seng(fake_strata, fake_comfy):
+    s = fake_strata.settings
+    s.admin_password_hash = auth.hash_password("pw")
+    s.admin_session_secret = "t"
+    app = create_app(
+        s,
+        start_background=False,
+        comfy_transport=fake_comfy.transport,
+        strata_transport=fake_strata.transport,
+    )
+    async with app.router.lifespan_context(app):
+        await app.state.backfill_task
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://a"
+        ) as c:
+            await c.post("/login", data={"password": "pw"})
+            c.headers["X-CSRF-Token"] = (await c.get("/api/session")).json()["csrf"]
+            yield c, fake_strata
+
+
+async def test_status_strata_active(seng, mlx_health):
+    c, fake = seng
+    fake.start()
+    st = (await c.get("/api/status")).json()
+    assert st["engine"]["active"] == "strata" and st["state"] == "strata"
+    assert st["engine"]["strata"]["ready"] is True and st["engine"]["strata_enabled"] is True
+    fake.flags["loading"] = True
+    assert (await c.get("/api/status")).json()["state"] == "strata-starting"
+
+
+async def test_status_strata_disabled_is_not_probed(eng, mlx_health):
+    c, _ = eng
+    st = (await c.get("/api/status")).json()
+    assert st["engine"]["strata_enabled"] is False and st["engine"]["strata"] is None
+
+
+async def test_engine_api_switches_to_strata(seng, mlx_health):
+    c, fake = seng
+    r = await c.post("/api/engine", json={"target": "strata"})
+    assert r.status_code in (200, 202), r.text
+
+
+async def test_chat_follows_strata(fake_strata, fake_comfy, mlx_health):
+    from .fake_openai import sse_chunks
+
+    s = fake_strata.settings
+    s.admin_password_hash = auth.hash_password("pw")
+    s.admin_session_secret = "t"
+    s.strata_api_key = "k-strata"
+    seen = []
+
+    def chat_handler(request):
+        seen.append(request)
+        body = b"".join(sse_chunks(["hi"]))
+        return httpx.Response(200, content=body, headers={"content-type": "text/event-stream"})
+
+    app = create_app(
+        s,
+        start_background=False,
+        comfy_transport=fake_comfy.transport,
+        strata_transport=fake_strata.transport,
+        chat_transport=httpx.MockTransport(chat_handler),
+    )
+    async with app.router.lifespan_context(app):
+        await app.state.backfill_task
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://a"
+        ) as c:
+            await c.post("/login", data={"password": "pw"})
+            c.headers["X-CSRF-Token"] = (await c.get("/api/session")).json()["csrf"]
+            fake_strata.flags["loading"] = True
+            fake_strata.start()
+            r = await c.post("/api/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+            assert r.status_code == 409 and "Strata" in r.json()["detail"]
+            fake_strata.flags["loading"] = False
+            r = await c.post("/api/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+            assert r.status_code == 200 and '"type": "done"' in r.text
+    assert str(seen[0].url) == "http://strata.test/v1/chat/completions"
+    assert seen[0].headers["authorization"] == "Bearer k-strata"
+    assert json.loads(seen[0].content)["model"] == "qwen3.8-flash-next-q2_0"
+    assert json.loads(seen[0].content)["max_tokens"] == 8192

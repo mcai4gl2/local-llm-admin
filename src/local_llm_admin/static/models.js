@@ -124,7 +124,7 @@ async function loadModels() {
     el("td", { class: "actions" },
       el("button", { onclick: () => openProfile(m.name), text: "Settings", title: `profile ${m.profile_fingerprint}` }),
       el("button", { onclick: () => removeModel(m.name), text: "Remove", disabled: m.selected }),
-      el("button", { disabled: !m.dir_exists || !m.has_config || m.weights?.state !== "complete" || lastStatus?.engine?.active === "comfyui", onclick: () => runAction("/api/models/switch", { name: m.name }, `Switch to ${m.name}?`), text: m.selected ? "Restart" : "Switch" }))));
+      el("button", { disabled: !m.dir_exists || !m.has_config || m.weights?.state !== "complete" || ["comfyui", "strata"].includes(lastStatus?.engine?.active), onclick: () => runAction("/api/models/switch", { name: m.name }, `Switch to ${m.name}?`), text: m.selected ? "Restart" : "Switch" }))));
   document.querySelector("#models-table tbody").replaceChildren(...(rows.length ? rows :
     [el("tr", {}, el("td", { colspan: 6, class: "muted", text: "No models (is the drive mounted?)" }))]));
 }
@@ -195,27 +195,45 @@ let userPicked = false;  // keep the dropdown choice only if the user made one
 
 function engineLabel(st) {
   const a = st.engine?.active;
-  return a === "mlx" ? `MLX · ${st.selected}` : a === "comfyui" ? "ComfyUI" : a === "conflict" ? "Conflict" : "Off";
+  return a === "mlx" ? `MLX · ${st.selected}` : a === "comfyui" ? "ComfyUI" : a === "strata" ? `Strata${st.engine?.strata?.pack ? ` · ${st.engine.strata.pack}` : ""}`
+    : a === "conflict" ? "Conflict" : "Off";
+}
+
+// 131072 → "128K": contexts are set in powers of two
+const contextK = (n) => (n % 1024 === 0 ? `${n / 1024}K` : fmt.compact(n));
+
+// one entry per installed pack (its run config), e.g. "Strata · IQ3_XXS · 128K context"
+function strataOptions(s) {
+  const packs = s?.packs || [];
+  if (!packs.length) return [el("option", { value: "strata", text: "Strata · Qwen3.8-Flash-Next" })];
+  return packs.map((p) => el("option", {
+    value: `strata:${p.pack}`,
+    text: `Strata · ${p.pack}${p.max_context ? ` · ${contextK(p.max_context)} context` : ""}${s.running && s.pack === p.pack ? " (running)" : ""}`,
+  }));
 }
 
 function renderEngineOptions() {
   const sel = document.getElementById("engine-target");
   const current = userPicked ? sel.value : null;
   const opts = engineModels.map((m) => el("option", { value: `mlx:${m.name}`, text: `MLX · ${m.name}${m.selected ? " (last used)" : ""}` }));
-  opts.push(el("option", { value: "comfyui", text: "ComfyUI" }), el("option", { value: "off", text: "Off" }));
+  opts.push(el("option", { value: "comfyui", text: "ComfyUI" }));
+  if (lastStatus?.engine?.strata_enabled) opts.push(...strataOptions(lastStatus.engine.strata));
+  opts.push(el("option", { value: "off", text: "Off" }));
   sel.replaceChildren(...opts);
-  const def = lastStatus?.engine?.active === "comfyui" ? `mlx:${(engineModels.find((m) => m.selected) || engineModels[0] || {}).name}` : "comfyui";
+  const def = ["comfyui", "strata"].includes(lastStatus?.engine?.active) ? `mlx:${(engineModels.find((m) => m.selected) || engineModels[0] || {}).name}` : "comfyui";
   sel.value = current && [...sel.options].some((o) => o.value === current) ? current : def;
 }
 
 async function applyEngine() {
   const target = document.getElementById("engine-target").value;
   const st = lastStatus || {};
-  const leavingComfy = st.engine?.active === "comfyui" && target !== "comfyui";
+  const leaving = { comfyui: "ComfyUI", strata: "Strata" }[st.engine?.active];
   const [title, body] = target === "comfyui"
     ? ["Switch to ComfyUI?", "LiteLLM local-qwen will be unavailable until you switch back. In-flight LLM requests will fail."]
-    : target === "off" ? ["Stop the running engine?", "Nothing will use the GPU until you start an engine again."]
-      : [`Run ${target.slice(4)} on MLX?`, leavingComfy ? "ComfyUI will be stopped first." : DEFAULT_CONFIRM];
+    : target === "strata" || target.startsWith("strata:")
+      ? [st.engine?.active === "strata" ? `Switch Strata to ${target.slice(7)}?` : `Switch to Strata${target.length > 7 ? ` · ${target.slice(7)}` : ""}?`, "Strata answers LiteLLM local-qwen on the same address once it has loaded (seconds to about a minute). The sidecars and the embedding service stop until you switch back. In-flight LLM requests will fail."]
+      : target === "off" ? ["Stop the running engine?", "Nothing will use the GPU until you start an engine again."]
+        : [`Run ${target.slice(4)} on MLX?`, leaving && leaving !== target ? `${leaving} will be stopped first.` : DEFAULT_CONFIRM];
   if (!(await confirmAction(title, body))) return;
   try {
     const job = await setEngineWithForce(target, confirmAction);
@@ -223,6 +241,26 @@ async function applyEngine() {
   } catch (e) {
     alert(e.message);
   }
+}
+
+// Strata card: from /api/status; a field Strata does not report shows "—"
+function renderStrata(st) {
+  const card = document.getElementById("strata-card");
+  card.hidden = !st.engine?.strata_enabled;
+  const s = st.engine?.strata;
+  if (card.hidden || !s) return;
+  const m = s.metrics || {};
+  const badge = document.getElementById("strata-state");
+  badge.dataset.state = !s.running ? "stopped" : s.ready ? "strata" : "strata-starting";
+  badge.textContent = !s.running ? "Stopped" : s.ready ? (m.state || "Loaded") : "Loading";
+  const dash = (v, f = String) => (v === null || v === undefined ? "—" : f(v));
+  const facts = [
+    ["Model", dash(s.model)], ["Pack", dash(s.pack)], ["Context", dash(s.max_context, fmt.compact)],
+    ["Queued", dash(m.queued)], ["Live decode", fmt.tok(m.tok_s)],
+    ["Requests", dash(m.requests)], ["Mean prompt", fmt.tok(m.prompt_tok_s)],
+    ["Mean decode", fmt.tok(m.decode_tok_s)], ["PID", dash(s.pid)],
+  ];
+  document.getElementById("strata-facts").replaceChildren(...facts.map(([k, v]) => el("div", {}, el("dt", { text: k }), el("dd", { text: v }))));
 }
 
 async function loadComfy() {
@@ -365,6 +403,7 @@ onStatus((st) => {
   }
   const cur = document.getElementById("engine-current");
   cur.dataset.state = st.state; cur.textContent = engineLabel(st);
+  renderStrata(st);
   syncQueuePolling(st);
 });
 document.getElementById("engine-apply").addEventListener("click", applyEngine);

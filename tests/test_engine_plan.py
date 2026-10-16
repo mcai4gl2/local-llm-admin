@@ -11,6 +11,7 @@ TTS = SidecarSpec(name="qwen-tts", label="TTS", title="TTS sidecar", port=8083)
 
 class Ops:
     stop_timeout_s, ready_timeout_s, job_timeout_s = 30.0, 120.0, 300.0
+    strata_ready_timeout_s = 600.0
 
     def mlx_argv(self, action, name):
         return ["mlx-model", action] + ([name] if name else [])
@@ -30,6 +31,15 @@ class Ops:
     def comfy_cancel_all(self):
         return None
 
+    def strata_argv(self, action, pack=None):
+        return ["strata", action] + ([pack] if pack else [])
+
+    def strata_down(self):
+        return True
+
+    def strata_ready(self):
+        return True
+
     def sidecar_argv(self, name, action):
         return [name, action]
 
@@ -43,7 +53,21 @@ class Ops:
         return (lambda: True) if name == "qwen-embed" else None
 
 
-def plan(target, mlx=False, name="qwen", comfy=False, queue=0, force=False, dj=False, ok=True, spec=SPEC):
+def plan(
+    target,
+    mlx=False,
+    name="qwen",
+    comfy=False,
+    queue=0,
+    force=False,
+    dj=False,
+    ok=True,
+    spec=SPEC,
+    strata=False,
+    services=(),
+    restore=(),
+    pack=None,
+):
     allowed = frozenset({"qwen", "qwen2", "big"}) if ok else frozenset()
     return plan_transition(
         target,
@@ -54,6 +78,10 @@ def plan(target, mlx=False, name="qwen", comfy=False, queue=0, force=False, dj=F
         force=force,
         ops=Ops(),
         sidecar=replace(spec, allowed_mlx=allowed) if dj else None,
+        services=services,
+        restore=restore,
+        strata_running=strata,
+        strata_pack=pack,
     )
 
 
@@ -340,3 +368,143 @@ def test_restore_without_warmup_has_two_steps():
     t = plan_svc(Target("off"), comfy=True, running=(), restore=(spec,))
     assert labels(t.steps)[-2:] == ["other-svc start", "wait for :8085 to be ready"]
     assert "warm up other-svc" not in labels(t.steps)
+
+
+# --- Strata (third exclusive engine) -------------------------------------------------
+EMB = SidecarSpec(
+    name="qwen-embed",
+    label="embeddings",
+    title="Embeddings",
+    port=8084,
+    kind="service",
+    allowed_mlx=frozenset({"qwen", "gemma"}),
+)
+STRATA_UP = ["strata start", "wait for Strata to be ready"]
+STRATA_DOWN = ["strata stop", "wait for Strata to exit"]
+MLX_DOWN = ["mlx-model stop", "wait for MLX to exit"]
+COMFY_DOWN = ["comfyui stop", "wait for :8188 to close"]
+COMFY_UP = ["comfyui start", "wait for ComfyUI to be ready"]
+
+
+def test_parse_target_strata():
+    from local_llm_admin.engines import parse_target
+
+    assert parse_target("strata") == Target("strata")
+    assert parse_target("strata:IQ3_XXS") == Target("strata", "IQ3_XXS")
+    for bad in ("strata:", "strata:iq3_xxs", "strata:Q9_9", "strata:Q2_0;rm"):
+        with pytest.raises(ValueError):
+            parse_target(bad)
+
+
+def test_off_to_a_strata_pack():
+    t = plan(Target("strata", "IQ3_XXS"))
+    assert labels(t.steps) == ["strata start IQ3_XXS", "wait for Strata to be ready"]
+    assert t.steps[0].argv == ["strata", "start", "IQ3_XXS"]
+    assert (t.from_label, t.to_label) == (None, "strata")
+
+
+def test_switching_strata_packs_restarts_it_and_rollback_brings_the_old_pack_back():
+    t = plan(Target("strata", "IQ3_XXS"), strata=True, pack="Q2_0")
+    assert labels(t.steps) == [*STRATA_DOWN, "strata start IQ3_XXS", "wait for Strata to be ready"]
+    assert labels(t.rollback) == [*STRATA_DOWN, "strata start Q2_0", "wait for Strata to be ready"]
+    assert t.rollback[0].optional and t.rollback_after == 2
+    assert (t.from_label, t.to_label) == ("strata", "strata")
+
+
+def test_the_running_strata_pack_is_already_active():
+    with pytest.raises(TransitionRefused) as ei:
+        plan(Target("strata", "Q2_0"), strata=True, pack="Q2_0")
+    assert ei.value.code == 409 and "already active" in ei.value.message
+    with pytest.raises(TransitionRefused):  # no pack named: whichever runs is fine
+        plan(Target("strata"), strata=True, pack="IQ3_XXS")
+
+
+def test_strata_pack_of_unknown_state_is_restarted():
+    t = plan(Target("strata", "IQ3_XXS"), strata=True, pack=None)
+    assert labels(t.steps)[:2] == STRATA_DOWN
+
+
+def test_leaving_strata_rolls_back_to_the_pack_that_ran():
+    t = plan(Target("mlx", "gemma"), strata=True, pack="IQ3_XXS")
+    assert labels(t.rollback) == [*MLX_DOWN, "strata start IQ3_XXS", "wait for Strata to be ready"]
+
+
+def test_off_to_strata():
+    t = plan(Target("strata"))
+    assert labels(t.steps) == STRATA_UP and t.rollback == []
+    assert t.steps[0].argv == ["strata", "start"] and t.steps[1].timeout_s == 600.0
+    assert (t.from_label, t.to_label) == (None, "strata")
+
+
+def test_mlx_to_strata_stops_services_and_rollback_restores_them():
+    t = plan(Target("strata"), mlx=True, services=[EMB])
+    assert labels(t.steps) == ["qwen-embed stop", "wait for :8084 to close", *MLX_DOWN, *STRATA_UP]
+    assert labels(t.rollback) == [
+        *STRATA_DOWN,
+        "mlx-model start qwen",
+        "qwen-embed start",
+        "wait for :8084 to be ready",
+        "warm up qwen-embed",
+    ]
+    assert [s.optional for s in t.rollback[:2]] == [True, False]
+    assert t.rollback_after == 4 and (t.from_label, t.to_label) == ("qwen", "strata")
+
+
+def test_strata_stops_running_sidecar_even_if_allowed():
+    t = plan(Target("strata"), mlx=True, dj=True)
+    assert labels(t.steps)[:2] == ["openjev stop", "wait for :8081 to close"]
+
+
+def test_strata_to_mlx_restores_services():
+    t = plan(Target("mlx", "gemma"), strata=True, restore=[EMB])
+    assert labels(t.steps) == [
+        *STRATA_DOWN,
+        "mlx-model start gemma",
+        "qwen-embed start",
+        "wait for :8084 to be ready",
+        "warm up qwen-embed",
+    ]
+    assert labels(t.rollback) == [*MLX_DOWN, *STRATA_UP]
+    assert t.rollback_after == 2 and (t.from_label, t.to_label) == ("strata", "gemma")
+
+
+def test_strata_to_mlx_leaves_excluded_service_off():
+    excl = replace(EMB, allowed_mlx=frozenset({"qwen"}))
+    t = plan(Target("mlx", "gemma"), strata=True, restore=[excl])
+    assert "qwen-embed start" not in labels(t.steps) and t.unrestored == ("qwen-embed",)
+
+
+def test_strata_to_off_restores_services():
+    t = plan(Target("off"), strata=True, restore=[EMB])
+    assert labels(t.steps)[:2] == STRATA_DOWN and "qwen-embed start" in labels(t.steps)
+    assert t.rollback == [] and (t.from_label, t.to_label) == ("strata", None)
+
+
+def test_comfyui_to_strata_does_not_restore_services():
+    t = plan(Target("strata"), comfy=True, restore=[EMB])
+    assert labels(t.steps) == [*COMFY_DOWN, *STRATA_UP]
+    assert labels(t.rollback) == [*STRATA_DOWN, *COMFY_UP]
+
+
+def test_strata_to_comfyui():
+    t = plan(Target("comfyui"), strata=True, restore=[EMB])
+    assert labels(t.steps) == [*STRATA_DOWN, *COMFY_UP]
+    assert labels(t.rollback) == [*COMFY_DOWN, *STRATA_UP]
+    assert (t.from_label, t.to_label) == ("strata", "comfyui")
+
+
+def test_strata_already_active_refused():
+    with pytest.raises(TransitionRefused) as ei:
+        plan(Target("strata"), strata=True)
+    assert ei.value.code == 409 and "strata is already active" in ei.value.message
+
+
+def test_comfyui_queue_guard_applies_on_the_way_to_strata():
+    with pytest.raises(TransitionRefused):
+        plan(Target("strata"), comfy=True, queue=1)
+
+
+def test_conflict_with_strata_stops_every_other_engine():
+    t = plan(Target("strata"), mlx=True, comfy=True, strata=True)
+    assert labels(t.steps) == [*COMFY_DOWN, *MLX_DOWN]
+    assert t.from_label == "conflict"

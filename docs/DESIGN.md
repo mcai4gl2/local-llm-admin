@@ -74,6 +74,49 @@ Consequences:
 | `AbandonProcessGroup` on macOS 27 | Verified 2026-09-29: `launchctl kickstart -k` of the admin left both an admin-started MLX server (pid 19550) and ComfyUI (pid 19405) running. |
 | **Local Network privacy (found 2026-09-29)** | Under launchd, the admin's Python gets `[Errno 65] No route to host` for other LAN hosts (litellm.example.com:4000), while loopback and the Mac's own IP work; over SSH the same binary connects. So the usage page cannot reach LiteLLM until the admin's Python is allowed in System Settings → Privacy & Security → Local Network. |
 
+## 3b. Strata Phase 0 results (2026-10-16)
+
+Strata 0.1.44.1-metal, pack Q2_0, context 32768, MTP on, `--mmap-experts`, in a sandbox on the
+models volume with its own `HOME`; MLX, ComfyUI, the sidecars and the embedding service
+stopped. Bench: `ops/strata-phase0/bench.py`, streamed chat completions.
+
+| Check | Result |
+|---|---|
+| `./setup.sh --model Q2_0` | Done in 2 h 32 min, bound by the download (62 GB of GGUF shards, 5.7 GB MTP data); the Metal build took minutes. Writes `app/strata-q2_0.json` and serves the model id `qwen3.8-flash-next-q2_0`. |
+| Start to `/health` `loaded: true` | 36.8 s (warm page cache). |
+| Process tree | `serve/server.py` runs `build-metal/strata --serve` as a direct child; ~40 GB resident (mostly the mapped experts). |
+| Short prompt (65 tokens, first request) | TTFT 2.1 s, decode 41.8 tok/s. |
+| 2K-token answer | TTFT 0.65 s, decode 56.6 tok/s, 760 of 1289 drafts accepted. |
+| 4K prompt (3,685 tokens) | TTFT 13.8 s, prompt 267 tok/s, decode 65.5 tok/s. |
+| 29K prompt (29,029 tokens) | TTFT 34.9 s, prompt 831 tok/s, decode 65.1 tok/s. |
+| Memory | Pressure level 1 (normal) throughout, swap unchanged (837 MB before and after). |
+| SIGTERM | Port closed and both processes gone in 0.6 s; memory back to its idle level. |
+| `/health` | No auth; `{status, max_context, model, images, api_key, image_generation, loaded, service: "strata"}`. |
+| `/metrics` | JSON with `engine`, `live`, `requests`, `totals`, `hardware`, `history`; `?format=prometheus` gives vLLM-named series. Needs the API key. |
+| Per-user state | `~/.config`, `~/.cache`, `~/.local`, LaunchAgents/Daemons, shell rc files, crontab, brew and `/usr/local` unchanged. One CMake try-compile probe crashed during the build and left a crash report. |
+| Chat template | `reasoning_effort` accepts `low`, `medium`, `xhigh` (`high` maps to `xhigh`); a reply that hits `max_tokens` while thinking has no answer. |
+| Thinking off | Only `chat_template_kwargs: {"enable_thinking": false}` or `reasoning_effort: "none"`; a top-level `enable_thinking` (MLX's spelling) is ignored and the model thinks at `xhigh`. The compatibility cases send both. |
+| Context 262144 (the trained length) | `setup.sh --context 262144`; KV stays fp16 on a Mac (`--kv` is ignored), ~9 GB, leaving ~1 GB of GPU memory free. Ready in 32.7 s. |
+| 197.5K-token prompt at 262144 | TTFT ~240 s (prompt 760–830 tok/s), decode ~58 tok/s; a code hidden at 10%, 50% and 90% depth found every time (also at 8K). Pressure normal, swap unchanged. |
+
+IQ3_XXS, context 131072, same Strata build; models on the internal SSD (the pack does not fit
+in memory, so experts stream from disk):
+
+| Check | Result |
+|---|---|
+| `./setup.sh --model IQ3_XXS --context 131072` | Done in 2 h 6 min (76 GB of GGUF shards, plus a 43 GB streaming copy of the experts: 111 GB on disk). No MTP draft layer: setup leaves it out when experts stream ("one token per step is faster there"), and writes `--suffix-draft 0`. Model id `qwen3.8-flash-next-iq3_xxs`. |
+| Start to `/health` `loaded: true` | 4.1 s, 2.6 s, 2.1 s over three cold starts, no errors. The 28 GB expert arena fills and wires (mlock) after that, so the first request waits ~12 s. |
+| Memory | 28 GB of the ~40 GB of experts held in the wired arena; the rest read from the SSD on a miss. ~29 GB resident. Pressure normal, swap unchanged. |
+| 2K-token answer | Decode 32.2 tok/s (no drafts). |
+| 4K prompt | Prompt 427 tok/s, decode 26.2 tok/s. |
+| 29K prompt | Prompt 533 tok/s, decode 29.0 tok/s. |
+| 98.8K-token prompt, thinking on | TTFT 177–187 s (prompt 529–557 tok/s), decode 27–29 tok/s; the code found at 10%, 50% and 90% depth. |
+
+Decision gate (`plans/20261015_strata-qwen38-flash-next.md`): IQ3_XXS fails it. Memory and
+cold starts pass, but decode is 26–32 tok/s, below 60% of Q2_0's (about 35 tok/s), and a 4K
+prompt reads at 427 tok/s, below 500. Q2_0 ships, at a 262144 context. Its decode is 57–66 tok/s, inside the 50–70 tok/s estimate. Engine-side request
+statistics go to `app/strata-<pack>.log`, apart from the server log the wrapper keeps.
+
 ## 4. Architecture
 
 ```
@@ -184,7 +227,7 @@ The data comes from the existing LiteLLM gateway API at `http://litellm.example.
 *Changed in Phase 0:* the daily view was planned on `/user/daily/activity/aggregated`, but its rollups are UTC days (the `timezone` parameter does not re-bucket them) and its `model` filter is refused for a key without model access (§3a). Spend logs carry per-request timestamps, so the admin buckets them into ops-timezone days itself.
 
 Rules:
-- **Local model selection.** `LITELLM_LOCAL_MODELS` is a comma-separated list of upstream model strings; an entry ending in `/` is a prefix. The default is `openai//Volumes/Models/models/`, so every weights directory behind the local route counts, whatever the route is called. Matching is done in the admin (rows may carry the model with or without the `openai/` prefix).
+- **Local model selection.** `LITELLM_LOCAL_MODELS` is a comma-separated list of upstream model strings; an entry ending in `/` is a prefix. The default is `openai//Volumes/Models/models/,openai/qwen3.8-flash-next-q2_0,openai/qwen3.8-flash-next-iq3_xxs`, so every weights directory behind the local route counts, whatever the route is called, and so do Strata's Q2_0 and IQ3_XXS packs (Strata serves `qwen3.8-flash-next-<pack>`; another pack's id is added by hand). Matching is done in the admin (rows may carry the model with or without the `openai/` prefix).
 - **Timezone.** `LITELLM_TIMEZONE_OFFSET_MIN=-480` (JavaScript `getTimezoneOffset` convention, Asia/Hong_Kong) sets the ops day used for the UTC request bounds and for bucketing. Example: a request at 22:34 UTC on 09-28 counts on 09-29.
 - **Range.** At most 90 days (the retention in `cleanup-spend.sh`), with the last 30 as the default. Dates are validated as ISO and are never passed through unchecked.
 - **Caching.** The local rows are cached in memory for 60 s per range and shared by the daily and sessions views. The usage page is the only consumer, so there is no background polling.
@@ -306,6 +349,7 @@ local-llm-admin/
 | D4 | Install folder | Proposed: `/Users/you/local-llm-admin` |
 | D5 | Usage data source | **Decided 2026-09-28, revised 2026-09-29:** LiteLLM API with a dedicated `proxy_admin_viewer` key (no model access). Both views come from `/spend/logs/v2`, bucketed in the ops timezone by the admin (§3a explains why not the UTC daily rollups). The earlier the LiteLLM host agent running SQL and `session-report.sh` is dropped. |
 | D6 | Chat routing | Proposed: direct to `:8080` (a pure model test; not counted in LiteLLM usage). The alternative is through LiteLLM with a separate chat-capable key, so test chats are counted. |
+| D7 | Strata engine (Qwen3.8-Flash-Next) | **Implemented 2026-10-15** (`plans/20261015_strata-qwen38-flash-next.md`): a third exclusive engine (`EngineKind` `strata`), driven only through `strata/bin/strata` and its HTTP API on the MLX server's `0.0.0.0:8080` (2026-10-16: LiteLLM's one route reaches whichever engine runs; host scripts tell Strata apart by its command line, the admin by its pid file and `/health` `service: "strata"`). One Engine entry per installed pack (`strata:<pack>`, from the `app/strata-<pack>.json` run configs; the running pack from `/health`'s model id): picking another pack while Strata runs restarts it, and rollback brings the old pack back. `bin/strata start <pack>` keeps the choice in `run/strata.pack`, so a plain start (the watchdog's) runs it again; the intent stays `strata`. Switching to it stops MLX or ComfyUI, the sidecar and every always-on service; leaving it restores the services meant to run. Off unless `STRATA_ENABLED=true`. Test chat and the compatibility cases follow it (benchmarks and model sweeps stay MLX-only). |
 
 ## 12. Implementation notes (2026-09-29)
 

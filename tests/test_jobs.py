@@ -585,3 +585,19 @@ def test_an_unexpected_error_while_running_steps_is_a_failed_job(runner, store, 
     done = _wait(runner, runner.submit("stop", None)["id"])
     assert done["status"] == "failed" and runner.running() is None
     assert store.get_job(done["id"])["status"] == "failed"
+
+
+def test_strata_engine_switch_labels_usage_days(store):
+    for ts, frm, to in (("2026-10-15 09:00:00", "qwen", "strata"), ("2026-10-16 09:00:00", "strata", "qwen")):
+        store.add_history(
+            ts=_ts(ts),
+            action="engine",
+            from_name=frm,
+            to_name=to,
+            result="succeeded",
+            duration_s=200,
+            output_tail="",
+            source="admin",
+        )
+    got = store.active_by_day(["2026-10-15", "2026-10-16", "2026-10-17"], tz_offset_min=-480)
+    assert got == {"2026-10-15": ["strata"], "2026-10-16": ["strata", "qwen"], "2026-10-17": ["qwen"]}

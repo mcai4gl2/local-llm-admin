@@ -112,8 +112,8 @@ class LogMaintenance:
         if st.get("day") != local.date().isoformat():
             return "daily" if local.hour >= self.settings.log_rotate_hour else None
         deferred = (st.get("result") or {}).get("deferred")
-        # a stopped MLX (or ComfyUI owning the GPU) means the MLX logs' writer is gone
-        if deferred and snap.engine in ("none", "comfyui"):
+        # a stopped MLX (or ComfyUI or Strata owning the GPU) means the MLX logs' writer is gone
+        if deferred and snap.engine in ("none", "comfyui", "strata"):
             if now - float(st.get("attempted_at") or 0) >= RETRY_S:
                 return "retry"
         return None

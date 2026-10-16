@@ -35,6 +35,12 @@ function effectText() {
   if (engine === "comfyui" || engine === "conflict") {
     return { text: "ComfyUI owns the GPU. Switch the engine to MLX or off first.", ok: false };
   }
+  if (engine === "strata") {
+    const ok = document.getElementById("q-kind").value === "compatibility" && scope === "current";
+    return ok
+      ? { text: "Runs the compatibility checks on Strata; nothing is switched.", ok: true, off: false }
+      : { text: "Strata is running: only compatibility checks of the current engine run on it.", ok: false };
+  }
   const n = scope === "all" ? roster.length : 1;
   const target = scope === "model" ? chosen : scope === "all" ? null : cur;
   if (engine === "mlx") {
@@ -55,7 +61,7 @@ function renderEffect() {
   document.getElementById("quality-start").disabled = !e.ok || Boolean(lastStatus?.job);
   const st = lastStatus || {};
   document.getElementById("engine-now").textContent = st.engine?.active === "mlx" ? `MLX · ${st.selected}`
-    : st.engine?.active === "none" ? "Engine off" : st.engine?.active || "";
+    : st.engine?.active === "none" ? "Engine off" : st.engine?.active === "strata" ? "Strata" : st.engine?.active || "";
 }
 
 async function start() {
@@ -168,7 +174,8 @@ function showRun(run) {
   const rest = run.restoration || {};
   const facts = [
     ["Kind", run.kind], ["Models", runModels(run)], ["Started", fmt.time(run.started)], ["Finished", fmt.time(run.finished)],
-    ["Started from", run.original ? (run.original.engine === "mlx" ? `MLX · ${run.original.name}` : `off (${run.original.name} selected)`) : "—"],
+    ["Started from", run.original ? (run.original.engine === "mlx" ? `MLX · ${run.original.name}`
+      : run.original.engine === "strata" ? "Strata" : `off (${run.original.name} selected)`) : "—"],
     ["Restoration", `${RESTORE_TEXT[rest.outcome] || "—"}${rest.detail ? ` — ${rest.detail}` : ""}`],
     ["Runtime", run.runtime_version ? `mlx-vlm ${run.runtime_version}` : "unavailable"],
     ["Settings fingerprint", run.runtime_fingerprint ? run.runtime_fingerprint.slice(0, 12) : "unavailable"],
@@ -219,6 +226,7 @@ document.getElementById("q-scope").addEventListener("change", () => {
   renderEffect();
 });
 document.getElementById("q-model").addEventListener("change", renderEffect);
+document.getElementById("q-kind").addEventListener("change", renderEffect);
 document.getElementById("quality-start").addEventListener("click", start);
 onStatus((st) => { lastStatus = st; renderEffect(); });
 loadRoster().catch(() => {});

@@ -68,6 +68,8 @@ def fake_mlx(tmp_path, monkeypatch) -> FakeMlx:
         mlx_api_base="http://mlx.test",
         chat_ui_port=1,  # nothing listens on port 1
         mlx_port=1,
+        strata_root=tmp_path / "strata-absent",
+        strata_port=1,
         admin_data_dir=tmp_path / "data",
         admin_log_dir=tmp_path / "adminlogs",
         admin_password_hash="",
@@ -171,6 +173,60 @@ def fake_comfy(fake_mlx, monkeypatch):
             os.kill(int(pidfile.read_text()), 9)
         except (OSError, ValueError):
             pass
+
+
+@dataclass
+class FakeStrata:
+    root: Path
+    state: Path
+    settings: Settings
+    transport: httpx.MockTransport
+    flags: dict[str, Any]
+
+    def start(self) -> None:
+        subprocess.run([str(self.settings.strata_path), "start"], capture_output=True, check=False)
+
+
+@pytest.fixture
+def fake_strata(fake_comfy, monkeypatch):
+    """The Strata engine next to the fake MLX and ComfyUI; ready once its CLI started it."""
+    root = fake_comfy.root.parent / "strata"
+    for d in ("run", "logs"):
+        (root / d).mkdir(parents=True)
+    monkeypatch.setenv("FAKE_STRATA_ROOT", str(root))
+    s = fake_comfy.settings
+    s.strata_enabled = True
+    s.strata_root = root
+    s.strata_bin = FIX / "fake-strata"
+    s.strata_api_base = "http://strata.test"
+    s.strata_port = 1
+    s.strata_ready_timeout_s = 3.0
+    health = json.loads((FIX / "strata/health.json").read_text())
+    flags: dict[str, Any] = {}
+
+    def handler(request):
+        if not (fake_comfy.state / "strata_ready").exists():
+            raise httpx.ConnectError("not listening")
+        if request.url.path == "/health":
+            pack = fake_comfy.state / "strata_pack"
+            model = (
+                "qwen3.8-flash-next-" + pack.read_text().strip().lower()
+                if pack.exists()
+                else health["model"]
+            )
+            return httpx.Response(
+                200, json={**health, "model": model, "loaded": not flags.get("loading")}
+            )
+        if request.url.path == "/metrics" and "metrics" in flags:
+            return httpx.Response(200, json=flags["metrics"])
+        return httpx.Response(404)
+
+    fake = FakeStrata(root, fake_comfy.state, s, httpx.MockTransport(handler), flags)
+    yield fake
+    try:
+        os.kill(int((root / "run/strata.pid").read_text()), 9)
+    except (OSError, ValueError):
+        pass
 
 
 @dataclass
