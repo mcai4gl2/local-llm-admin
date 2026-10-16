@@ -89,6 +89,7 @@ def settings(host, tmp_path):
 async def app(settings):
     app = create_app(settings, start_background=False)
     async with app.router.lifespan_context(app):
+        await app.state.startup_task  # adoption holds the job slot; a slow runner races it
         yield app
 
 

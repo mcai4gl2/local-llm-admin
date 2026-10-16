@@ -20,6 +20,7 @@ async def out(fake_comfy):
     s.admin_session_secret = "t"
     app = create_app(s, start_background=False, comfy_transport=fake_comfy.transport)
     async with app.router.lifespan_context(app):
+        await app.state.startup_task  # adoption holds the job slot; a slow runner races it
         await app.state.backfill_task
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://a"
@@ -222,6 +223,7 @@ async def test_outputs_require_login(fake_comfy):
     s = fake_comfy.settings
     app = create_app(s, start_background=False, comfy_transport=fake_comfy.transport)
     async with app.router.lifespan_context(app):
+        await app.state.startup_task  # adoption holds the job slot; a slow runner races it
         await app.state.backfill_task
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://a"

@@ -39,6 +39,7 @@ async def app(settings, fake_llm):
     app.state.follow_interval_s = 0.05
     app.state.follow_max_s = 0.6
     async with app.router.lifespan_context(app):
+        await app.state.startup_task  # adoption holds the job slot; a slow runner races it
         await app.state.backfill_task  # background at startup; wait so tests see the rows
         yield app
 

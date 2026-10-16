@@ -9,4 +9,5 @@ description = "fake credentials used only by tests and docs placeholders"
 regexes = [
   '''sk-viewer-SECRET-123''',
   '''sk-abcdef123456''',  # tests/test_performance_api.py: redaction fixture
+  '''replace-with-32-to-256-chars-of-A-Za-z0-9_-''',  # host/strata/etc/strata.env.example
 ]

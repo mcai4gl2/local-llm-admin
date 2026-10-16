@@ -51,6 +51,7 @@ async def app(settings, fake_comfy, server):
         quality_transport=server.transport,
     )
     async with app.router.lifespan_context(app):
+        await app.state.startup_task  # adoption holds the job slot; a slow runner races it
         yield app
 
 

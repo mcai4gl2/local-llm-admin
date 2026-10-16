@@ -30,6 +30,7 @@ def settings(fake_comfy):
 async def app(settings, fake_comfy):
     app = create_app(settings, start_background=False, comfy_transport=fake_comfy.transport)
     async with app.router.lifespan_context(app):
+        await app.state.startup_task  # adoption holds the job slot; a slow runner races it
         yield app
 
 

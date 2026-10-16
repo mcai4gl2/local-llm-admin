@@ -34,6 +34,7 @@ async def client(fake_decision, fake_comfy, fake_mlx, monkeypatch):
     )
     app.state.sampler_pressure = lambda: "normal"
     async with app.router.lifespan_context(app):
+        await app.state.startup_task  # adoption holds the job slot; a slow runner races it
         await app.state.backfill_task
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://a"
