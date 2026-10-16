@@ -11,7 +11,8 @@ A third GPU engine next to MLX and ComfyUI: Qwen3.8-Flash-Next (125B MoE) throug
 | `/Users/you/strata/data` | `Strata-data` for IQ3_XXS, on the internal SSD: the pack streams its experts from disk, which Strata supports only from the internal drive (~111 GB with the experts' copy) |
 | `etc/strata.env` | mode 600: `STRATA_MODEL` (`Q2_0` default), `STRATA_CONTEXT` (shown only), optional `STRATA_API_KEY` and `STRATA_ALLOWED_HOSTS` |
 | `home/` | `HOME`, caches and `TMPDIR` the engine runs with (never the real home) |
-| `logs/strata.log`, `run/strata.pid`, `run/strata.pack` | log (rotated at 50 MiB by `start`), pid, the pack the last start used |
+| `logs/strata.log`, `run/strata.pid`, `run/strata.pack` | server log (rotated at 50 MiB by `start`), pid, the pack the last start used |
+| `app/strata-<pack>.log` | Strata's engine log for the pack, appended across starts; `start` rotates it at 50 MiB too. Admin logs source `strata-engine-<pack>` |
 
 Rules:
 

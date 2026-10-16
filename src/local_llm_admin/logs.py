@@ -19,6 +19,8 @@ FIXED_SOURCE_IDS = (*MLX_LOG_FILES, "admin", "comfyui")
 DOWNLOAD_ID_RE = re.compile(r"^download-[A-Za-z0-9_-]+$")
 _LEVELS = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
 _LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL)\b")
+# Strata's engine log per pack (the run config's "log"), next to the wrapper's logs/strata.log
+STRATA_ENGINE_PREFIX = "strata-engine-"
 # Strata's own warnings carry no level word: memory running low, a numerically broken step
 _STRATA_LEVELS = (("non-finite logits", "ERROR"), ("LOW: requests may stall", "WARNING"))
 
@@ -35,11 +37,25 @@ def download_log_ids(settings: Settings) -> list[str]:
     return sorted(s for s in stems if DOWNLOAD_ID_RE.fullmatch(s))
 
 
+def strata_engine_log_ids(settings: Settings) -> list[str]:
+    """One id per installed pack (its ``app/strata-<pack>.json`` run config exists)."""
+    from .engines import STRATA_PACKS  # engines imports mlx, which imports this module
+
+    if not settings.strata_enabled:
+        return []
+    app = settings.strata_root / "app"
+    try:
+        packs = [p.lower() for p in STRATA_PACKS if (app / f"strata-{p.lower()}.json").is_file()]
+    except OSError:
+        return []
+    return [STRATA_ENGINE_PREFIX + p for p in packs]
+
+
 def source_ids(settings: Settings) -> list[str]:
     """Fixed sources, the decision sidecar's and Strata's logs when enabled, and every
     ``logs/download-*.log`` present now."""
     extra = ["decision"] if settings.decision_enabled else []
-    extra += ["strata"] if settings.strata_enabled else []
+    extra += ["strata", *strata_engine_log_ids(settings)] if settings.strata_enabled else []
     return [*FIXED_SOURCE_IDS, *extra, *download_log_ids(settings)]
 
 
@@ -57,6 +73,9 @@ def resolve_source(settings: Settings, source_id: str) -> Path:
         return settings.decision_root / "logs" / "openjev.log"
     if source_id == "strata" and settings.strata_enabled:
         return settings.strata_root / "logs" / "strata.log"
+    if source_id in strata_engine_log_ids(settings):
+        pack = source_id.removeprefix(STRATA_ENGINE_PREFIX)
+        return settings.strata_root / "app" / f"strata-{pack}.log"
     if source_id in MLX_LOG_FILES:
         return settings.mlx_log_dir / MLX_LOG_FILES[source_id]
     if DOWNLOAD_ID_RE.fullmatch(source_id):

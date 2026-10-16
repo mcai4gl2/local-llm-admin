@@ -115,7 +115,8 @@ in memory, so experts stream from disk):
 Decision gate (`plans/20261015_strata-qwen38-flash-next.md`): IQ3_XXS fails it. Memory and
 cold starts pass, but decode is 26–32 tok/s, below 60% of Q2_0's (about 35 tok/s), and a 4K
 prompt reads at 427 tok/s, below 500. Q2_0 ships, at a 262144 context. Its decode is 57–66 tok/s, inside the 50–70 tok/s estimate. Engine-side request
-statistics go to `app/strata-<pack>.log`, apart from the server log the wrapper keeps.
+statistics go to `app/strata-<pack>.log`, apart from the server log the wrapper keeps; the
+logs page shows both (§5.5).
 
 ## 4. Architecture
 
@@ -208,6 +209,7 @@ API: `GET /api/metrics/current` and `GET /api/metrics/history?window=15m|1h`. Th
 
 - Allow-listed sources only. The id maps to a fixed path, and client-supplied paths are never accepted:
   `mlx-server` → `/Volumes/Models/logs/mlx-server.log`, `chat-ui` → `…/chat-qwen.log`, `serve` → `…/serve-qwen.log`, `admin` → the admin's own log. Download logs are discovered when requested: every `logs/download-<name>.log` whose stem matches `^download-[A-Za-z0-9_-]+$` becomes source `download-<name>` (for example `download-models`, `download-variant`). The id pattern has no dots or slashes and must name an existing file in the fixed logs directory.
+- With `STRATA_ENABLED=true`: `strata` → `/Volumes/Models/strata/logs/strata.log` (the wrapper's server log: starts and per-request progress), and `strata-engine-<pack>` → `…/strata/app/strata-<pack>.log` (Strata's engine log: memory footprint, prompt and decode statistics) for every pack in `STRATA_PACKS` whose `app/strata-<pack>.json` run config exists. Strata appends to its engine log across starts; `bin/strata start` rotates both at 50 MiB, keeping 8.
 - `GET /api/logs/{id}?lines=500&grep=…&level=INFO|WARNING|ERROR` reads from the end of the file in blocks, so a large log is never read whole.
 - `GET /api/logs/{id}/follow` (SSE) tails by byte offset, polling every 1 s. It detects truncation or rotation through the inode and size.
 - Curl progress is normalised: split on `\r` and keep the last segment. The download log view also gets a progress summary per file (bytes on disk against the size in `model.safetensors.index.json` or the HTTP `Content-Length` logged).

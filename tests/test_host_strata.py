@@ -275,7 +275,9 @@ def test_without_a_key_it_serves_like_mlx_and_never_inherits_one(st):
 
 
 def test_start_with_a_pack_overrides_the_env_file_and_is_remembered(st):
-    (st.app / "strata-iq3_xxs.json").write_text('{\n "args": [\n  "--max-context",\n  "131072"\n ]\n}\n')
+    (st.app / "strata-iq3_xxs.json").write_text(
+        '{\n "args": [\n  "--max-context",\n  "131072"\n ]\n}\n'
+    )
     r = st.run("start", "IQ3_XXS")
     assert r.returncode == 0, r.stderr
     st.host.wait_for(st.host.state / "strata_args")
@@ -307,3 +309,47 @@ def test_a_bad_remembered_pack_falls_back_to_the_env_file(st):
     (st.root / "run").mkdir(parents=True, exist_ok=True)
     (st.root / "run/strata.pack").write_text("junk\n")
     assert "model: Q2_0" in st.run("status").stdout.splitlines()
+
+
+# --- logs ----------------------------------------------------------------------------------
+def _small_rotation(st: Strata) -> None:
+    """Re-copy the wrapper with a 100-byte limit and 2 archives kept."""
+    redirect(
+        CLI,
+        st.cli,
+        st.host.root,
+        {
+            "STOP_TRIES=240": "STOP_TRIES=8",
+            "LOG_ROTATE_MAX=52428800": "LOG_ROTATE_MAX=100",
+            "LOG_ROTATE_KEEP=8": "LOG_ROTATE_KEEP=2",
+        },
+    )
+
+
+def test_status_names_the_engine_log(st):
+    assert f"engine log: {st.app}/strata-q2_0.log" in st.run("status").stdout.splitlines()
+
+
+def test_start_rotates_both_logs_over_the_limit(st):
+    _small_rotation(st)
+    (st.root / "logs").mkdir(parents=True)
+    (st.root / "logs/strata.log").write_text("x" * 200)
+    engine = st.app / "strata-q2_0.log"
+    engine.write_text("e" * 200)
+    for stamp in ("20260101-000000", "20260102-000000"):
+        (st.app / f"strata-q2_0.log.{stamp}").write_text("old")
+    assert st.run("start").returncode == 0
+    archives = sorted(p.name for p in st.app.glob("strata-q2_0.log.*"))
+    assert len(archives) == 2 and "strata-q2_0.log.20260101-000000" not in archives
+    assert not engine.exists()  # Strata reopens it in append mode on its own start
+    assert len(list((st.root / "logs").glob("strata.log.*"))) == 1
+
+
+def test_start_leaves_small_logs_and_other_packs_alone(st):
+    _small_rotation(st)
+    (st.app / "strata-q2_0.log").write_text("small")
+    (st.app / "strata-iq3_xxs.log").write_text("i" * 200)  # not the pack being started
+    assert st.run("start").returncode == 0
+    assert (st.app / "strata-q2_0.log").read_text() == "small"
+    assert (st.app / "strata-iq3_xxs.log").stat().st_size == 200
+    assert not list(st.app.glob("*.log.*"))

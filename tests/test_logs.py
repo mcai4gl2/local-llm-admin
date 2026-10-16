@@ -238,6 +238,35 @@ def test_strata_log_is_a_source_only_when_enabled(tmp_path):
     assert logs.resolve_source(s, "strata") == tmp_path / "strata/logs/strata.log"
 
 
+def test_strata_engine_logs_are_sources_per_installed_pack(tmp_path):
+    s = Settings(mlx_root=tmp_path / "Models", strata_root=tmp_path / "strata")
+    app = tmp_path / "strata/app"
+    app.mkdir(parents=True)
+    for name in ("strata-q2_0.json", "strata-iq3_xxs.json", "strata-q2_0.log"):
+        (app / name).write_text("{}")
+    assert not [i for i in logs.source_ids(s) if i.startswith("strata")]
+    s.strata_enabled = True
+    ids = logs.source_ids(s)
+    # in STRATA_PACKS order; a pack without a run config is not installed
+    assert [i for i in ids if i.startswith("strata-engine")] == [
+        "strata-engine-q2_0",
+        "strata-engine-iq3_xxs",
+    ]
+    # listed before setup or a first start wrote the file: it shows as missing
+    assert logs.resolve_source(s, "strata-engine-iq3_xxs") == app / "strata-iq3_xxs.log"
+    assert logs.resolve_source(s, "strata-engine-q2_0") == app / "strata-q2_0.log"
+    for bad in ("strata-engine-iq3_s", "strata-engine-../x", "strata-engine-Q2_0"):
+        with pytest.raises(KeyError):
+            logs.resolve_source(s, bad)
+
+
+def test_strata_engine_logs_without_an_app_folder(tmp_path):
+    s = Settings(mlx_root=tmp_path / "Models", strata_root=tmp_path / "absent")
+    s.strata_enabled = True
+    assert "strata" in logs.source_ids(s)
+    assert not [i for i in logs.source_ids(s) if i.startswith("strata-engine")]
+
+
 @pytest.mark.parametrize(
     ("line", "level"),
     [

@@ -154,16 +154,23 @@ config_context() {
   print -r -- "${ctx:-$STRATA_CONTEXT}"
 }
 
-# Rename a log over the size limit to strata.log.<stamp> and keep the newest
-# LOG_ROTATE_KEEP archives. Runs only from start, after every refusal check.
+# Strata's own log for the pack (the run config's "log"): engine start, memory and per-request
+# statistics, appended across starts
+engine_log() {
+  print -r -- "$APP/strata-${(L)STRATA_MODEL}.log"
+}
+
+# Rename a log over the size limit to <log>.<stamp> and keep the newest LOG_ROTATE_KEEP
+# archives. Runs only from start, after every refusal check, while nothing writes the log.
 rotate_log() {
-  [[ -f "$LOG_FILE" ]] || return 0
+  local log="$1"
+  [[ -f "$log" ]] || return 0
   local size
-  size=$(wc -c <"$LOG_FILE" 2>/dev/null | tr -d ' ') || return 0
+  size=$(wc -c <"$log" 2>/dev/null | tr -d ' ') || return 0
   (( size > LOG_ROTATE_MAX )) || return 0
-  mv "$LOG_FILE" "$LOG_FILE.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || return 0
+  mv "$log" "$log.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || return 0
   local -a archives
-  archives=("$LOG_FILE".<->-<->(N.On))  # newest first by name
+  archives=("$log".<->-<->(N.On))  # newest first by name
   local old
   for old in "${archives[@]:$LOG_ROTATE_KEEP}"; do
     rm -f "$old"
@@ -217,6 +224,7 @@ cmd_status() {
   echo "auth: $AUTH"
   echo "config: $(config_file)"
   echo "log: $LOG_FILE"
+  echo "engine log: $(engine_log)"
 }
 
 cmd_start() {
@@ -247,7 +255,8 @@ cmd_start() {
     exit 1
   fi
   mkdir -p "$ROOT/logs" "$ROOT/run" "$ROOT/home/tmp"
-  rotate_log || true
+  rotate_log "$LOG_FILE" || true
+  rotate_log "$(engine_log)" || true
   {
     echo
     echo "===== $(date '+%Y-%m-%d %H:%M:%S') start $STRATA_MODEL ====="
