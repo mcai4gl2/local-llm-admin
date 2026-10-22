@@ -241,6 +241,17 @@ class QualityStore(Database):
         """A benchmark case that could not finish: ``failed`` or ``cancelled``."""
         self._finish_case(case_id, status, None, detail)
 
+    def complete_eval_case(self, case_id: int, status: str, summary: dict[str, Any]) -> None:
+        """The ``eval:<suite>`` row of one model: its finalized summary (M10)."""
+        self._finish_case(case_id, status, summary, None)
+
+    def set_case_summary(self, case_id: int, summary: dict[str, Any]) -> None:
+        """Refresh a case's summary only (a regrade): status, detail and finished stay."""
+        with self._conn() as c:
+            c.execute(
+                "UPDATE quality_cases SET summary = ? WHERE id = ?", (json.dumps(summary), case_id)
+            )
+
     def set_compatibility(
         self, case_id: int, outcome: str, detail: str | None, data: dict[str, Any] | None = None
     ) -> None:
@@ -313,6 +324,20 @@ class QualityStore(Database):
                 "SELECT * FROM quality_baselines WHERE fingerprint = ? AND case_key = ?"
                 " AND settings_hash = ? AND cache_state = ?",
                 (fingerprint, case_key, settings_hash, cache_state),
+            ).fetchone()
+        if row is None:
+            return None
+        out = dict(row)
+        out["medians"] = json.loads(out["medians"])
+        return out
+
+    def latest_baseline(self, fingerprint: str, case_key: str) -> dict[str, Any] | None:
+        """The newest baseline for a model's weights and case, whatever its settings."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT * FROM quality_baselines WHERE fingerprint = ? AND case_key = ?"
+                " ORDER BY ts DESC LIMIT 1",
+                (fingerprint, case_key),
             ).fetchone()
         if row is None:
             return None

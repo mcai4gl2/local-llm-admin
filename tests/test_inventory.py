@@ -425,3 +425,64 @@ async def test_inventory_error_and_cache(client, app, monkeypatch):
     app.state.inventory_cache = (time.monotonic(), {"available": True, "cached": 1})
     assert (await client.get("/api/models/inventory")).json()["cached"] == 1
     assert len(calls) == 1
+
+
+async def test_inventory_rows_carry_promoted_eval_means(client, settings, app):
+    from local_llm_admin.quality_runner import model_info
+
+    llama_fp = model_info(str(settings.mlx_root / "models/Llama"))["fingerprint"]
+    with app.state.evals._conn() as c:
+        c.execute(
+            "INSERT INTO eval_scores (fingerprint, suite_id, suite_hash, settings_hash, model,"
+            " run_id, n, excluded, mean, lo, hi, by_category, judge, self_judged, ts)"
+            " VALUES (?, 'core-v1', 'h', 's', 'llama', 'r1', 10, 0, 0.62, 0.5, 0.7, '{}',"
+            " NULL, 0, 1.0)",
+            (llama_fp,),
+        )
+    body = (await client.get("/api/models/inventory?refresh=true")).json()
+    by = {m["name"]: m for m in body["models"]}
+    assert by["llama"]["eval"] == {"core-v1": 0.62}
+    assert by["qwen"]["eval"] == {} and by["gemma"]["eval"] == {}
+
+
+async def test_cache_hit_does_no_drive_io_but_shows_new_scores(client, settings, app, monkeypatch):
+    import local_llm_admin.app as app_mod
+    from local_llm_admin.quality_runner import model_info
+
+    await client.get("/api/models/inventory?refresh=true")
+
+    def boom(*a, **kw):
+        raise AssertionError("model_info called on a cache hit")
+
+    monkeypatch.setattr(app_mod, "model_info", boom)
+    fp = model_info(str(settings.mlx_root / "models/Llama"))["fingerprint"]
+    with app.state.evals._conn() as c:
+        c.execute(
+            "INSERT INTO eval_scores (fingerprint, suite_id, suite_hash, settings_hash, model,"
+            " run_id, n, excluded, mean, lo, hi, by_category, judge, self_judged, ts)"
+            " VALUES (?, 'core-v1', 'h', 's', 'llama', 'r1', 10, 0, 0.4, 0.3, 0.5, '{}',"
+            " NULL, 0, 1.0), ('', 'core-v1', 'h', 's2', 'x', 'r2', 1, 0, 0.9, 0.9, 0.9, '{}',"
+            " NULL, 0, 2.0)",
+            (fp,),
+        )
+    by = {m["name"]: m for m in (await client.get("/api/models/inventory")).json()["models"]}
+    assert by["llama"]["eval"] == {"core-v1": 0.4}
+    # missing directory (null fingerprint) never matches, even a row keyed ""
+    assert by["gemma"]["exists"] is False and by["gemma"]["eval"] == {}
+
+
+async def test_inventory_eval_shows_thinking_off_scores_only(client, settings, app):
+    from local_llm_admin.quality_runner import model_info
+
+    fp = model_info(str(settings.mlx_root / "models/Llama"))["fingerprint"]
+    with app.state.evals._conn() as c:
+        c.execute(
+            "INSERT INTO eval_scores (fingerprint, suite_id, suite_hash, settings_hash, model,"
+            " run_id, n, excluded, mean, lo, hi, by_category, judge, self_judged, ts, thinking)"
+            " VALUES (?, 'core-v1', 'h', 's', 'llama', 'r1', 10, 0, 0.62, 0.5, 0.7, '{}',"
+            " NULL, 0, 1.0, 0), (?, 'core-v1', 'h', 's2', 'llama', 'r2', 10, 0, 0.9, 0.8, 1.0,"
+            " '{}', NULL, 0, 2.0, 1)",
+            (fp, fp),
+        )
+    by = {m["name"]: m for m in (await client.get("/api/models/inventory?refresh=true")).json()["models"]}
+    assert by["llama"]["eval"] == {"core-v1": 0.62}

@@ -80,6 +80,16 @@ class Settings(BaseSettings):
     quality_rss_interval_s: float = 0.5
     quality_retention_days: int = 90
 
+    # M10 evals
+    eval_run_deadline_s: Annotated[float, Field(gt=0, le=72 * 3600)] = 12 * 3600.0
+    eval_thinking_max_tokens: Annotated[int, Field(ge=256, le=65_536)] = 8192
+    eval_judge: str = "none"  # none | external | mlx:<registered name>
+    eval_judge_base_url: str = ""  # OpenAI-compatible, e.g. http://litellm.example.com:4000
+    eval_judge_model: str = ""
+    eval_judge_api_key: SecretStr = SecretStr("")
+    eval_import_max_bytes: Annotated[int, Field(ge=1024, le=50_000_000)] = 2_000_000
+    eval_import_max_cases: Annotated[int, Field(ge=1, le=20_000)] = 2000
+
     # Observability (M4): request history, availability samples, log rotation
     availability_interval_s: Annotated[float, Field(ge=10.0, le=600.0)] = 60.0
     observability_retention_days: Annotated[int, Field(ge=7, le=365)] = 90

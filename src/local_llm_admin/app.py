@@ -18,7 +18,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import (
     JSONResponse,
     PlainTextResponse,
@@ -59,6 +59,21 @@ from .downloads import DownloadError, DownloadService
 from .embed import QUERY_INSTRUCTION, EmbedClient, EmbedError, validate_embed, validate_rerank
 from .embed_store import EmbedStore
 from .engines import ComfyClient, StrataClient, badge_state, resolve_active
+from .eval_graders import grade_response
+from .eval_judge import judge_target
+from .eval_stats import paired
+from .eval_store import EvalStore
+from .eval_suites import (
+    NEEDLE_MARGIN,
+    EvalCase,
+    Judge,
+    Suite,
+    SuiteError,
+    builtin_suites,
+    expand,
+    messages_for,
+    parse_jsonl,
+)
 from .ingestion import HostLogs, IngestStore
 from .inventory import InventoryStore, build_inventory
 from .jobs import JobRunner, JobStore, ops_tz
@@ -84,7 +99,7 @@ from .performance_store import (
     request_context,
 )
 from .profiles import ProfileError, ProfileService
-from .quality_runner import QualityError, QualityRunner
+from .quality_runner import QualityError, QualityRunner, model_info
 from .quality_store import QualityStore
 from .sidecars import (
     SidecarMonitor,
@@ -196,11 +211,27 @@ class InterruptRequest(BaseModel):
     session: str | None = None
 
 
+class EvalEstimateRequest(BaseModel):
+    suite: str
+    scope: str
+    model: str | None = None
+    thinking: bool = False
+
+
+# decode and prefill speeds when no benchmark baseline exists for a model's weights
+DEFAULT_DECODE_TOK_S = 20.0
+DEFAULT_PREFILL_TOK_S = 300.0
+MODEL_SWITCH_S = 60.0
+GIB = 1024**3
+
+
 class QualityRequest(BaseModel):
     kind: str
     scope: str
     model: str | None = None
     confirm_off: bool = False
+    suite: str | None = None
+    thinking: bool = False
 
 
 def _setup_logging(settings: Settings) -> None:
@@ -239,6 +270,7 @@ def create_app(
     tts_transport: httpx.MockTransport | None = None,
     embed_transport: httpx.MockTransport | None = None,
     strata_transport: httpx.MockTransport | None = None,
+    judge_transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     mlx = MlxClient(settings)
@@ -325,8 +357,16 @@ def create_app(
         )
     )
     quality_store = QualityStore(db_path)
+    evals = EvalStore(db_path)
     quality = QualityRunner(
-        settings, control, quality_store, alerts, sampler, transport=quality_transport
+        settings,
+        control,
+        quality_store,
+        alerts,
+        sampler,
+        transport=quality_transport,
+        evals=evals,
+        judge_transport=judge_transport,
     )
     profiles = ProfileService(settings, mlx, control, quality_store)
     comfy_queue = ComfyQueue(comfy, control, store)
@@ -353,6 +393,7 @@ def create_app(
         # previous process
         control.reconcile()
         quality.reconcile()
+        evals.sync_builtins(builtin_suites())  # refuses an edited builtin suite version
 
         async def backfill() -> None:
             # never block startup on the model drive: a macOS privacy prompt or a hung
@@ -399,6 +440,7 @@ def create_app(
     app.state.alerts = alerts
     app.state.supervisor = supervisor
     app.state.quality = quality
+    app.state.evals = evals
     app.state.maintenance = maintenance
     app.state.perf_logs = perf_logs
     app.state.inventory_timeout_s = settings.inventory_timeout_s
@@ -719,15 +761,38 @@ def create_app(
     async def register(body: RegisterRequest) -> JSONResponse:
         return await _control(control.register(body.dir_name, body.name))
 
+    def _scan_inventory() -> dict[str, Any]:
+        """Runs inside the probe: the weights fingerprint reads the drive, so it is cached too."""
+        inv = build_inventory(mlx, inventory, downloaded=app.state.downloaded_at)
+        for m in inv["models"]:
+            m["weights_fingerprint"] = model_info(m["dir"] if m["exists"] else None)["fingerprint"]
+        return inv
+
+    async def _with_evals(inv: dict[str, Any]) -> dict[str, Any]:
+        """Fresh promoted eval means per model (a DB read only), so the 30 s cache never hides a run."""
+
+        def attach() -> dict[str, Any]:
+            by_fp = {c["fingerprint"]: c["suites"] for c in evals.scorecard()}
+            models = []
+            for m in inv.get("models", []):
+                fp = m.get("weights_fingerprint")
+                suites = by_fp.get(fp, {}) if fp else {}
+                # the Models tab shows thinking-off scores only ("<suite>+thinking" cells skipped)
+                means = {k: v["mean"] for k, v in suites.items() if not v["thinking"]}
+                models.append({**m, "eval": means})
+            return {**inv, "models": models}
+
+        return await asyncio.to_thread(attach)
+
     @app.get("/api/models/inventory")
     async def models_inventory(refresh: bool = False) -> dict[str, Any]:
         cached = app.state.inventory_cache
         if cached and not refresh and time.monotonic() - cached[0] < INVENTORY_CACHE_S:
             value: dict[str, Any] = cached[1]
-            return value
+            return await _with_evals(value)
         res = await probes.run(
             "inventory",
-            lambda: build_inventory(mlx, inventory, downloaded=app.state.downloaded_at),
+            _scan_inventory,
             app.state.inventory_timeout_s,
         )
         if res.state != "done":
@@ -740,7 +805,7 @@ def create_app(
             return {"available": False, "reason": reason}
         app.state.inventory_cache = (time.monotonic(), res.value)
         out: dict[str, Any] = res.value
-        return out
+        return await _with_evals(out)
 
     @app.get("/api/models/{name}/remove-preview")
     async def remove_preview(name: str) -> dict[str, Any]:
@@ -1348,7 +1413,12 @@ def create_app(
     async def quality_start(body: QualityRequest) -> JSONResponse:
         try:
             run = await quality.start(
-                body.kind, body.scope, body.model, confirm_off=body.confirm_off
+                body.kind,
+                body.scope,
+                body.model,
+                confirm_off=body.confirm_off,
+                suite=body.suite,
+                thinking=body.thinking,
             )
         except QualityError as exc:
             raise _quality_error(exc) from None
@@ -1384,6 +1454,243 @@ def create_app(
             "settings": quality_mod.EFFECTIVE_SETTINGS,
             "warmup": quality_mod.WARMUP,
             "repeats": quality_mod.REPEATS,
+        }
+
+    # --- evals (M10) -------------------------------------------------------------
+    @app.get("/api/evals/suites")
+    async def eval_suites_list() -> dict[str, Any]:
+        return {"suites": await asyncio.to_thread(evals.suites)}
+
+    async def _suite_or_404(suite_id: str, version: int | None = None) -> Suite:
+        suite = await asyncio.to_thread(evals.suite, suite_id, version)
+        if suite is None:
+            raise HTTPException(404, "unknown eval suite")
+        return suite
+
+    @app.get("/api/evals/suites/{suite_id}")
+    async def eval_suite(suite_id: str, version: int | None = None) -> dict[str, Any]:
+        return (await _suite_or_404(suite_id, version)).model_dump(mode="json")
+
+    @app.get("/api/evals/suites/{suite_id}/export")
+    async def eval_suite_export(suite_id: str) -> Response:
+        suite = await _suite_or_404(suite_id)
+        if suite.needle is not None:
+            raise HTTPException(400, "generated suite: nothing to export")
+        lines = []
+        for case in suite.cases:
+            doc = case.model_dump(mode="json")
+            lines.append(json.dumps({k: v for k, v in doc.items() if v is not None}))
+        return Response(
+            "\n".join(lines) + "\n",
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": f'attachment; filename="{suite.id}.jsonl"'},
+        )
+
+    @app.post("/api/evals/suites", status_code=201)
+    async def eval_suite_import(
+        file: UploadFile = File(...),  # noqa: B008
+        id: str = Form(...),  # noqa: A002
+        title: str = Form(...),
+    ) -> dict[str, Any]:
+        raw = await file.read(settings.eval_import_max_bytes + 1)
+        if len(raw) > settings.eval_import_max_bytes:
+            raise HTTPException(
+                400, f"file is larger than {settings.eval_import_max_bytes} bytes"
+            )
+        try:
+            text = raw.decode()
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,63}", id):
+                raise SuiteError("id must be lowercase letters, digits, '_', '.' or '-'")
+            suite = parse_jsonl(
+                text,
+                id=id,
+                title=title,
+                max_bytes=settings.eval_import_max_bytes,
+                max_cases=settings.eval_import_max_cases,
+            )
+        except UnicodeDecodeError:
+            raise HTTPException(400, "file is not UTF-8 text") from None
+        except SuiteError as exc:
+            raise HTTPException(400, exc.message) from None
+        try:
+            await asyncio.to_thread(evals.add_custom, suite)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        stored = await _suite_or_404(id)
+        return {"id": stored.id, "version": stored.version, "cases": len(stored.cases)}
+
+    @app.delete("/api/evals/suites/{suite_id}", status_code=204)
+    async def eval_suite_delete(suite_id: str) -> Response:
+        if await asyncio.to_thread(evals.delete_custom, suite_id) == 0:
+            if await asyncio.to_thread(evals.suite, suite_id) is None:
+                raise HTTPException(404, "unknown eval suite")
+            raise HTTPException(409, "a builtin suite cannot be deleted")
+        return Response(status_code=204)
+
+    @app.post("/api/evals/estimate")
+    async def eval_estimate(body: EvalEstimateRequest) -> dict[str, Any]:
+        suite = await _suite_or_404(body.suite)
+        try:
+            plan = await quality.plan_targets(body.scope, body.model)
+        except QualityError as exc:
+            raise _quality_error(exc) from None
+        cases = suite.cases
+        if suite.needle is not None:  # generated cases depend on the running engine's context
+            ctx = await quality.current_context(plan)
+            cases = await asyncio.to_thread(expand, suite, ctx)
+        out = []
+        for name in plan.targets:
+            decode, prefill, basis = DEFAULT_DECODE_TOK_S, DEFAULT_PREFILL_TOK_S, "default"
+            fp = (await asyncio.to_thread(model_info, plan.dirs.get(name)))["fingerprint"]
+            base = fp and await asyncio.to_thread(quality_store.latest_baseline, fp, "p2k")
+            if base:
+                med = base["medians"]
+                decode = med.get("backend_decode_tok_s") or decode
+                prefill = med.get("backend_prefill_tok_s") or prefill
+                basis = "benchmark"
+            seconds = 0.0 if name == plan.original["name"] else MODEL_SWITCH_S
+            for case in cases:
+                max_tokens = settings.eval_thinking_max_tokens if body.thinking else case.max_tokens
+                out_tokens = (
+                    max_tokens / 2 if isinstance(case.grader, Judge) else min(max_tokens, 64)
+                )
+                prompt_chars = sum(len(m["content"]) for m in messages_for(case))
+                seconds += prompt_chars / 4 / prefill + out_tokens / decode
+            out.append({"name": name, "seconds": round(seconds, 1), "basis": basis})
+        try:
+            target = judge_target(settings)
+            judge = target.label if target else "none"
+        except ValueError as exc:
+            judge = f"invalid judge setting: {exc}"
+        return {"models": out, "judge": judge}
+
+    @app.get("/api/evals/runs/{run_id}/results")
+    async def eval_results(run_id: str, model: str | None = None) -> dict[str, Any]:
+        return {"results": await asyncio.to_thread(evals.results, run_id, model)}
+
+    def _regrade(run_id: str) -> dict[str, Any]:
+        rows = evals.results(run_id)
+        if not rows:
+            raise HTTPException(404, "no eval results for this run")
+        suites: dict[tuple[str, str], Any] = {}
+        for r in rows:
+            key = (r["suite_id"], r["suite_hash"])
+            if key not in suites:
+                suites[key] = evals.suite_by_hash(*key)
+            if suites[key] is None:
+                raise HTTPException(409, f"suite {key[0]} version of this run is no longer stored")
+        # judged and failed rows keep what they have: only deterministic graders re-run
+        promoted = {
+            (r["model"], r["suite_id"])
+            for r in rows
+            if r["fingerprint"] and evals.is_promoted(run_id, r["fingerprint"], r["suite_id"])
+        }
+        regraded = changed = 0
+        by_suite: dict[tuple[str, str], dict[str, EvalCase]] = {}
+        for r in rows:
+            key = (r["suite_id"], r["suite_hash"])
+            if key not in by_suite:  # a needle suite's cases are generated, so build them once
+                suite = suites[key]
+                biggest = max(suite.needle.lengths) + NEEDLE_MARGIN if suite.needle else None
+                by_suite[key] = {c.id: c for c in expand(suite, biggest)}
+            case = by_suite[key].get(r["case_id"])
+            if case is None or isinstance(case.grader, Judge) or r["grade_state"] == "failed":
+                continue
+            calls = json.loads(r["tool_calls"]) if r["tool_calls"] else None
+            g = grade_response(
+                case.grader, r["response"], r["finish_reason"], r["reasoning_chars"] or 0, calls,
+                thinking=bool(r["thinking"]),
+            )  # fmt: skip
+            regraded += 1
+            new = (g.get("score"), g.get("passed"), g["grade_state"], g.get("grade_detail"))
+            if new != (r["score"], r["passed"], r["grade_state"], r["grade_detail"]):
+                changed += 1
+                evals.update_grade(
+                    r["id"], score=new[0], passed=None if new[1] is None else bool(new[1]),
+                    state=new[2], detail=new[3],
+                )  # fmt: skip
+        summaries = []
+        for model in dict.fromkeys(r["model"] for r in rows):
+            suite_id = next(r["suite_id"] for r in rows if r["model"] == model)
+            summary = evals.finalize(run_id, model, promote=(model, suite_id) in promoted)
+            case_row = next(r["quality_case_id"] for r in rows if r["model"] == model)
+            if case_row is not None:  # status, detail and finished stay as the run left them
+                quality_store.set_case_summary(case_row, summary)
+            summaries.append(summary)
+        return {"run_id": run_id, "regraded": regraded, "changed": changed, "models": summaries}
+
+    @app.post("/api/evals/runs/{run_id}/regrade")
+    async def eval_regrade(run_id: str) -> dict[str, Any]:
+        active = quality.active()
+        if active is not None and active["run_id"] == run_id:
+            raise HTTPException(409, "the run is still in progress")
+        return await asyncio.to_thread(_regrade, run_id)
+
+    @app.get("/api/evals/scorecard")
+    async def eval_scorecard() -> dict[str, Any]:
+        cards = await asyncio.to_thread(evals.scorecard)
+        for card in cards:
+            base = await asyncio.to_thread(
+                quality_store.latest_baseline, card["fingerprint"], "p2k"
+            )
+            med = base["medians"] if base else {}
+            rss = med.get("peak_rss_bytes")
+            card["speed"] = (
+                {
+                    "decode_tok_s": med.get("backend_decode_tok_s"),
+                    "prefill_tok_s": med.get("backend_prefill_tok_s"),
+                    "peak_rss_gb": None if rss is None else round(rss / GIB, 2),
+                }
+                if base
+                else None
+            )  # Strata rows are keyed strata-<hash> and have no baseline, so their speed is null
+        return {"models": cards}
+
+    @app.get("/api/evals/compare")
+    async def eval_compare(
+        suite: str, a_run: str, a_model: str, b_run: str, b_model: str
+    ) -> dict[str, Any]:
+        def load(run: str, model: str) -> list[dict[str, Any]]:
+            rows = [r for r in evals.results(run, model) if r["suite_id"] == suite]
+            if not rows:
+                raise HTTPException(404, "no eval results for that run, model and suite")
+            return rows
+
+        rows_a = await asyncio.to_thread(load, a_run, a_model)
+        rows_b = await asyncio.to_thread(load, b_run, b_model)
+        for field, what in (
+            ("suite_hash", "suite version"),
+            ("settings_hash", "generation settings (thinking, profile or runtime)"),
+        ):
+            if {r[field] for r in rows_a} != {r[field] for r in rows_b}:
+                raise HTTPException(409, f"not comparable: {what} differs")
+        # same suite version on both sides (checked above), so one lookup names its judge cases
+        stored = await asyncio.to_thread(evals.suite_by_hash, suite, rows_a[0]["suite_hash"])
+        judged_ids = {c.id for c in stored.cases if isinstance(c.grader, Judge)} if stored else set()
+        extra: dict[str, Any] = {}
+        if judged_ids:
+
+            def judged(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+                return [r for r in rows if r["case_id"] in judged_ids and r["grade_state"] == "graded"]
+
+            ja, jb = judged(rows_a), judged(rows_b)
+            if {r["judge"] for r in ja} != {r["judge"] for r in jb}:
+                raise HTTPException(409, "not comparable: judge differs")
+            own = {"a": any(r["self_judged"] for r in ja), "b": any(r["self_judged"] for r in jb)}
+            if any(own.values()):
+                extra["self_judged"] = own
+        a = await asyncio.to_thread(evals.case_scores, a_run, a_model, suite)
+        b = await asyncio.to_thread(evals.case_scores, b_run, b_model, suite)
+        try:
+            result = paired(a, b)
+        except ValueError:
+            raise HTTPException(409, "not comparable: no shared cases") from None
+        return dataclasses.asdict(result) | extra | {
+            "disagreements": [
+                {"case_id": k, "a_score": a[k], "b_score": b[k]}
+                for k in sorted(a.keys() & b.keys())
+                if a[k] != b[k]
+            ]
         }
 
     # --- chat --------------------------------------------------------------

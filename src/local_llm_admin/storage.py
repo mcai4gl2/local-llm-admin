@@ -270,6 +270,39 @@ def _v13_embed_service(conn: sqlite3.Connection) -> None:
     )
 
 
+def _v14_evals(conn: sqlite3.Connection) -> None:
+    # M10: eval suites, per-case results with the stored response, latest scores per
+    # comparable key; the M9 app ignores them (rollback to user_version 13).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS eval_suites (id TEXT NOT NULL, version INTEGER NOT NULL,"
+        " title TEXT NOT NULL, origin TEXT NOT NULL CHECK (origin IN ('builtin','custom')),"
+        " content_hash TEXT NOT NULL, body TEXT NOT NULL, created REAL NOT NULL,"
+        " PRIMARY KEY (id, version))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS eval_results (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " run_id TEXT NOT NULL, quality_case_id INTEGER NOT NULL, model TEXT NOT NULL,"
+        " fingerprint TEXT, settings_hash TEXT NOT NULL, suite_id TEXT NOT NULL,"
+        " suite_hash TEXT NOT NULL, case_id TEXT NOT NULL, category TEXT NOT NULL,"
+        " response TEXT, reasoning_chars INTEGER, tool_calls TEXT, finish_reason TEXT,"
+        " prompt_tokens INTEGER, completion_tokens INTEGER, latency_s REAL, error TEXT,"
+        " score REAL, passed INTEGER, grade_state TEXT NOT NULL"
+        " CHECK (grade_state IN ('graded','needs_judge','judge_error','ungraded','failed')),"
+        " grade_detail TEXT, judge TEXT, self_judged INTEGER, judged_at REAL,"
+        " thinking INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS eval_results_run ON eval_results(run_id, model)")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS eval_scores (fingerprint TEXT NOT NULL,"
+        " suite_id TEXT NOT NULL, suite_hash TEXT NOT NULL, settings_hash TEXT NOT NULL,"
+        " model TEXT NOT NULL, run_id TEXT NOT NULL, n INTEGER NOT NULL,"
+        " excluded INTEGER NOT NULL, mean REAL NOT NULL, lo REAL NOT NULL, hi REAL NOT NULL,"
+        " by_category TEXT NOT NULL, judge TEXT, self_judged INTEGER NOT NULL,"
+        " ts REAL NOT NULL, thinking INTEGER NOT NULL DEFAULT 0,"
+        " PRIMARY KEY (fingerprint, suite_id, suite_hash, settings_hash))"
+    )
+
+
 # Append only; never edit a released step. Each must be safe to re-run.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v1_base,
@@ -285,6 +318,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v11_decision_clients,
     _v12_sidecar_slot,
     _v13_embed_service,
+    _v14_evals,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

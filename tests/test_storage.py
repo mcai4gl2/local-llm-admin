@@ -124,7 +124,7 @@ def test_v12_moves_the_decision_intent_and_tags_availability(tmp_path):
     assert db.get_kv("decision_intent")["value"] == "running"  # kept for an M6 rollback
     with sqlite3.connect(path) as c:
         assert c.execute("SELECT sidecar FROM decision_availability").fetchone()[0] == "openjev"
-        assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 13
+        assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     assert {
         "ts",
         "client_id",
@@ -160,7 +160,7 @@ def test_v13_adds_embed_requests_and_stopped_intent(tmp_path):
     path = tmp_path / "admin.sqlite"
     conn = sqlite3.connect(path, isolation_level=None)
     migrate(conn)
-    assert SCHEMA_VERSION == 13
+    assert SCHEMA_VERSION >= 13
     cols = {r[1] for r in conn.execute("PRAGMA table_info(embed_requests)")}
     assert {"route", "inputs", "chars", "tokens", "dims", "client_id", "status"} <= cols
     row = conn.execute("SELECT value FROM kv WHERE key = 'embed_intent'").fetchone()
@@ -187,3 +187,18 @@ def test_v13_keeps_an_existing_intent(tmp_path):
     migrate(conn)
     row = conn.execute("SELECT value FROM kv WHERE key = 'embed_intent'").fetchone()
     assert json.loads(row[0])["value"] == "running"
+
+
+def test_v14_adds_eval_tables_and_is_rerunnable(tmp_path):
+    import sqlite3
+
+    from local_llm_admin.storage import SCHEMA_VERSION, Database, migrate
+
+    path = tmp_path / "admin.sqlite"
+    conn = sqlite3.connect(path, isolation_level=None)
+    migrate(conn)
+    assert SCHEMA_VERSION == 14
+    for table in ("eval_suites", "eval_results", "eval_scores"):
+        assert conn.execute(f"PRAGMA table_info({table})").fetchall()
+    conn.close()
+    Database(path)  # re-running is a no-op

@@ -44,6 +44,75 @@
   <div class="table-wrap"><table id="compat-table"><thead></thead><tbody></tbody></table></div>
 </section>
 
+<section class="card" id="evals">
+  <div class="card-head"><h2>Task-quality evals</h2><span class="muted" id="eval-engine-note"></span></div>
+  <div class="toolbar">
+    <label>Suite <select id="eval-suite"></select></label>
+    <label>Models
+      <select id="eval-scope">
+        <option value="current">Current model</option>
+        <option value="all">All registered models</option>
+        <option value="model">One model…</option>
+      </select>
+    </label>
+    <label id="eval-model-label" hidden>Model <select id="eval-model"></select></label>
+    <label><input type="checkbox" id="eval-thinking"> Thinking on</label>
+    <button id="eval-start" class="primary">Run eval</button>
+  </div>
+  <p class="muted" id="eval-suite-note"></p>
+  <p class="error" id="eval-error" hidden></p>
+  <details>
+    <summary class="muted">Suites: import, export, delete</summary>
+    <div class="table-wrap"><table id="eval-suites">
+      <thead><tr><th>Id</th><th>Title</th><th class="num">Cases</th><th>Origin</th><th></th></tr></thead><tbody></tbody>
+    </table></div>
+    <div class="toolbar">
+      <label>JSONL file <input type="file" id="eval-import-file" accept=".jsonl,.json,.txt"></label>
+      <label>Id <input id="eval-import-id" placeholder="my-suite" size="16"></label>
+      <label>Title <input id="eval-import-title" size="20"></label>
+      <button id="eval-import">Import</button>
+    </div>
+  </details>
+</section>
+
+<section class="card" id="eval-scorecard">
+  <div class="card-head"><h2>Scorecard</h2><span class="muted">newest score per model and suite, with a 95% interval</span></div>
+  <div class="table-wrap"><table id="eval-scorecard-table"><thead></thead><tbody></tbody></table></div>
+</section>
+
+<section class="card" id="eval-runs-card">
+  <div class="card-head"><h2>Eval runs</h2><span class="muted">pick one to read each answer</span></div>
+  <div class="table-wrap"><table id="eval-runs">
+    <thead><tr><th>Started</th><th>Models</th><th>Status</th><th></th></tr></thead><tbody></tbody>
+  </table></div>
+</section>
+
+<section class="card" id="eval-results" hidden>
+  <div class="card-head"><h2>Eval run <span id="eval-results-id"></span></h2>
+    <div class="actions"><button id="eval-regrade">Regrade deterministic cases</button></div></div>
+  <p class="muted" id="eval-results-note"></p>
+  <div id="eval-results-body"></div>
+</section>
+
+<section class="card" id="eval-compare">
+  <div class="card-head"><h2>Compare</h2><span class="muted">paired by case; only runs of the same suite version and settings</span></div>
+  <div class="toolbar">
+    <label>Suite <select id="cmp-suite"></select></label>
+    <label>A run <select id="cmp-a-run"></select></label>
+    <label>A model <select id="cmp-a-model"></select></label>
+    <label>B run <select id="cmp-b-run"></select></label>
+    <label>B model <select id="cmp-b-model"></select></label>
+    <button id="cmp-go">Compare</button>
+  </div>
+  <p class="error" id="cmp-error" hidden></p>
+  <div id="cmp-result" hidden>
+    <p><strong id="cmp-verdict"></strong> <span class="muted" id="cmp-detail"></span></p>
+    <div class="table-wrap"><table id="cmp-disagree">
+      <thead><tr><th>Case</th><th class="num">A</th><th class="num">B</th></tr></thead><tbody></tbody>
+    </table></div>
+  </div>
+</section>
+
 <section class="card">
   <div class="card-head"><h2>Runs</h2><span class="muted">details kept 90 days; baselines are kept</span></div>
   <div class="table-wrap"><table id="runs-table">
@@ -76,4 +145,4 @@
   </form>
 </dialog>
 {% endblock %}
-{% block scripts %}<script src="/static/quality.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/quality.js"></script><script src="/static/evals.js"></script>{% endblock %}

@@ -13,8 +13,9 @@ function unavailable() { return el("span", { class: "muted", title: "not reporte
 function metric(v, f) { return v === null || v === undefined ? unavailable() : f(v); }
 const secs = (v) => `${Number(v).toFixed(v < 10 ? 2 : 1)} s`;
 
-function confirmStart(title, body) {
+function confirmStart(title, body, okLabel = "Start") {
   const dlg = document.getElementById("confirm");
+  dlg.querySelector("button[value=ok]").textContent = okLabel;
   document.getElementById("confirm-title").textContent = title;
   document.getElementById("confirm-body").textContent = body;
   return new Promise((resolve) => {
@@ -25,21 +26,20 @@ function confirmStart(title, body) {
 
 function currentName(st) { return st?.engine?.active === "mlx" ? st.selected : (roster.find((m) => m.selected) || {}).name; }
 
-function effectText() {
+function effectText(kind = document.getElementById("q-kind").value, scope = document.getElementById("q-scope").value,
+  chosen = document.getElementById("q-model").value) {
   const st = lastStatus || {};
   const engine = st.engine?.active;
-  const scope = document.getElementById("q-scope").value;
-  const chosen = document.getElementById("q-model").value;
   const cur = currentName(st) || "the selected model";
   const parts = [];
   if (engine === "comfyui" || engine === "conflict") {
     return { text: "ComfyUI owns the GPU. Switch the engine to MLX or off first.", ok: false };
   }
   if (engine === "strata") {
-    const ok = document.getElementById("q-kind").value === "compatibility" && scope === "current";
+    const ok = (kind === "compatibility" || kind === "eval") && scope === "current";
     return ok
-      ? { text: "Runs the compatibility checks on Strata; nothing is switched.", ok: true, off: false }
-      : { text: "Strata is running: only compatibility checks of the current engine run on it.", ok: false };
+      ? { text: `Runs the ${kind === "eval" ? "eval" : "compatibility checks"} on Strata; nothing is switched.`, ok: true, off: false }
+      : { text: "Strata is running: compatibility checks and evals also run on Strata, for the current engine only (a local mlx: judge is not allowed there).", ok: false };
   }
   const n = scope === "all" ? roster.length : 1;
   const target = scope === "model" ? chosen : scope === "all" ? null : cur;
@@ -111,6 +111,7 @@ function watchRun(id) {
       clearInterval(activeTimer); activeTimer = null;
       document.getElementById("active-cancel").disabled = false;
       loadRuns(); loadLatest(); showRun(run); refreshStatus();
+      if (typeof refreshEvals === "function") refreshEvals();
     }
   };
   tick().catch(() => {});

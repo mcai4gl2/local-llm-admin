@@ -173,10 +173,17 @@ async function loadInventory(refresh = false) {
       m.aliases.length ? el("div", { class: "muted", text: `same weights as ${m.aliases.join(", ")}` }) : null),
     el("td", { class: "num", text: fmt.bytes(m.size_bytes) }),
     el("td", {}, m.fingerprint ? el("code", { title: "file names and sizes plus config/index content", text: m.fingerprint.slice(5, 13) }) : el("span", { class: "muted", text: m.exists ? "—" : "dir missing" })),
+    el("td", { text: evalCell(m.eval) }),
     el("td", { text: m.downloaded_at ? `downloaded ${fmt.time(m.downloaded_at)}` : fmt.time(m.first_observed) }),
     el("td", { text: fmt.time(m.last_activated) }),
     el("td", { class: "num", text: m.requests ? fmt.num(m.requests.count) : "—" }),
     el("td", { class: "num", text: m.requests ? fmt.num((m.requests.prompt_tokens || 0) + (m.requests.generated_tokens || 0)) : "—" }))));
+}
+
+function evalCell(ev) {
+  // thinking-off scores only: the API leaves out "<suite>+thinking" cells
+  const parts = ["core-v1", "writing-v1"].filter((id) => ev && typeof ev[id] === "number").map((id) => `${id} ${ev[id].toFixed(2)}`);
+  return parts.length ? parts.join(" · ") : "—";
 }
 
 async function loadHistory() {

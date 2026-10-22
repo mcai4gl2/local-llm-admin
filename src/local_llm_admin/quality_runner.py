@@ -1,4 +1,5 @@
-"""M2 quality runs: benchmark or compatibility over one or all registered models.
+"""M2 quality runs: benchmark, compatibility or (M10) an eval suite over one or all
+registered models.
 
 A run is one held job (``source="benchmark"``): it owns the lifecycle slot from start to
 restoration, so manual actions and the watchdog see a busy slot and never act on the
@@ -32,8 +33,14 @@ import psutil
 
 from . import compatibility
 from .alerts import AlertStore
+from .chat import ACTIVE_MODEL_ID
 from .config import Settings
 from .control import ControlError, ControlService
+from .eval_graders import final_answer, grade_response
+from .eval_judge import MAX_TOKENS as JUDGE_MAX_TOKENS
+from .eval_judge import JudgeTarget, build_judge_messages, judge_one, judge_target
+from .eval_store import EvalStore
+from .eval_suites import EvalCase, Judge, Suite, expand, messages_for
 from .jobs import JobConflict, JobStorageError
 from .mlx import build_command, validate_name
 from .quality import (
@@ -57,7 +64,7 @@ from .quality_store import QualityStore
 log = logging.getLogger("local_llm_admin")
 T = TypeVar("T")
 
-KINDS = ("benchmark", "compatibility")
+KINDS = ("benchmark", "compatibility", "eval")
 SCOPES = ("current", "all", "model")
 EXTERNAL_WARNING = (
     "LiteLLM clients can still send requests to this model during the run. Pause them for"
@@ -105,6 +112,44 @@ class RunPlan:
     switched: bool = False
     runtime_fingerprint: str | None = None
     failures: list[str] = field(default_factory=list)
+    suite: Suite | None = None
+    thinking: bool = False
+    eval_cases: dict[str, int] = field(default_factory=dict)  # model -> its eval case row
+
+
+def eval_request_timeout(base_s: float, max_tokens: int) -> float:
+    """A non-streamed eval answer arrives whole: allow at least 5 tokens/s for it."""
+    return max(base_s, max_tokens / 5)
+
+
+def eval_payload(
+    case: EvalCase, *, thinking: bool, engine: str, max_tokens_thinking: int
+) -> dict[str, Any]:
+    """One non-streamed eval request. ``engine`` is ``"mlx"`` (MLX's full active path is
+    sent) or the model id another engine serves. Thinking is set both ways the servers
+    read it."""
+    payload: dict[str, Any] = {
+        "model": ACTIVE_MODEL_ID if engine == "mlx" else engine,
+        "messages": messages_for(case),
+        "stream": False,
+        "temperature": 0,
+        "seed": 0,
+        "max_tokens": max_tokens_thinking if thinking else case.max_tokens,
+        "enable_thinking": thinking,
+        "chat_template_kwargs": {"enable_thinking": thinking},
+    }
+    if case.tools:
+        payload["tools"] = case.tools
+    return payload
+
+
+def health_context(health: Any, strata: bool) -> int | None:
+    """Context size from a /health body: ``max_context`` for Strata, ``loaded_context_size``
+    for MLX; None when absent or unusable."""
+    if not isinstance(health, dict):
+        return None
+    raw = health.get("max_context" if strata else "loaded_context_size")
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0 else None
 
 
 def model_info(path: str | None) -> dict[str, Any]:
@@ -142,6 +187,8 @@ class QualityRunner:
         transport: httpx.AsyncBaseTransport | None = None,
         cases: tuple[Case, ...] = BENCHMARK_CASES,
         compat_cases: tuple[str, ...] = compatibility.CASES,
+        evals: EvalStore | None = None,
+        judge_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.settings = settings
         self.control = control
@@ -151,6 +198,8 @@ class QualityRunner:
         self.transport = transport
         self.cases = cases
         self.compat_cases = compat_cases
+        self.evals = evals
+        self.judge_transport = judge_transport
         self._task: asyncio.Task[None] | None = None
         self._plan: RunPlan | None = None
         self._cancel = asyncio.Event()
@@ -172,11 +221,8 @@ class QualityRunner:
                 await self._task
 
     # --- start ---------------------------------------------------------------------
-    async def start(
-        self, kind: str, scope: str, model: str | None = None, *, confirm_off: bool = False
-    ) -> dict[str, Any]:
-        if kind not in KINDS:
-            raise QualityError(400, "kind must be benchmark or compatibility")
+    @staticmethod
+    def _check_scope(scope: str, model: str | None) -> None:
         if scope not in SCOPES:
             raise QualityError(400, "scope must be current, all or model")
         if (scope == "model") != (model is not None):
@@ -186,6 +232,28 @@ class QualityRunner:
                 validate_name(model)
             except ValueError:
                 raise QualityError(400, "invalid model name") from None
+
+    async def plan_targets(self, scope: str, model: str | None) -> RunPlan:
+        """The models a run of this scope would visit, in order (for an estimate); the
+        plan is never started."""
+        self._check_scope(scope, model)
+        plan, _ = await self._plan_run("eval", scope, model, True)
+        return plan
+
+    async def start(
+        self,
+        kind: str,
+        scope: str,
+        model: str | None = None,
+        *,
+        confirm_off: bool = False,
+        suite: str | None = None,
+        thinking: bool = False,
+    ) -> dict[str, Any]:
+        if kind not in KINDS:
+            raise QualityError(400, "kind must be benchmark, compatibility or eval")
+        self._check_scope(scope, model)
+        loaded = self._suite(kind, suite, thinking)
         runner = self.control.runner
         try:
             claim = runner.claim()
@@ -193,6 +261,8 @@ class QualityRunner:
             raise QualityError(409, self.control.busy_message()) from None
         try:
             plan, warning = await self._plan_run(kind, scope, model, confirm_off)
+            plan.suite, plan.thinking = loaded, thinking
+            self._check_judge(plan)
             try:
                 job = runner.begin(
                     "quality",
@@ -218,7 +288,7 @@ class QualityRunner:
                     "started": time.time(),
                     "case_version": CASE_VERSION,
                     "original": plan.original,
-                    "settings": EFFECTIVE_SETTINGS if kind == "benchmark" else None,
+                    "settings": self._run_settings(plan),
                     "warning": warning,
                 }
             )
@@ -233,6 +303,56 @@ class QualityRunner:
         run = self.store.get_run(plan.run_id)
         assert run is not None
         return run
+
+    def _suite(self, kind: str, suite: str | None, thinking: bool) -> Suite | None:
+        if kind != "eval":
+            if suite is not None or thinking:
+                raise QualityError(400, "suite and thinking apply to eval runs only")
+            return None
+        if suite is None:
+            raise QualityError(400, "an eval run needs a suite")
+        if self.evals is None:
+            raise QualityError(503, "evals are not available")
+        loaded = self.evals.suite(suite)
+        if loaded is None:
+            raise QualityError(404, "unknown eval suite")
+        return loaded
+
+    def _check_judge(self, plan: RunPlan) -> None:
+        """A suite with judge cases needs a usable judge setting; a local judge must be a
+        registered model, and never on Strata (a run never switches it)."""
+        if plan.suite is None or not any(isinstance(c.grader, Judge) for c in plan.suite.cases):
+            return
+        try:
+            target = judge_target(self.settings)
+        except ValueError as exc:
+            raise QualityError(409, f"invalid judge setting: {exc}") from None
+        if target is None or target.mlx_name is None:
+            return
+        if plan.original["engine"] == "strata":
+            raise QualityError(
+                409, "Strata is running and is never switched; use an external judge or none"
+            )
+        if target.mlx_name not in plan.dirs:
+            raise QualityError(409, f"the judge model {target.mlx_name} is not registered")
+
+    def _run_settings(self, plan: RunPlan) -> dict[str, Any] | None:
+        if plan.kind == "benchmark":
+            return EFFECTIVE_SETTINGS
+        if plan.suite is None:
+            return None
+        return {
+            "suite_id": plan.suite.id,
+            "suite_version": plan.suite.version,
+            "suite_hash": plan.suite.content_hash(),
+            "thinking": plan.thinking,
+        }
+
+    def _deadline(self, kind: str) -> float:
+        s = self.settings
+        return time.monotonic() + (
+            s.eval_run_deadline_s if kind == "eval" else s.quality_run_deadline_s
+        )
 
     async def _plan_run(
         self, kind: str, scope: str, model: str | None, confirm_off: bool
@@ -292,16 +412,19 @@ class QualityRunner:
             targets=targets,
             dirs=dirs,
             original={"engine": engine, "name": original},
-            deadline=time.monotonic() + self.settings.quality_run_deadline_s,
+            deadline=self._deadline(kind),
         )
         return plan, warning
 
     def _plan_strata(self, kind: str, scope: str) -> tuple[RunPlan, str]:
         """Strata serves one model and is never switched by a run: only the compatibility
-        cases of the running engine (Strata Phase 4). Sidecars cannot run beside it."""
-        if kind != "compatibility" or scope != "current":
+        cases or an eval of the running engine (Strata Phase 4, M10). Sidecars cannot run
+        beside it."""
+        if kind not in ("compatibility", "eval") or scope != "current":
             raise QualityError(
-                409, "Strata is running; only compatibility checks of the current engine run on it"
+                409,
+                "Strata is running; only compatibility checks and evals of the current engine"
+                " run on it",
             )
         plan = RunPlan(
             run_id=uuid.uuid4().hex[:12],
@@ -310,7 +433,7 @@ class QualityRunner:
             targets=["strata"],
             dirs={},
             original={"engine": "strata", "name": "strata"},
-            deadline=time.monotonic() + self.settings.quality_run_deadline_s,
+            deadline=self._deadline(kind),
         )
         return plan, EXTERNAL_WARNING
 
@@ -364,6 +487,10 @@ class QualityRunner:
         return max(
             0.01, min(self.settings.quality_request_timeout_s, plan.deadline - time.monotonic())
         )
+
+    def _eval_deadline(self, plan: RunPlan, max_tokens: int) -> float:
+        budget = eval_request_timeout(self.settings.quality_request_timeout_s, max_tokens)
+        return max(0.01, min(budget, plan.deadline - time.monotonic()))
 
     # --- helpers -------------------------------------------------------------------
     def _rss(self) -> int | None:
@@ -450,18 +577,27 @@ class QualityRunner:
                 f" {obs['engine']} {obs['mlx_name'] or '-'})"
             )
 
+    def _open(self, strata: bool) -> httpx.AsyncClient:
+        key = self.settings.strata_api_key.get_secret_value() if strata else ""
+        return httpx.AsyncClient(
+            base_url=self.settings.strata_api_base if strata else self.settings.mlx_api_base,
+            timeout=REQUEST_TIMEOUT,
+            transport=self.transport,
+            headers={"Authorization": f"Bearer {key}"} if key else None,
+        )
+
+    async def current_context(self, plan: RunPlan) -> int | None:
+        """The running engine's context size (for estimating a needle suite), or None."""
+        strata = plan.original["engine"] == "strata"
+        async with self._open(strata) as http:
+            return health_context(await self._get(http, "/health"), strata)
+
     # --- the run ---------------------------------------------------------------------
     async def _execute(self, plan: RunPlan) -> None:
         status, error = "failed", None
         shutdown = False
         strata = plan.original["engine"] == "strata"
-        key = self.settings.strata_api_key.get_secret_value() if strata else ""
-        async with httpx.AsyncClient(
-            base_url=self.settings.strata_api_base if strata else self.settings.mlx_api_base,
-            timeout=REQUEST_TIMEOUT,
-            transport=self.transport,
-            headers={"Authorization": f"Bearer {key}"} if key else None,
-        ) as http:
+        async with self._open(strata) as http:
             try:
                 version = await self._get(http, "/openapi.json")
                 if isinstance(version, dict):
@@ -474,6 +610,8 @@ class QualityRunner:
                         plan, model=name, index=index, total=len(plan.targets), step="load"
                     )
                     await self._model(http, plan, name, index)
+                await self._judge_phase(http, plan)
+                await self._after_models(plan)
                 status = "failed" if plan.failures else "succeeded"
                 error = "; ".join(plan.failures) or None
             except RunCancelled:
@@ -566,6 +704,9 @@ class QualityRunner:
             )
         with contextlib.suppress(Exception):
             self.store.prune(now, self.settings.quality_retention_days)
+        if self.evals is not None:
+            with contextlib.suppress(Exception):  # after the runs it orphans are gone
+                self.evals.prune(now, self.settings.quality_retention_days)
         log.info("quality run %s: %s (restoration %s)", plan.run_id, status, restoration["outcome"])
 
     async def _serve(self, http: httpx.AsyncClient, name: str) -> tuple[float | None, Any]:
@@ -610,7 +751,7 @@ class QualityRunner:
                 cache_state=None,
                 load_s=None,
             )
-            if plan.kind == "benchmark":
+            if plan.kind in ("benchmark", "eval"):
                 self.store.fail_case(case_id, "failed", str(exc))
             else:
                 self.store.set_compatibility(
@@ -623,6 +764,8 @@ class QualityRunner:
         info = await asyncio.to_thread(model_info, path)
         if plan.kind == "benchmark":
             await self._benchmark(http, plan, name, path, info, load_s, generation, index)
+        elif plan.kind == "eval":
+            await self._eval(http, plan, name, path, info, load_s, generation, index)
         else:
             await self._compatibility(http, plan, name, path, info, load_s, generation, index)
 
@@ -819,6 +962,284 @@ class QualityRunner:
                 self.store.set_compatibility(cid, r.outcome, r.detail, {"error_kind": r.error_kind})
 
             await self._case_guard(plan, case_id, body())
+
+    async def _eval(
+        self,
+        http: httpx.AsyncClient,
+        plan: RunPlan,
+        name: str,
+        path: str | None,
+        info: dict[str, Any],
+        load_s: float | None,
+        generation: Any,
+        index: int,
+    ) -> None:
+        """One ``eval:<suite>`` case row per model, one result row per eval case. A case
+        that fails (HTTP error, timeout, bad body) is recorded as ``failed`` and the run
+        moves on; aborts close the row through ``_case_guard``."""
+        suite, evals = plan.suite, self.evals
+        assert suite is not None and evals is not None
+        settings_doc = await self._get(http, "/v1/settings")
+        fp = settings_doc.get("fingerprint") if isinstance(settings_doc, dict) else None
+        if plan.runtime_fingerprint is None and fp:
+            plan.runtime_fingerprint = fp
+            self.store.update_run(plan.run_id, runtime_fingerprint=fp)
+        engine, fingerprint = "mlx", info["fingerprint"]
+        strata = plan.original["engine"] == "strata"
+        health: Any = None
+        if strata or suite.needle is not None:
+            health = await self._get(http, "/health")
+        if strata:  # no weights path: key it by the served id
+            served = health.get("model") if isinstance(health, dict) else None
+            if isinstance(served, str) and served:
+                engine = served
+                fingerprint = "strata-" + hashlib.sha256(served.encode()).hexdigest()[:16]
+        thinking_max = self.settings.eval_thinking_max_tokens
+        effective = {
+            "temperature": 0,
+            "seed": 0,
+            "thinking": plan.thinking,
+            "max_tokens_thinking": thinking_max if plan.thinking else None,
+        }
+        profile = self._profile_fingerprint()
+        s_hash = settings_hash(effective, fp, profile)
+        suite_hash = suite.content_hash()
+        # a needle suite skips lengths that do not fit the loaded context
+        context = health_context(health, strata)
+        cases = await asyncio.to_thread(expand, suite, context)
+        self._check(plan)
+        await self._owned(name, generation)
+        case_id = self.store.add_case(
+            plan.run_id,
+            model=name,
+            model_path=path,
+            fingerprint=fingerprint,
+            case_key=f"eval:{suite.id}",
+            kind="eval",
+            settings_hash=s_hash,
+            cache_state=None,
+            load_s=load_s,
+            profile_fingerprint=profile,
+        )
+        plan.eval_cases[name] = case_id
+
+        async def body() -> None:
+            failed = 0
+            try:
+                for case in cases:
+                    self._check(plan)
+                    await self._owned(name, generation)
+                    self._progress(
+                        plan,
+                        model=name,
+                        index=index,
+                        total=len(plan.targets),
+                        step=f"{suite.id}:{case.id}",
+                    )
+                    payload = eval_payload(
+                        case,
+                        thinking=plan.thinking,
+                        engine=engine,
+                        max_tokens_thinking=thinking_max,
+                    )
+                    fields = await self._cancellable(self._eval_case(http, plan, case, payload))
+                    failed += fields["grade_state"] == "failed"
+                    evals.add_result(
+                        run_id=plan.run_id,
+                        quality_case_id=case_id,
+                        model=name,
+                        fingerprint=fingerprint,
+                        settings_hash=s_hash,
+                        suite_id=suite.id,
+                        suite_hash=suite_hash,
+                        case_id=case.id,
+                        category=case.category,
+                        thinking=int(plan.thinking),
+                        **fields,
+                    )
+            except InterventionRequired:
+                # the answers so far stay as rows, but an intervened run never becomes latest
+                self._finalize_eval(plan, name, None, promote=False)
+                raise
+            self._check(plan)  # a deadline or cancel during the last request wins
+            if failed:
+                plan.failures.append(f"{name} {suite.id}: {failed} of {len(cases)} cases failed")
+            # scored now, promoted only once every model finished cleanly (_after_models)
+            self._finalize_eval(plan, name, case_id, promote=False)
+
+        await self._case_guard(plan, case_id, body())
+
+    async def _judge_phase(self, http: httpx.AsyncClient, plan: RunPlan) -> None:
+        """After every candidate answered (one switch to a local judge, not one per
+        candidate): score the ``needs_judge`` rows, then re-score each model. With no judge
+        they become ``ungraded``; a judge that gives no verdict leaves ``judge_error``
+        (excluded and counted, never 0). Aborts propagate like during the candidates, so
+        nothing is promoted; restoration undoes a judge switch."""
+        evals, suite = self.evals, plan.suite
+        if plan.kind != "eval" or evals is None or suite is None:
+            return
+        rows = evals.needs_judge(plan.run_id)
+        if not rows:
+            return
+        target = judge_target(self.settings)  # checked at start
+        if target is None:
+            for r in rows:
+                evals.set_judged(r["id"], score=None, passed=None, detail="no judge configured",
+                                 judge=None, self_judged=False, state="ungraded")  # fmt: skip
+        elif target.kind == "external":
+            async with httpx.AsyncClient(
+                base_url=target.base_url,
+                timeout=REQUEST_TIMEOUT,
+                transport=self.judge_transport,
+                headers={"Authorization": f"Bearer {target.api_key}"} if target.api_key else None,
+            ) as judge_http:
+                await self._judge_rows(judge_http, plan, target, rows, None)
+        else:
+            assert target.mlx_name is not None
+            self._check(plan)
+            self._progress(plan, model=target.mlx_name, step="judge:load")
+            try:
+                _, generation = await self._serve(http, target.mlx_name)
+            except ModelLoadFailed as exc:
+                self._check(plan)
+                for r in rows:
+                    evals.set_judged(r["id"], score=None, passed=None, detail=f"judge: {exc}",
+                                     judge=target.label, self_judged=False,
+                                     state="judge_error")  # fmt: skip
+                plan.failures.append(f"judge: {exc}")
+            else:
+                await self._judge_rows(http, plan, target, rows, generation)
+        for name, case_id in plan.eval_cases.items():
+            self._finalize_eval(plan, name, case_id, promote=False)
+
+    async def _judge_rows(
+        self,
+        http: httpx.AsyncClient,
+        plan: RunPlan,
+        target: JudgeTarget,
+        rows: list[dict[str, Any]],
+        generation: Any,
+    ) -> None:
+        evals, suite = self.evals, plan.suite
+        assert evals is not None and suite is not None
+        cases = {c.id: c for c in suite.cases}
+        errors = 0
+        for n, r in enumerate(rows):
+            self._check(plan)
+            if target.mlx_name is not None:
+                await self._owned(target.mlx_name, generation)
+            self._progress(plan, model=r["model"], step=f"judge:{r['case_id']}", index=n,
+                           total=len(rows))  # fmt: skip
+            case = cases[r["case_id"]]
+            spec = case.grader
+            assert isinstance(spec, Judge)
+            answer, _ = final_answer(r["response"], r["finish_reason"], r["reasoning_chars"] or 0,
+                                     thinking=bool(r["thinking"]))  # fmt: skip
+            messages = build_judge_messages(case, answer or "", spec)
+            verdict = await self._cancellable(
+                judge_one(http, target, messages, scale=spec.scale, until=plan.deadline,
+                          deadline_s=self._eval_deadline(plan, JUDGE_MAX_TOKENS))
+            )  # fmt: skip
+            self._check(plan)  # a deadline or cancel during the request wins
+            self_judged = target.mlx_name is not None and r["model"] == target.mlx_name
+            if verdict is None:
+                errors += 1
+                evals.set_judged(r["id"], score=None, passed=None,
+                                 detail="the judge gave no usable verdict", judge=target.label,
+                                 self_judged=self_judged, state="judge_error")  # fmt: skip
+                continue
+            score, reason = verdict
+            evals.set_judged(r["id"], score=score, passed=score >= 0.5, detail=reason,
+                             judge=target.label, self_judged=self_judged,
+                             state="graded")  # fmt: skip
+        if target.mlx_name is not None:  # a switch during the last verdict counts too
+            await self._owned(target.mlx_name, generation)
+        if errors:
+            plan.failures.append(f"judge: {errors} of {len(rows)} cases got no verdict")
+
+    async def _after_models(self, plan: RunPlan) -> None:
+        """After the last model, before restoration (a run that aborted never gets here):
+        promote every model's eval scores if the run stayed controlled. A model with any
+        ``failed`` case (timeout, HTTP error) keeps its summary but is not promoted, so a
+        flaky or out-of-memory run never becomes its latest score."""
+        if plan.kind != "eval" or not plan.controlled:
+            return
+        assert self.evals is not None
+        for name, case_id in plan.eval_cases.items():
+            failed = any(r["grade_state"] == "failed" for r in self.evals.results(plan.run_id, name))
+            self._finalize_eval(plan, name, case_id, promote=not failed)
+
+    def _finalize_eval(
+        self, plan: RunPlan, name: str, case_id: int | None, *, promote: bool
+    ) -> dict[str, Any]:
+        """Score one model's results (promoting them when asked) and, given its case row,
+        record the summary there."""
+        assert self.evals is not None
+        summary = self.evals.finalize(plan.run_id, name, promote=promote)
+        if case_id is not None:
+            status = "complete" if summary["n"] else "incomplete"
+            self.store.complete_eval_case(case_id, status, summary)
+        return summary
+
+    async def _eval_case(
+        self, http: httpx.AsyncClient, plan: RunPlan, case: EvalCase, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """POST one case and grade it: the result row's fields (never raises for the
+        case's own failure)."""
+        deadline = self._eval_deadline(plan, payload["max_tokens"])
+        t0 = time.monotonic()
+
+        def failed(error: str) -> dict[str, Any]:
+            return {
+                "error": error,
+                "grade_detail": error,
+                "grade_state": "failed",
+                "latency_s": round(time.monotonic() - t0, 3),
+            }
+
+        try:
+            async with asyncio.timeout(deadline):
+                resp = await http.post(
+                    "/v1/chat/completions",
+                    json=payload,
+                    timeout=httpx.Timeout(deadline, connect=5.0),  # not streamed: one long read
+                )
+        except TimeoutError:
+            return failed(f"no response within {deadline:g}s")
+        except httpx.HTTPError as exc:
+            return failed(f"request failed: {exc}")
+        if resp.status_code != 200:
+            return failed(f"HTTP {resp.status_code}: {resp.text[:200]}")
+        try:
+            doc = resp.json()
+            choice = doc["choices"][0]
+            msg = choice["message"]
+            if not isinstance(msg, dict):
+                raise TypeError("message is not an object")
+        except (ValueError, KeyError, IndexError, TypeError):
+            return failed("invalid response from the model server")
+        latency = round(time.monotonic() - t0, 3)
+        content = msg.get("content") if isinstance(msg.get("content"), str) else None
+        reasoning = msg.get("reasoning_content") or msg.get("reasoning")
+        reasoning_chars = len(reasoning) if isinstance(reasoning, str) else 0
+        calls = msg.get("tool_calls") if isinstance(msg.get("tool_calls"), list) else None
+        finish = choice.get("finish_reason")
+        usage = doc.get("usage") if isinstance(doc.get("usage"), dict) else {}
+        fields: dict[str, Any] = {
+            "response": content,
+            "reasoning_chars": reasoning_chars,
+            "tool_calls": calls,
+            "finish_reason": finish,
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "latency_s": latency,
+        }
+        # off the event loop: a custom regex can still backtrack for a while
+        graded = await asyncio.to_thread(
+            grade_response, case.grader, content, finish, reasoning_chars, calls,
+            thinking=plan.thinking,
+        )  # fmt: skip
+        return fields | graded
 
     # --- restoration -------------------------------------------------------------------
     async def _restore(self, http: httpx.AsyncClient, plan: RunPlan) -> dict[str, Any]:

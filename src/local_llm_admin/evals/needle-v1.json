@@ -1,0 +1,4 @@
+{"id": "needle-v1", "version": 1, "title": "Long-context retrieval",
+ "description": "Find an access code hidden at 10%, 50% and 90% depth. Lengths above the loaded context are skipped.",
+ "cases": [],
+ "needle": {"lengths": [8192, 32768, 131072, 200000], "depths": [0.1, 0.5, 0.9], "seed": "needle-v1"}}
