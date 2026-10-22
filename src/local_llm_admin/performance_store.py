@@ -8,6 +8,7 @@ finished requests plus the correlation state in the cursor's transaction.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import sqlite3
@@ -15,7 +16,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Literal
 
 from .config import Settings
 from .ingestion import (
@@ -63,12 +64,55 @@ _ROW_COLS = (
     "log_identity",
     "log_start",
     "log_end",
+    "requests",
 )
 _UPDATABLE = ("elapsed_s", "stream", "generated_tokens")
-_INSERT = (
-    f"INSERT OR IGNORE INTO inference_requests (source, {', '.join(_ROW_COLS)})"
-    f" VALUES (?, {', '.join('?' * len(_ROW_COLS))})"
+# a request that started inside a quality or eval run (edges included, an open run has
+# no end yet) is the admin's own traffic: the run holds the lifecycle slot
+_ORIGIN = (
+    "CASE WHEN EXISTS (SELECT 1 FROM quality_runs WHERE started <= ? AND"
+    " (finished IS NULL OR finished >= ?)) THEN 'quality' ELSE 'client' END"
 )
+_INSERT = (
+    f"INSERT OR IGNORE INTO inference_requests (source, {', '.join(_ROW_COLS)}, origin)"
+    f" VALUES (?, {', '.join('?' * len(_ROW_COLS))}, {_ORIGIN})"
+)
+TokenGroup = Literal["day", "model", "day_model"]
+_COUNTS = (
+    "requests",
+    "measured",
+    "cached_unknown",
+    "input_tokens",
+    "cached_tokens",
+    "output_tokens",
+)
+_MEASURED = "prompt_tokens IS NOT NULL AND generated_tokens IS NOT NULL"
+# token sums over request rows; a missing count adds nothing and is never estimated
+_LIVE_SUMS = (
+    "SUM(requests) AS requests,"
+    f" SUM(CASE WHEN {_MEASURED} THEN requests ELSE 0 END) AS measured,"
+    f" SUM(CASE WHEN {_MEASURED} AND cached_tokens IS NULL THEN requests ELSE 0 END)"
+    " AS cached_unknown, COALESCE(SUM(prompt_tokens), 0) AS input_tokens,"
+    " COALESCE(SUM(cached_tokens), 0) AS cached_tokens,"
+    " COALESCE(SUM(generated_tokens), 0) AS output_tokens,"
+    " MIN(started) AS first_started, MAX(started) AS last_started"
+)
+_FOLDED_SUMS = (
+    ", ".join(f"SUM({k}) AS {k}" for k in _COUNTS)
+    + ", MIN(first_started) AS first_started, MAX(last_started) AS last_started"
+)
+_DAY = "date(started - ?, 'unixepoch')"  # the ops day; ? = tz_offset_min * 60
+_FOLD = (
+    "INSERT INTO token_usage_daily (date, source, model, origin, requests, measured,"
+    " cached_unknown, input_tokens, cached_tokens, output_tokens, first_started,"
+    f" last_started) SELECT {_DAY}, source, COALESCE(model, ''), origin, {_LIVE_SUMS}"
+    " FROM inference_requests WHERE id IN ({ids}) GROUP BY 1, 2, 3, 4"
+    " ON CONFLICT(date, source, model, origin) DO UPDATE SET"
+    + ",".join(f" {k} = {k} + excluded.{k}" for k in _COUNTS)
+    + ", first_started = MIN(first_started, excluded.first_started),"
+    " last_started = MAX(last_started, excluded.last_started)"
+)
+_PRUNE_IDS = "SELECT id FROM inference_requests WHERE started < ? ORDER BY id LIMIT ?"
 
 
 def _last_generation(fh: BinaryIO, end: int) -> dict[str, Any] | None:
@@ -141,12 +185,28 @@ class PerformanceStore(Database):
     def _insert(conn: sqlite3.Connection, source: str, rows: list[dict[str, Any]]) -> int:
         n = 0
         for r in rows:
-            n += conn.execute(_INSERT, (source, *(r[c] for c in _ROW_COLS))).rowcount
+            values = (r.get(c, 1 if c == "requests" else None) for c in _ROW_COLS)
+            n += conn.execute(_INSERT, (source, *values, r["started"], r["started"])).rowcount
         return n
 
-    def insert_rows(self, source: str, rows: list[dict[str, Any]]) -> int:
+    def insert_rows(
+        self,
+        source: str,
+        rows: list[dict[str, Any]],
+        *,
+        state: tuple[str, Any] | None = None,
+    ) -> int:
+        """Inserts new rows; ``state`` (a kv key and value) is saved in the same
+        transaction, so a poller's cursor and its rows never disagree."""
         with self._conn() as c:
-            return self._insert(c, source, rows)
+            n = self._insert(c, source, rows)
+            if state is not None:
+                c.execute(
+                    "INSERT INTO kv (key, value, updated) VALUES (?, ?, ?) ON CONFLICT(key)"
+                    " DO UPDATE SET value = excluded.value, updated = excluded.updated",
+                    (state[0], json.dumps(state[1]), time.time()),
+                )
+            return n
 
     def state(self, source: str) -> PerfState:
         with self._conn() as c:
@@ -179,6 +239,8 @@ class PerformanceStore(Database):
         before: int | None = None,
     ) -> dict[str, Any]:
         sql = "SELECT * FROM inference_requests WHERE started >= ? AND started < ?"
+        if state is None:
+            sql += " AND state != 'aggregate'"  # a Strata gap row is not one request
         args: list[Any] = [frm, to]
         for clause, value in (
             (" AND model = ?", model),
@@ -221,8 +283,9 @@ class PerformanceStore(Database):
         model: str | None = None,
     ) -> dict[str, Any]:
         sql = (
-            "SELECT started, model, state, complete, ttft_s, decode_tok_s FROM"
-            " inference_requests WHERE started >= ? AND started < ?"
+            "SELECT started, model, state, complete, ttft_s, decode_tok_s, prompt_tokens,"
+            " cached_tokens, generated_tokens FROM inference_requests WHERE started >= ?"
+            " AND started < ? AND state != 'aggregate'"
         )
         args: list[Any] = [frm, to]
         if model is not None:
@@ -258,7 +321,70 @@ class PerformanceStore(Database):
             "decode_p50": percentile(decode, 0.5),
             "decode_p90": percentile(decode, 0.9),
             "models": sorted({r["model"] for r in rows if r["model"]}),
+            "input_tokens": sum(r["prompt_tokens"] or 0 for r in rows),
+            "cached_tokens": sum(r["cached_tokens"] or 0 for r in rows),
+            "output_tokens": sum(r["generated_tokens"] or 0 for r in rows),
         }
+
+    def tokens(
+        self,
+        frm: float,
+        to: float,
+        *,
+        tz_offset_min: int,
+        group: TokenGroup,
+        model: str | None = None,
+        origin: str | None = None,
+    ) -> dict[str, Any]:
+        """Input, cached and output tokens per ops day and/or model: live rows plus the
+        totals the retention pass folded into ``token_usage_daily``. A row is either live
+        or folded, never both, so the two add up without overlap. Unknown model is ``''``."""
+        if group not in ("day", "model", "day_model"):
+            raise ValueError(f"unknown token grouping: {group!r}")
+        live = (
+            f"SELECT {_DAY} AS date, COALESCE(model, '') AS model, {_LIVE_SUMS}"
+            " FROM inference_requests WHERE started >= ? AND started < ?"
+        )
+        live_args: list[Any] = [tz_offset_min * 60, frm, to]
+        tz = ops_tz(tz_offset_min)
+        last = datetime.fromtimestamp(max(frm, to - 0.001), tz).date().isoformat()
+        folded = f"SELECT date, model, {_FOLDED_SUMS} FROM token_usage_daily WHERE date >= ? AND date <= ?"
+        folded_args: list[Any] = [datetime.fromtimestamp(frm, tz).date().isoformat(), last]
+        for col, value in (("model", model), ("origin", origin)):
+            if value is not None:
+                live += f" AND COALESCE({col}, '') = ?"
+                folded += f" AND {col} = ?"
+                live_args.append(value)
+                folded_args.append(value)
+        cells: dict[tuple[str, str], dict[str, Any]] = {}
+        with self._conn() as c:
+            for sql, args in ((live, live_args), (folded, folded_args)):
+                for r in c.execute(sql + " GROUP BY 1, 2", args).fetchall():
+                    cell = cells.setdefault((r["date"], r["model"]), dict.fromkeys(_COUNTS, 0))
+                    for k in _COUNTS:
+                        cell[k] += r[k]
+        rows: dict[tuple[str, ...], dict[str, Any]] = {}
+        for (day, name), cell in sorted(cells.items()):
+            key = {"day": (day,), "model": (name,), "day_model": (day, name)}[group]
+            row = rows.get(key)
+            if row is None:
+                row = rows[key] = dict.fromkeys(_COUNTS, 0)
+                if group != "model":
+                    row["date"] = day
+                if group != "day":
+                    row["model"] = name
+                if group == "model":
+                    row["first"] = day
+            for k in _COUNTS:
+                row[k] += cell[k]
+            if group == "model":
+                row["last"] = day
+        totals = dict.fromkeys(_COUNTS, 0)
+        for cell in cells.values():
+            for k in _COUNTS:
+                totals[k] += cell[k]
+        out = [_with_unmeasured(rows[k]) for k in sorted(rows)]
+        return {"rows": out, "totals": _with_unmeasured(totals)}
 
     def last_ingest(self, source: str) -> float | None:
         with self._conn() as c:
@@ -267,24 +393,33 @@ class PerformanceStore(Database):
             ).fetchone()
         return float(row["updated"]) if row else None
 
-    def prune_bounded(self, before: float, batch: int = 5000, batches: int = 10) -> int:
+    def prune_bounded(
+        self, before: float, batch: int = 5000, batches: int = 10, *, tz_offset_min: int = 0
+    ) -> int:
         """The daily retention pass: at most ``batches`` bounded deletes."""
         total = 0
         for _ in range(batches):
-            n = self.prune(before, batch)
+            n = self.prune(before, batch, tz_offset_min=tz_offset_min)
             total += n
             if n < batch:
                 break
         return total
 
-    def prune(self, before: float, limit: int = 5000) -> int:
+    def prune(self, before: float, limit: int = 5000, *, tz_offset_min: int = 0) -> int:
+        """Deletes the oldest rows, first adding their token counts to
+        ``token_usage_daily`` (per ops day) in the same transaction: a crash leaves the
+        rows either live or folded, never both."""
         with self._conn() as c:
+            c.execute(_FOLD.format(ids=_PRUNE_IDS), (tz_offset_min * 60, before, limit))
             cur = c.execute(
-                "DELETE FROM inference_requests WHERE id IN (SELECT id FROM inference_requests"
-                " WHERE started < ? ORDER BY id LIMIT ?)",
-                (before, limit),
+                f"DELETE FROM inference_requests WHERE id IN ({_PRUNE_IDS})", (before, limit)
             )
         return cur.rowcount
+
+
+def _with_unmeasured(row: dict[str, Any]) -> dict[str, Any]:
+    row["unmeasured"] = row["requests"] - row["measured"]
+    return row
 
 
 def request_context(

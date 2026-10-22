@@ -13,6 +13,7 @@ PYTHON="$APP/.venv/bin/python"
 ENV_FILE="$ROOT/etc/strata.env"
 LOG_FILE="$ROOT/logs/strata.log"
 PID_FILE="$ROOT/run/strata.pid"
+FINAL_PREFIX="$ROOT/run/metrics-final"  # <prefix>-<pid>.json: the last /metrics before a stop
 PACK_FILE="$ROOT/run/strata.pack"  # the pack the last start used: a plain start runs it again
 PACKS='^(Q2_0|IQ2_XS|IQ3_XXS|IQ3_S)$'
 MLX_LOCK="$VOLUME/run/mlx.lock"
@@ -285,6 +286,30 @@ cmd_start() {
   echo "Log: $LOG_FILE"
 }
 
+# The server's last /metrics (its whole request history) before it stops: the admin adds
+# what finished after its last poll, then deletes the file. Best effort and bounded; the
+# key goes to curl on stdin, never on the command line.
+save_final_metrics() {
+  local pid="$1" key="" line out tmp
+  out="$FINAL_PREFIX-$pid.json"
+  tmp="$out.tmp"
+  if [[ -r "$ENV_FILE" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" == STRATA_API_KEY=* ]] && key="${line#*=}"
+    done <"$ENV_FILE"
+  fi
+  [[ "$key" =~ '^[A-Za-z0-9_-]*$' ]] || key=""
+  : >"$tmp" && chmod 600 "$tmp" || return 0
+  if { [[ -z "$key" ]] || print -r -- "header = \"Authorization: Bearer $key\""; } \
+      | curl -s --max-time 3 --max-filesize 8388608 -K - -o "$tmp" \
+        "http://127.0.0.1:$PORT/metrics?requests=all" 2>/dev/null \
+      && [[ "$(head -c 1 "$tmp" 2>/dev/null)" == "{" ]]; then
+    mv -f "$tmp" "$out"
+  else
+    rm -f "$tmp"
+  fi
+}
+
 cmd_stop() {
   local pid="" i
   local -a children
@@ -295,6 +320,7 @@ cmd_stop() {
   fi
   # the server runs the Metal engine as a child: remember it, it must not outlive the server
   children=(${(f)"$(pgrep -P "$pid" 2>/dev/null || true)"})
+  save_final_metrics "$pid" || true
   kill "$pid" 2>/dev/null || true
   for i in {1..$STOP_TRIES}; do
     pid_running "$pid" || break

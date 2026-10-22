@@ -83,6 +83,23 @@ while :; do sleep 0.1; done
 """
 
 
+# curl for the wrapper's final /metrics reading: records its argv and its stdin config
+# (where the key must be), and answers with $FAKE_HOST_STATE/strata_metrics if present
+FAKE_STRATA_CURL = r"""#!/bin/bash
+case "$*" in
+  *"/metrics"*)
+    printf '%s\n' "$@" > "$FAKE_HOST_STATE/curl_args"
+    cat > "$FAKE_HOST_STATE/curl_config"
+    [ -f "$FAKE_HOST_STATE/strata_metrics" ] || exit 7
+    out=""; prev=""
+    for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done
+    cat "$FAKE_HOST_STATE/strata_metrics" > "$out" ;;
+  *) [ -f "$FAKE_HOST_STATE/healthy" ] || exit 7
+     echo '{"status":"healthy","loaded_model":"active"}' ;;
+esac
+"""
+
+
 class Strata:
     def __init__(self, host: Host) -> None:
         self.host = host
@@ -95,6 +112,7 @@ class Strata:
         (self.app / "serve/server.py").write_text("")
         _exe(self.app / ".venv/bin/python", FAKE_SERVER_PY)
         (self.app / "strata-q2_0.json").write_text("{}")
+        _exe(host.root.parent / "fakebin/curl", FAKE_STRATA_CURL)
         self.write_env(f"STRATA_API_KEY={KEY}\nSTRATA_MODEL=Q2_0\nSTRATA_CONTEXT=32768\n")
 
     def write_env(self, text: str, mode: int = 0o600) -> None:
@@ -353,3 +371,39 @@ def test_start_leaves_small_logs_and_other_packs_alone(st):
     assert (st.app / "strata-q2_0.log").read_text() == "small"
     assert (st.app / "strata-iq3_xxs.log").stat().st_size == 200
     assert not list(st.app.glob("*.log.*"))
+
+
+def _finals(st):
+    return sorted((st.root / "run").glob("metrics-final-*.json"))
+
+
+def test_stop_saves_the_last_metrics_with_the_key_off_the_command_line(st):
+    (st.host.state / "strata_metrics").write_text('{"totals": {"since": 1.0}}')
+    assert st.run("start").returncode == 0
+    pid = st.pid()
+    r = st.run("stop")
+    assert r.returncode == 0 and "Strata stopped" in r.stdout
+    (final,) = _finals(st)
+    assert final.name == f"metrics-final-{pid}.json"
+    assert final.read_text() == '{"totals": {"since": 1.0}}'
+    assert final.stat().st_mode & 0o777 == 0o600
+    args = (st.host.state / "curl_args").read_text()
+    assert "http://127.0.0.1:8080/metrics?requests=all" in args and KEY not in args
+    assert "--max-time" in args
+    assert f"Authorization: Bearer {KEY}" in (st.host.state / "curl_config").read_text()
+
+
+def test_stop_without_a_reading_saves_nothing_and_still_stops(st):
+    st.write_env("STRATA_MODEL=Q2_0\n")  # no key: nothing on stdin
+    assert st.run("start").returncode == 0
+    r = st.run("stop")
+    assert r.returncode == 0 and "Strata stopped" in r.stdout
+    assert _finals(st) == [] and not list((st.root / "run").glob("*.tmp"))
+    assert (st.host.state / "curl_config").read_text() == ""
+
+
+def test_stop_drops_a_reading_that_is_not_json(st):
+    (st.host.state / "strata_metrics").write_text("<html>busy</html>")
+    assert st.run("start").returncode == 0
+    assert st.run("stop").returncode == 0
+    assert _finals(st) == [] and not list((st.root / "run").glob("*.tmp"))

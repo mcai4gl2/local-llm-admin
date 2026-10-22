@@ -421,3 +421,255 @@ def test_request_context_after_a_remount(env, monkeypatch):
     assert (
         request_context(settings.mlx_log_dir, row, {**cursor, "head": "5:00"})["available"] is False
     )
+
+
+# --- token usage (rollup, fold on prune, origin) ----------------------------------
+
+DAY = 86400.0
+TZ = -480  # UTC+8
+
+
+def _local(ts: float) -> str:
+    from local_llm_admin.jobs import ops_tz
+
+    return datetime.fromtimestamp(ts, ops_tz(TZ)).date().isoformat()
+
+
+def _sum_keys(row):
+    keys = ("requests", "measured", "unmeasured", "cached_unknown")
+    return {k: row[k] for k in (*keys, "input_tokens", "cached_tokens", "output_tokens")}
+
+
+def test_tokens_of_an_empty_range_are_zero(env):
+    out = env[2].tokens(NOW, NOW + DAY, tz_offset_min=TZ, group="day")
+    assert out["rows"] == []
+    assert _sum_keys(out["totals"]) == {
+        "requests": 0,
+        "measured": 0,
+        "unmeasured": 0,
+        "cached_unknown": 0,
+        "input_tokens": 0,
+        "cached_tokens": 0,
+        "output_tokens": 0,
+    }
+
+
+def test_tokens_add_up_measured_rows_and_count_the_rest(env):
+    perf = env[2]
+    perf.insert_rows(
+        PERF_SOURCE,
+        [
+            _row(1, prompt_tokens=100, cached_tokens=40, generated_tokens=10),
+            _row(2, prompt_tokens=50, cached_tokens=None, generated_tokens=5),
+            # cancelled with partial output: counts what the engine logged
+            _row(3, state="cancelled", prompt_tokens=30, cached_tokens=0, generated_tokens=2),
+            # no counts at all: unmeasured, adds nothing
+            _row(4, prompt_tokens=None, cached_tokens=None, generated_tokens=None, complete=0),
+            # prompt only (cancelled before decode): unmeasured, its input still counts
+            _row(5, state="cancelled", generated_tokens=None, prompt_tokens=7, complete=0),
+        ],
+    )
+    t = perf.tokens(NOW - 10, NOW + DAY, tz_offset_min=TZ, group="day")["totals"]
+    assert _sum_keys(t) == {
+        "requests": 5,
+        "measured": 3,
+        "unmeasured": 2,
+        "cached_unknown": 1,
+        "input_tokens": 187,
+        "cached_tokens": 40,
+        "output_tokens": 17,
+    }
+
+
+def test_tokens_bucket_by_the_ops_day_and_group_by_model(env):
+    perf = env[2]
+    from local_llm_admin.jobs import ops_tz
+
+    # the last second of an ops day (UTC+8); one second later is the next one
+    edge = datetime(2026, 9, 29, 23, 59, 59, tzinfo=ops_tz(TZ)).timestamp()
+    perf.insert_rows(
+        PERF_SOURCE,
+        [
+            _row(1, started=edge, model="a", prompt_tokens=1, generated_tokens=1),
+            _row(2, started=edge + 1, model="a", prompt_tokens=2, generated_tokens=2),
+            _row(3, started=edge + 2, model="b", prompt_tokens=4, generated_tokens=4),
+            _row(4, started=edge + 3, model=None, prompt_tokens=8, generated_tokens=8),
+        ],
+    )
+    frm, to = edge - DAY, edge + DAY
+    days = perf.tokens(frm, to, tz_offset_min=TZ, group="day")["rows"]
+    assert [(d["date"], d["input_tokens"]) for d in days] == [
+        (_local(edge), 1),
+        (_local(edge + 1), 14),
+    ]
+    assert _local(edge) != _local(edge + 1)
+    models = perf.tokens(frm, to, tz_offset_min=TZ, group="model")["rows"]
+    assert [(m["model"], m["requests"], m["first"], m["last"]) for m in models] == [
+        ("", 1, _local(edge + 3), _local(edge + 3)),
+        ("a", 2, _local(edge), _local(edge + 1)),
+        ("b", 1, _local(edge + 2), _local(edge + 2)),
+    ]
+    both = perf.tokens(frm, to, tz_offset_min=TZ, group="day_model")["rows"]
+    assert [(r["date"], r["model"]) for r in both] == [
+        (_local(edge), "a"),
+        (_local(edge + 1), ""),
+        (_local(edge + 1), "a"),
+        (_local(edge + 1), "b"),
+    ]
+    only_b = perf.tokens(frm, to, tz_offset_min=TZ, group="day", model="b")
+    assert only_b["totals"]["input_tokens"] == 4
+    with pytest.raises(ValueError):
+        perf.tokens(frm, to, tz_offset_min=TZ, group="week")  # type: ignore[arg-type]
+
+
+def test_summary_carries_token_sums(env):
+    perf = env[2]
+    perf.insert_rows(
+        PERF_SOURCE,
+        [
+            _row(1, prompt_tokens=10, cached_tokens=4, generated_tokens=3),
+            _row(2, prompt_tokens=None, cached_tokens=None, generated_tokens=None),
+        ],
+    )
+    out = perf.summary(NOW - 10, NOW + DAY, tz_offset_min=TZ)
+    for part in (out["totals"], out["days"][0]):
+        assert (part["input_tokens"], part["cached_tokens"], part["output_tokens"]) == (10, 4, 3)
+
+
+def _usage(perf, frm=0.0, to=4e9, **kw):
+    out = perf.tokens(frm, to, tz_offset_min=TZ, group="day_model", **kw)
+    return [_sum_keys(r) | {"date": r["date"], "model": r["model"]} for r in out["rows"]]
+
+
+def test_prune_folds_token_totals_so_nothing_is_lost(env):
+    perf = env[2]
+    old = NOW - 100 * DAY
+    perf.insert_rows(
+        PERF_SOURCE,
+        [
+            _row(1, started=old, prompt_tokens=100, cached_tokens=60, generated_tokens=9),
+            _row(2, started=old + 60, prompt_tokens=20, cached_tokens=None, generated_tokens=1),
+            _row(3, started=old + 120, prompt_tokens=None, generated_tokens=None),
+            _row(4, started=old + 180, model=None, prompt_tokens=5, generated_tokens=5),
+            _row(5, started=NOW, prompt_tokens=1, cached_tokens=0, generated_tokens=1),
+        ],
+    )
+    before = _usage(perf)
+    totals = perf.tokens(0, 4e9, tz_offset_min=TZ, group="model")
+    assert perf.prune(NOW - 90 * DAY, limit=2, tz_offset_min=TZ) == 2
+    assert _usage(perf) == before  # half the old day folded, half still live
+    assert perf.prune(NOW - 90 * DAY, tz_offset_min=TZ) == 2
+    assert perf.prune(NOW - 90 * DAY, tz_offset_min=TZ) == 0  # again: nothing to fold
+    assert len(perf.requests(0, 4e9)["requests"]) == 1
+    assert _usage(perf) == before
+    after = perf.tokens(0, 4e9, tz_offset_min=TZ, group="model")
+    assert after == totals  # first/last days survive too
+    # the range still applies to folded days
+    assert (
+        perf.tokens(NOW - 10, NOW + DAY, tz_offset_min=TZ, group="day")["totals"]["requests"] == 1
+    )
+
+
+def test_prune_bounded_folds_with_the_ops_timezone(env):
+    perf = env[2]
+    old = NOW - 100 * DAY
+    perf.insert_rows(PERF_SOURCE, [_row(i, started=old + i) for i in range(3)])
+    before = _usage(perf)
+    assert perf.prune_bounded(NOW - 90 * DAY, batch=2, batches=5, tz_offset_min=TZ) == 3
+    assert _usage(perf) == before
+
+
+def test_request_totals_keep_folded_tokens_and_add_cached(env):
+    from local_llm_admin.inventory import InventoryStore
+
+    perf = env[2]
+    old = NOW - 100 * DAY
+    perf.insert_rows(
+        PERF_SOURCE,
+        [
+            _row(1, started=old, prompt_tokens=10, cached_tokens=4, generated_tokens=2),
+            _row(2, started=NOW, prompt_tokens=1, cached_tokens=1, generated_tokens=1),
+            _row(3, started=NOW + 1, model=None, attribution="unknown"),
+        ],
+    )
+    inv = InventoryStore(perf.path)
+    before = inv.request_totals()
+    assert before == {
+        "a": {
+            "count": 2,
+            "prompt_tokens": 11,
+            "cached_tokens": 5,
+            "generated_tokens": 3,
+            "first": old,
+            "last": NOW,
+        }
+    }
+    perf.prune(NOW - 90 * DAY, tz_offset_min=TZ)
+    assert inv.request_totals() == before
+    assert inv.requests_since() == old
+
+
+def _quality_run(perf, started, finished, run_id="q1"):
+    import sqlite3
+
+    with sqlite3.connect(perf.path) as c:
+        c.execute(
+            "INSERT INTO quality_runs (id, kind, scope, status, started, finished)"
+            " VALUES (?, 'eval', 'one', ?, ?, ?)",
+            (run_id, "running" if finished is None else "succeeded", started, finished),
+        )
+
+
+def test_rows_inside_a_quality_run_are_tagged_quality(env):
+    perf = env[2]
+    _quality_run(perf, NOW + 10, NOW + 20)
+    _quality_run(perf, NOW + 100, None, run_id="open")
+    perf.insert_rows(
+        PERF_SOURCE,
+        [
+            _row(i, started=NOW + i)
+            for i in (9, 10, 15, 20, 21, 99, 100, 500)  # edges inclusive; open run
+        ],
+    )
+    got = {r["started"] - NOW: r["origin"] for r in perf.requests(0, 4e9, limit=100)["requests"]}
+    assert got == {
+        9: "client",
+        10: "quality",
+        15: "quality",
+        20: "quality",
+        21: "client",
+        99: "client",
+        100: "quality",
+        500: "quality",
+    }
+    q = perf.tokens(0, 4e9, tz_offset_min=TZ, group="day", origin="quality")["totals"]
+    c = perf.tokens(0, 4e9, tz_offset_min=TZ, group="day", origin="client")["totals"]
+    assert (q["requests"], c["requests"]) == (5, 3)
+    perf.prune(NOW + 1000, tz_offset_min=TZ)  # folded rows keep their origin
+    q2 = perf.tokens(0, 4e9, tz_offset_min=TZ, group="day", origin="quality")["totals"]
+    assert q2["requests"] == 5
+
+
+def test_aggregate_rows_count_their_requests_but_skip_timing(env):
+    perf = env[2]
+    perf.insert_rows(
+        "strata",
+        [
+            _row(1, ttft_s=1.0),
+            _row(
+                2,
+                state="aggregate",
+                requests=3,
+                prompt_tokens=30,
+                cached_tokens=0,
+                generated_tokens=6,
+                ttft_s=None,
+                decode_tok_s=None,
+            ),
+        ],
+    )
+    t = perf.tokens(0, 4e9, tz_offset_min=TZ, group="day")["totals"]
+    assert (t["requests"], t["measured"], t["input_tokens"]) == (4, 4, 40)
+    s = perf.summary(0, 4e9, tz_offset_min=TZ)["totals"]
+    assert s["requests"] == 1 and s["partial"] == 0
+    assert [r["state"] for r in perf.requests(0, 4e9)["requests"]] == ["completed"]

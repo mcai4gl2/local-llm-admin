@@ -197,8 +197,26 @@ def test_v14_adds_eval_tables_and_is_rerunnable(tmp_path):
     path = tmp_path / "admin.sqlite"
     conn = sqlite3.connect(path, isolation_level=None)
     migrate(conn)
-    assert SCHEMA_VERSION == 14
+    assert SCHEMA_VERSION >= 14
     for table in ("eval_suites", "eval_results", "eval_scores"):
         assert conn.execute(f"PRAGMA table_info({table})").fetchall()
     conn.close()
     Database(path)  # re-running is a no-op
+
+
+def test_v15_adds_token_usage_and_is_rerunnable(tmp_path):
+    import sqlite3
+
+    from local_llm_admin.storage import MIGRATIONS, SCHEMA_VERSION, Database, migrate
+
+    path = tmp_path / "admin.sqlite"
+    conn = sqlite3.connect(path, isolation_level=None)
+    migrate(conn)
+    assert SCHEMA_VERSION == 15
+    assert {"requests", "origin"} <= _columns(path, "inference_requests")
+    assert {"date", "source", "model", "origin", "cached_tokens"} <= _columns(
+        path, "token_usage_daily"
+    )
+    MIGRATIONS[14](conn)  # a half-applied step finishes cleanly
+    conn.close()
+    Database(path)

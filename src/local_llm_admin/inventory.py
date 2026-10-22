@@ -178,27 +178,47 @@ class InventoryStore(Database):
         return {r["to_name"]: r["ts"] for r in rows}
 
     def request_totals(self) -> dict[str, dict[str, Any]]:
-        """Requests seen in mlx-server.log per model (attributed by its start marker)."""
+        """Requests seen per model (attributed by its start marker), including the totals
+        the retention pass folded into ``token_usage_daily``."""
         with self._conn() as c:
             rows = c.execute(
-                "SELECT model, COUNT(*) AS n, SUM(prompt_tokens) AS p, SUM(generated_tokens)"
-                " AS g, MIN(started) AS first, MAX(started) AS last FROM inference_requests"
-                " WHERE model IS NOT NULL AND attribution = 'generation' GROUP BY model"
+                "SELECT model, SUM(requests) AS n, SUM(prompt_tokens) AS p,"
+                " SUM(cached_tokens) AS k, SUM(generated_tokens) AS g, MIN(started) AS first,"
+                " MAX(started) AS last FROM inference_requests WHERE model IS NOT NULL"
+                " AND attribution = 'generation' GROUP BY model"
+                " UNION ALL SELECT model, SUM(requests), SUM(input_tokens), SUM(cached_tokens),"
+                " SUM(output_tokens), MIN(first_started), MAX(last_started)"
+                " FROM token_usage_daily WHERE model != '' GROUP BY model"
             ).fetchall()
-        return {
-            r["model"]: {
-                "count": r["n"],
-                "prompt_tokens": r["p"],
-                "generated_tokens": r["g"],
-                "first": r["first"],
-                "last": r["last"],
-            }
-            for r in rows
-        }
+        out: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            t = out.get(r["model"])
+            if t is None:
+                out[r["model"]] = {
+                    "count": r["n"],
+                    "prompt_tokens": r["p"],
+                    "cached_tokens": r["k"],
+                    "generated_tokens": r["g"],
+                    "first": r["first"],
+                    "last": r["last"],
+                }
+                continue
+            t["count"] += r["n"]
+            for k, v in (
+                ("prompt_tokens", r["p"]),
+                ("cached_tokens", r["k"]),
+                ("generated_tokens", r["g"]),
+            ):
+                t[k] = v if t[k] is None else t[k] + (v or 0)
+            t["first"], t["last"] = min(t["first"], r["first"]), max(t["last"], r["last"])
+        return out
 
     def requests_since(self) -> float | None:
         with self._conn() as c:
-            r = c.execute("SELECT MIN(started) AS s FROM inference_requests").fetchone()
+            r = c.execute(
+                "SELECT MIN(s) AS s FROM (SELECT MIN(started) AS s FROM inference_requests"
+                " UNION ALL SELECT MIN(first_started) FROM token_usage_daily)"
+            ).fetchone()
         return r["s"] if r else None
 
 

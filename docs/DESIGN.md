@@ -271,6 +271,43 @@ Plan: `plans/20261017_task-quality-evals.md`. Summary of what was built.
 - **UI.** Quality tab: suite picker, thinking toggle, estimate dialog, results with case details, scorecard and compare. Models tab: a Quality column (thinking-off `core-v1`, `writing-v1`) on the inventory table, taken fresh from the scorecard on each `/api/models/inventory` call by weights fingerprint (computed inside the cached, probe-guarded scan, so a cache hit does no drive I/O). Strata scores (`strata-<hash>`) appear only on the Quality tab scorecard, not in this column.
 - **Measured numbers** (durations, scores, estimate error, judge agreement) are filled in after the first runs on the Mac. Not yet recorded.
 
+### 5.8 Local token usage
+
+The Performance page's "Token usage" section totals input (of which cached) and output
+tokens per ops day and per model, from the engines' own counts.
+
+- **Rollup.** `PerformanceStore.tokens()` sums `prompt_tokens` (input, including the cached
+  part), `cached_tokens` and `generated_tokens` over `inference_requests`, grouped by day,
+  model, or both. A request counts as measured when it has both prompt and generated counts;
+  any count a row has is added (a cancelled request adds what the engine logged), and
+  nothing is estimated. Cached tokens unknown on a measured row are counted as such.
+- **Totals beyond retention.** The daily prune folds the rows it deletes into
+  `token_usage_daily` (ops day, source, model, origin) in the same transaction as the delete,
+  so a row is either live or folded, never both. `tokens()` and the Models page totals add
+  the two.
+- **Strata.** On each monitor tick while Strata is the engine, the admin reads
+  `/metrics?requests=all` (without it Strata lists only the newest 12; with it, its whole
+  history of up to 500). Strata appends a request to that history and to `totals` in one
+  step, for every finish (`stop`, `length`, `cancel`, `disconnect`, `error`), and lists it
+  newest finished first; `time` is the start, which parallel slots put out of order. So the
+  new records are the first `totals.requests` minus the last poll's count of them. Each
+  becomes a row (`source='strata'`, key `<since>:<time>`, so re-reading is a no-op). When
+  more requests finished between two polls than the list holds, the shortfall against
+  `totals` becomes one `aggregate` row that counts its requests, so totals match Strata's
+  counters. Both engines count cached tokens inside the prompt count (mlx-vlm 0.7.3:
+  `prompt_tokens = reused prefix + new input`; Strata: `prompt_tokens` includes `reused`).
+  A new `since` is a new process. `bin/strata stop` saves the server's last
+  `/metrics?requests=all` to `run/metrics-final-<pid>.json` before SIGTERM (3 s at most,
+  mode 600, the key on curl's stdin); the admin reads those files on the next ticks while
+  the drive is mounted, adds what finished after its last poll, and deletes them. The
+  cursor is kept per process (the newest 8), so an old process's final reading counts once
+  even after a newer process was polled.
+- **Origin.** A request that started inside a quality or eval run's window is tagged
+  `quality`; everything else, including the test chat, is `client`.
+- **API.** `GET /api/performance/tokens?from&to&model&origin` returns `days`, `models`
+  (with first and last day) and `totals`. The figures differ from the Usage page, which
+  only sees LiteLLM traffic, per route.
+
 ## 6. Security
 
 - LAN only: bind `0.0.0.0:8090` on the Mac. Never port-forward. Tailscale is fine later.

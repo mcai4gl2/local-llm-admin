@@ -38,6 +38,25 @@
   <figure class="card"><figcaption>Requests per day (finished, failed or cut short)</figcaption><div class="chart" id="count-chart"></div></figure>
 </section>
 
+<section class="card" id="tokens">
+  <div class="card-head"><h2>Token usage</h2>
+    <div class="toolbar">
+      <label>Traffic <select id="origin-filter">
+        <option value="">All</option><option value="client">Clients</option><option value="quality">Quality and eval runs</option>
+      </select></label>
+    </div>
+  </div>
+  <div class="hero" id="token-totals"></div>
+  <figure><figcaption>Tokens per day</figcaption><div class="chart" id="token-chart"></div>
+    <div class="legend"><span class="key s1"></span>Input, uncached <span class="key s1-light"></span>Input, cached <span class="key s2"></span>Output</div>
+  </figure>
+  <div class="table-wrap"><table id="token-table">
+    <thead><tr><th>Model</th><th class="num">Requests</th><th class="num">Input</th><th class="num">Cached</th><th class="num">Cache %</th><th class="num">Output</th><th>First day</th><th>Last day</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <p class="muted">The engines' own counts: MLX from its server log, Strata from its <code>/metrics</code> request list (a request that list no longer held is added as one aggregate per poll, so totals match Strata's counters). Input includes the cached part. Totals stay after request rows are pruned. They differ from the Usage page, which counts only traffic through LiteLLM and per route. Requests without a full count are shown as unmeasured and never estimated. Test chat is counted as client traffic.</p>
+</section>
+
 <section class="card">
   <div class="card-head"><h2>Requests</h2>
     <div class="toolbar">
@@ -54,7 +73,7 @@
   </table></div>
   <div class="pager"><button id="more">Older ›</button></div>
   <pre class="log wrap" id="req-context" hidden></pre>
-  <p class="muted">Measured from the MLX server log: counts and rates are the server's own figures; a missing value is shown as —, never estimated. Rows marked partial lack some measurements. Model names come from the start marker of the process that served the request; "unknown" means that could not be established.</p>
+  <p class="muted">Measured from the MLX server log (and Strata's request list; Strata's time to first token is its prompt time): counts and rates are the server's own figures; a missing value is shown as —, never estimated. Rows marked partial lack some measurements. Model names come from the start marker of the process that served the request; "unknown" means that could not be established.</p>
   <p class="muted" id="rotation-state"></p>
 </section>
 {% endblock %}

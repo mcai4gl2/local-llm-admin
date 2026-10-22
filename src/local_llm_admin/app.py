@@ -110,6 +110,7 @@ from .sidecars import (
     read_service_intent,
     service_unavailable_reason,
 )
+from .strata_usage import StrataUsage
 from .tts import TtsClient, TtsError, text_weight, validate_speech
 from .tts_store import TtsStore
 from .watchdog import Supervisor
@@ -327,13 +328,19 @@ def create_app(
             log.warning("request ingestion failed: %s", res.error)
 
     supervisor.add_listener(ingest_requests)
+    strata_usage = StrataUsage(settings, strata, perf)
+    supervisor.add_listener(strata_usage.on_tick)
     availability = AvailabilityStore(db_path)
     inventory = InventoryStore(db_path)
     downloads_svc = DownloadService(settings, DownloadStore(db_path), probes)
     supervisor.add_listener(downloads_svc.on_tick)
 
+    def prune_requests(before: float) -> None:
+        # token totals of pruned rows are folded per ops day, so they need its offset
+        perf.prune_bounded(before, tz_offset_min=settings.litellm_timezone_offset_min)
+
     supervisor.add_listener(
-        AvailabilityRecorder(availability, settings, prune_extra=perf.prune_bounded).on_tick
+        AvailabilityRecorder(availability, settings, prune_extra=prune_requests).on_tick
     )
     maintenance = LogMaintenance(settings, control, alerts)
     supervisor.add_listener(maintenance.on_tick)
@@ -443,6 +450,7 @@ def create_app(
     app.state.evals = evals
     app.state.maintenance = maintenance
     app.state.perf_logs = perf_logs
+    app.state.strata_usage = strata_usage
     app.state.inventory_timeout_s = settings.inventory_timeout_s
     app.state.inventory_cache = None  # (monotonic time, result)
     app.state.downloaded_at = downloads_svc.downloaded_at  # published path -> time
@@ -1915,6 +1923,30 @@ def create_app(
                 "last_ingest": await asyncio.to_thread(perf.last_ingest, PERF_SOURCE),
             },
             **out,
+        }
+
+    @app.get("/api/performance/tokens")
+    async def performance_tokens(
+        frm: str | None = Query(None, alias="from"),
+        to: str | None = None,
+        model: str | None = Query(None, max_length=200),
+        origin: Literal["client", "quality"] | None = None,
+    ) -> dict[str, Any]:
+        start, end, lo, hi = _epoch_range(frm, to)
+        tz = settings.litellm_timezone_offset_min
+
+        def both() -> tuple[dict[str, Any], dict[str, Any]]:
+            kw: dict[str, Any] = {"tz_offset_min": tz, "model": model, "origin": origin}
+            return perf.tokens(lo, hi, group="day", **kw), perf.tokens(lo, hi, group="model", **kw)
+
+        days, models = await asyncio.to_thread(both)
+        return {
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "tz_offset_min": tz,
+            "days": days["rows"],
+            "models": models["rows"],
+            "totals": days["totals"],
         }
 
     @app.get("/api/performance/requests")

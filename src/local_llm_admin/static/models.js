@@ -177,7 +177,9 @@ async function loadInventory(refresh = false) {
     el("td", { text: m.downloaded_at ? `downloaded ${fmt.time(m.downloaded_at)}` : fmt.time(m.first_observed) }),
     el("td", { text: fmt.time(m.last_activated) }),
     el("td", { class: "num", text: m.requests ? fmt.num(m.requests.count) : "—" }),
-    el("td", { class: "num", text: m.requests ? fmt.num((m.requests.prompt_tokens || 0) + (m.requests.generated_tokens || 0)) : "—" }))));
+    el("td", { class: "num", text: m.requests ? fmt.num((m.requests.prompt_tokens || 0) + (m.requests.generated_tokens || 0)) : "—",
+      title: m.requests ? `input ${fmt.num(m.requests.prompt_tokens)} (${fmt.num(m.requests.cached_tokens)} cached) · output ${fmt.num(m.requests.generated_tokens)}` : "" },
+      m.requests?.cached_tokens ? el("div", { class: "muted", text: `${fmt.num(m.requests.cached_tokens)} cached` }) : null))));
 }
 
 function evalCell(ev) {

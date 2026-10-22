@@ -410,7 +410,7 @@ class StrataClient:
             return False
         return isinstance(d, dict) and d.get("service") == "strata" and d.get("loaded") is True
 
-    async def _get(self, path: str) -> dict[str, Any] | None:
+    async def get_json(self, path: str) -> dict[str, Any] | None:
         headers = {}
         key = self.settings.strata_api_key.get_secret_value()
         if key:
@@ -430,9 +430,9 @@ class StrataClient:
 
     async def status(self) -> dict[str, Any]:
         proc = self.running()
-        health = await self._get("/health") if proc.running else None
+        health = await self.get_json("/health") if proc.running else None
         ok = health is not None and health.get("service") == "strata"
-        metrics = await self._get("/metrics") if ok else None
+        metrics = await self.get_json("/metrics") if ok else None
         return {
             "running": proc.running,
             "pid": proc.pid,

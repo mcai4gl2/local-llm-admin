@@ -303,6 +303,24 @@ def _v14_evals(conn: sqlite3.Connection) -> None:
     )
 
 
+def _v15_token_usage(conn: sqlite3.Connection) -> None:
+    # token usage: each request row says how many requests it stands for (a Strata gap
+    # row stands for several) and whether the admin's own quality/eval traffic made it;
+    # the daily table keeps token totals of rows the retention pass deleted. The v14 app
+    # ignores all three (rollback to user_version 14).
+    _add_column(conn, "inference_requests", "requests", "INTEGER NOT NULL DEFAULT 1")
+    _add_column(conn, "inference_requests", "origin", "TEXT NOT NULL DEFAULT 'client'")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS token_usage_daily (date TEXT NOT NULL,"
+        " source TEXT NOT NULL, model TEXT NOT NULL, origin TEXT NOT NULL,"
+        " requests INTEGER NOT NULL, measured INTEGER NOT NULL,"
+        " cached_unknown INTEGER NOT NULL, input_tokens INTEGER NOT NULL,"
+        " cached_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,"
+        " first_started REAL NOT NULL, last_started REAL NOT NULL,"
+        " PRIMARY KEY (date, source, model, origin))"
+    )
+
+
 # Append only; never edit a released step. Each must be safe to re-run.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v1_base,
@@ -319,6 +337,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v12_sidecar_slot,
     _v13_embed_service,
     _v14_evals,
+    _v15_token_usage,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

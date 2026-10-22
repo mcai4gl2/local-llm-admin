@@ -88,6 +88,7 @@ def _row(i, started, **kw):
         "/api/performance/summary",
         "/api/performance/requests",
         "/api/performance/requests/1/context",
+        "/api/performance/tokens",
         "/api/availability",
         "/api/maintenance/log-rotation",
     ],
@@ -299,7 +300,57 @@ async def test_the_daily_retention_pass_prunes_old_requests(app, settings):
     await sup.tick()  # the first tick runs the daily prune
     rows = await _anon_rows(settings)
     assert rows == 1
+    # the pruned rows' tokens were folded, not lost
+    t = store.tokens(0, 4e9, tz_offset_min=settings.litellm_timezone_offset_min, group="day")
+    assert t["totals"]["requests"] == 4 and t["totals"]["input_tokens"] == 40
 
 
 async def _anon_rows(settings) -> int:
     return len(PerformanceStore(_db(settings)).requests(0, 2e9)["requests"])
+
+
+async def test_token_usage_by_day_and_model(client, settings):
+    now = time.time()
+    PerformanceStore(_db(settings)).insert_rows(
+        PERF_SOURCE,
+        [
+            _row(1, now - 60, prompt_tokens=100, cached_tokens=30, generated_tokens=7),
+            _row(2, now - 50, model="gemma", prompt_tokens=20, cached_tokens=None),
+            _row(3, now - 40, prompt_tokens=None, generated_tokens=None, complete=0),
+        ],
+    )
+    r = await client.get("/api/performance/tokens")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["to"] == _today().isoformat() and body["tz_offset_min"] == (
+        settings.litellm_timezone_offset_min
+    )
+    t = body["totals"]
+    assert (t["requests"], t["measured"], t["unmeasured"], t["cached_unknown"]) == (3, 2, 1, 1)
+    assert (t["input_tokens"], t["cached_tokens"], t["output_tokens"]) == (120, 30, 12)
+    assert [d["date"] for d in body["days"]] == [_today().isoformat()]
+    assert [(m["model"], m["requests"]) for m in body["models"]] == [("gemma", 1), ("qwen", 2)]
+    assert body["models"][0]["first"] == body["models"][0]["last"] == _today().isoformat()
+    one = (await client.get("/api/performance/tokens?model=gemma")).json()
+    assert one["totals"]["requests"] == 1
+    assert (await client.get("/api/performance/tokens?origin=quality")).json()["totals"][
+        "requests"
+    ] == 0
+    assert (await client.get("/api/performance/tokens?origin=client")).json()["totals"][
+        "requests"
+    ] == 3
+
+
+async def test_token_usage_validates_its_filters(client):
+    assert (await client.get("/api/performance/tokens?from=2026-13-01")).status_code == 400
+    assert (await client.get("/api/performance/tokens?origin=everyone")).status_code == 422
+    too_long = "x" * 201
+    assert (await client.get(f"/api/performance/tokens?model={too_long}")).status_code == 422
+
+
+async def test_the_strata_usage_poller_is_a_monitor_listener(app):
+    from local_llm_admin.strata_usage import StrataUsage
+
+    usage = app.state.strata_usage
+    assert isinstance(usage, StrataUsage)
+    await usage.on_tick(None, {"engine": "mlx"})  # not the engine: no call, no error

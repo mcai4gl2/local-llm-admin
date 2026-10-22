@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 Date: 2026-10-22
-Status: Proposed. Not started.
+Status: Implemented 2026-10-22, Task 0 included (see the devlog for the findings).
 
 **Goal:** Show how many tokens the local models consumed (input, of which cached, and
 output) per day, per model and in total, measured by the engines themselves. The totals

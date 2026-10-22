@@ -45,3 +45,7 @@ Rules:
 curl -s http://127.0.0.1:8080/health   # "service": "strata"
 /Volumes/Models/strata/bin/strata stop
 ```
+
+Before it stops the server, `stop` saves its last `/metrics?requests=all` to
+`run/metrics-final-<pid>.json` (best effort, 3 s at most, mode 600). The admin reads these
+files to count the requests that finished after its last poll, then deletes them.

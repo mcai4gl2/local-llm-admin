@@ -155,12 +155,13 @@ function lineChart(container, points, { max = null, unit = "%" } = {}) {
   hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); tip.hide(); });
 }
 
-// days: [{label, a, b, lines: [..tooltip]}] stacked a (bottom, s1) + b (top, s2)
-function stackedBars(container, days) {
+// days: [{label, a, b, c?, lines: [..tooltip]}] stacked a (bottom) + b + c (top); classes
+// name each segment's fill (default a = s1, b = s2)
+function stackedBars(container, days, { classes = ["bar-p", "bar-c", "bar-x"] } = {}) {
   const W = container.clientWidth || 600, H = container.clientHeight || 240;
   const m = { l: 44, r: 8, t: 8, b: 22 };
   const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" });
-  const top = niceMax(Math.max(1, ...days.map((d) => d.a + d.b)));
+  const top = niceMax(Math.max(1, ...days.map((d) => d.a + d.b + (d.c || 0))));
   const y = (v) => H - m.b - (v / top) * (H - m.t - m.b);
   for (const f of [0, 0.25, 0.5, 0.75, 1]) {
     const yy = y(top * f);
@@ -175,16 +176,18 @@ function stackedBars(container, days) {
   days.forEach((d, i) => {
     const x0 = m.l + i * slot + (slot - bw) / 2;
     const r = Math.min(4, bw / 2);
-    const ya = y(d.a), yb = y(d.a + d.b);
-    if (d.a > 0) {
-      // prompt segment: square at the baseline, rounded only when it is the top segment
-      svg.append(d.b > 0 ? svgEl("rect", { class: "bar-p", x: x0, y: ya, width: bw, height: Math.max(0, y(0) - ya) })
-        : svgEl("path", { class: "bar-p", d: roundTop(x0, ya, bw, y(0) - ya, r) }));
-    }
-    if (d.b > 0) {
-      const h = Math.max(0, ya - yb - (d.a > 0 ? 2 : 0));  // 2px surface gap between stacked segments
-      svg.append(svgEl("path", { class: "bar-c", d: roundTop(x0, yb, bw, h, r) }));
-    }
+    const vals = [d.a, d.b, d.c || 0];
+    const last = vals.reduce((k, v, j) => (v > 0 ? j : k), -1);
+    let base = 0;
+    vals.forEach((v, j) => {
+      if (v <= 0) return;
+      // square at the baseline and between segments, rounded only on the top segment;
+      // 2px surface gap between stacked segments
+      const yt = y(base + v), h = Math.max(0, y(base) - yt - (base > 0 ? 2 : 0));
+      svg.append(j === last ? svgEl("path", { class: classes[j], d: roundTop(x0, yt, bw, h, r) })
+        : svgEl("rect", { class: classes[j], x: x0, y: yt, width: bw, height: h }));
+      base += v;
+    });
     if (i % every === 0) {
       const t = svgEl("text", { x: x0 + bw / 2, y: H - 6, "text-anchor": "middle" }); t.textContent = d.label.slice(5); svg.append(t);
     }

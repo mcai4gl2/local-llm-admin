@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 let days = 7;
 let nextBefore = null;
 let lastSummary = null;
+let lastTokens = null;
 
 function isoLocal(d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 function params() {
@@ -78,6 +79,36 @@ function renderAvailability(a) {
       text: `${unseen} day${unseen === 1 ? "" : "s"} in this range with no observations (not counted as up or down).` }))] : []));
 }
 
+const share = (part, whole) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : "—");
+
+async function loadTokens() {
+  const origin = $("origin-filter").value;
+  const t = await api(`/api/performance/tokens?${params()}${origin ? `&origin=${origin}` : ""}`);
+  lastTokens = t;
+  const s = t.totals;
+  $("token-totals").replaceChildren(
+    tile("Input tokens", fmt.num(s.input_tokens), `${fmt.num(s.input_tokens - s.cached_tokens)} uncached`),
+    tile("Cached", fmt.num(s.cached_tokens), `${share(s.cached_tokens, s.input_tokens)} of input${s.cached_unknown ? ` · unknown for ${fmt.num(s.cached_unknown)} requests` : ""}`),
+    tile("Output tokens", fmt.num(s.output_tokens)),
+    tile("Requests", fmt.num(s.requests), `${fmt.num(s.unmeasured)} unmeasured`));
+  drawTokens();
+  $("token-table").querySelector("tbody").replaceChildren(...(t.models.length ? t.models.map((m) => el("tr", {},
+    el("td", { text: m.model || "unknown" }), el("td", { class: "num", text: fmt.num(m.requests) }),
+    el("td", { class: "num", text: fmt.num(m.input_tokens) }), el("td", { class: "num", text: fmt.num(m.cached_tokens) }),
+    el("td", { class: "num", text: share(m.cached_tokens, m.input_tokens) }), el("td", { class: "num", text: fmt.num(m.output_tokens) }),
+    el("td", { text: m.first }), el("td", { text: m.last })))
+    : [el("tr", {}, el("td", { colspan: 8, class: "muted", text: "No token usage recorded in this range." }))]));
+}
+
+function drawTokens() {
+  if (!lastTokens) return;
+  stackedBars($("token-chart"), lastTokens.days.map((d) => ({
+    label: d.date, a: d.input_tokens - d.cached_tokens, b: d.cached_tokens, c: d.output_tokens,
+    lines: [d.date, `input ${fmt.num(d.input_tokens)} (${fmt.num(d.cached_tokens)} cached)`, `output ${fmt.num(d.output_tokens)}`,
+      `${fmt.num(d.requests)} requests${d.unmeasured ? `, ${fmt.num(d.unmeasured)} unmeasured` : ""}`],
+  })), { classes: ["bar-p", "bar-q", "bar-c"] });
+}
+
 function reqRow(r) {
   const partial = r.complete ? "" : " (partial)";
   return el("tr", {},
@@ -109,7 +140,7 @@ async function showContext(id) {
 }
 
 async function reload() {
-  try { showError(null); $("req-context").hidden = true; await Promise.all([loadSummary(), loadRequests()]); }
+  try { showError(null); $("req-context").hidden = true; await Promise.all([loadSummary(), loadTokens(), loadRequests()]); }
   catch (e) { showError(e); }
 }
 
@@ -119,10 +150,11 @@ document.querySelectorAll("[data-days]").forEach((b) => b.addEventListener("clic
   reload();
 }));
 $("model").addEventListener("change", reload);
+$("origin-filter").addEventListener("change", () => loadTokens().catch(showError));
 $("state-filter").addEventListener("change", () => loadRequests().catch(showError));
 $("slow-filter").addEventListener("change", () => loadRequests().catch(showError));
 $("more").addEventListener("click", () => loadRequests(true).catch(showError));
-window.addEventListener("resize", () => { if (lastSummary) loadSummary().catch(showError); });
+window.addEventListener("resize", () => { if (lastSummary) loadSummary().catch(showError); drawTokens(); });
 api("/api/maintenance/log-rotation").then((r) => {
   const last = r.last;
   const parts = [`Log rotation: daily at ${String(r.hour).padStart(2, "0")}:00, logs over ${r.max_mib} MiB, ${r.keep} archives kept.`];
