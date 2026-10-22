@@ -1234,7 +1234,7 @@ class QualityRunner:
             "completion_tokens": usage.get("completion_tokens"),
             "latency_s": latency,
         }
-        # off the event loop: a custom regex can still backtrack for a while
+        # worker thread: regex matches time out (1 s) and release the GIL, so the loop stays free
         graded = await asyncio.to_thread(
             grade_response, case.grader, content, finish, reasoning_chars, calls,
             thinking=plan.thinking,

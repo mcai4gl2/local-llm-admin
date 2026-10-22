@@ -237,7 +237,60 @@ def test_grade_response_never_grades_cut_off_reasoning():
         ("The answer is a trick question; B", "A", False),  # "a" the article
         ("The answer is C because it is heavier", "C", True),
         ("answer: c.", "C", True),
+        ("Answer: c\nBecause the weights match", "C", True),  # alone on its line
+        ("Answer Is B", "B", True),  # keywords in any case
+        ("Answer: I believe it is B", "B", True),
+        ("Answer: I'm sure it's D", "D", True),
+        ("Answer: C\nThis is A common mistake", "C", True),  # explicit keyword beats "is"
+        ("This is A-grade work", "A", False),  # "A" is not standalone
+        ("This is A common mistake", "A", False),
+        # no "answer"/"choice"; "is D that" is not standalone, so the leading "B." decides
+        ("I think it is a trap", "I", False),  # the pronoun, not option I
+        ("A good answer is hard", "A", False),  # the article, not option A
+        ("B. It is D that people pick wrongly", "B", True),
+        ("B. It is D that people pick wrongly", "D", False),
     ],
 )
 def test_choice_letter_is_case_sensitive_except_alone(text, answer, ok):
     assert grade(Choice(type="choice", answer=answer), text, None).passed is ok
+
+
+def test_regex_timeout_is_a_zero_grade():
+    import time
+
+    from local_llm_admin import eval_graders
+
+    spec = Regex(type="regex", pattern="(a|aa)+$")
+    t0 = time.monotonic()
+    g = grade(spec, "a" * 40 + "b", None)
+    assert (g.score, g.passed, g.detail) == (0.0, False, "regex timed out after 1 s")
+    assert time.monotonic() - t0 < eval_graders.REGEX_TIMEOUT_S + 1.5
+
+
+async def test_regex_timeout_leaves_the_event_loop_running():
+    import asyncio
+    import time
+
+    spec = Regex(type="regex", pattern="(a|aa)+$")
+    gaps: list[float] = []
+    stop = False
+
+    async def ticker() -> None:
+        last = time.monotonic()
+        while not stop:
+            await asyncio.sleep(0.01)
+            now = time.monotonic()
+            gaps.append(now - last)
+            last = now
+
+    task = asyncio.create_task(ticker())
+    g = await asyncio.to_thread(grade, spec, "a" * 40 + "b", None)
+    stop = True
+    await task
+    assert not g.passed and "timed out" in g.detail
+    assert len(gaps) > 20 and max(gaps) < 0.3  # the GIL is released while matching
+
+
+def test_regex_that_stdlib_re_backtracks_on_is_fast_with_regex():
+    spec = Regex(type="regex", pattern="a?" * 25 + "a" * 25)
+    assert grade(spec, "a" * 25, None).passed

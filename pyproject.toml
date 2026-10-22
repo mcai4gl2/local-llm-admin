@@ -17,6 +17,7 @@ dependencies = [
   "argon2-cffi>=23.1,<26",
   "itsdangerous>=2.2,<3",
   "python-multipart>=0.0.20,<1",
+  "regex>=2024.11.6,<2027",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,7 @@ dev = [
   "ruff>=0.11,<1",
   "mypy>=1.13,<2",
   "types-psutil",
+  "types-regex",
 ]
 
 [project.scripts]

@@ -10,6 +10,8 @@ from collections.abc import Iterator
 from importlib import resources
 from typing import Annotated, Any, Literal
 
+import regex
+
 try:  # Python 3.11 moved the regex parser into the re package (no public stubs either way)
     _sre_parse: Any = importlib.import_module("re._parser")
 except ImportError:  # pragma: no cover - older interpreters
@@ -132,8 +134,9 @@ class Suite(_Spec):
 #   character with what can follow it, wrapping round to the body's start (core-v1's
 #   (\s+[^\s.]+){4} passes; (a+){4}, (a+b?){4} and ((a+){2}){3} do not).
 # One-character alternations the parser folds into a set ((?:a|b)+) are not alternations.
-# Polynomial backtracking outside repeated groups (a*a*a*$) is not caught; the runner
-# grades off the event loop.
+# Polynomial backtracking outside repeated groups (a*a*a*$) is not caught; the Regex
+# grader matches with the `regex` package, which has a per-match timeout and releases the
+# GIL (stdlib re holds it, so a worker thread would not keep the event loop responsive).
 _MAX_BOUNDED_REPEAT = 100
 _REPEATS = frozenset({"MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT"})
 _PROBE = frozenset(range(0x3000))  # characters checked for overlap (beyond: assumed shared)
@@ -260,9 +263,9 @@ def _check_regex(pattern: str) -> None:
     if len(pattern) > 300:
         raise SuiteError("regex pattern is longer than 300 characters")
     try:
-        re.compile(pattern)
+        regex.compile(pattern, regex.V0)
         parsed = _sre_parse.parse(pattern)
-    except re.error as exc:
+    except (re.error, regex.error) as exc:
         raise SuiteError(f"invalid regex: {exc}") from None
     problem = _repeat_problem(parsed)
     if problem is not None:

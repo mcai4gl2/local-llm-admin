@@ -9,6 +9,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+import regex
+
 from .eval_suites import (
     Choice,
     ContainsAll,
@@ -22,16 +24,24 @@ from .eval_suites import (
 )
 
 MAX_GRADED_CHARS = 20_000
+REGEX_TIMEOUT_S = 1.0  # per match; the regex package matches without the GIL
 STOPPED_THINKING = "no answer (stopped while thinking)"
 _THINK = re.compile(r"<think>.*?</think>", re.S)
 _OPEN_THINK = re.compile(r"<think>(?!.*</think>)", re.S)
 _NUM = re.compile(r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?")
-_CHOICE_ALONE = re.compile(r"^\s*\(?([A-J])\)?(?:[.):]|\s|$)")
-# the keyword in any case, the letter upper case ("I" not as the pronoun: "I believe",
-# "I'm"), or lower case only when it stands alone ("Answer: c." but not "is a trick")
+# a leading letter counts only when it stands alone: "(C)", "C", "C." but not "I think" or "A good"
+_CHOICE_ALONE = re.compile(r"^\s*(?:\(([A-J])\)|([A-J])(?:[.):,]|[ \t]*$))", re.M)
+# "answer"/"choice" (any case) then the letter: upper case ("I" not as the pronoun: "I believe",
+# "I'm"), or lower case only when it stands alone, i.e. before the end of a line or punctuation
+# ("Answer: c." but not "is a trick")
 _CHOICE_SAID = re.compile(
-    r"(?i:answer|choice)\s*(?:is|:)?\s*\(?(?:([A-HJ]|I(?!\s+[a-z]|'))|([a-j])(?=\s*(?:[.)!,;]|$)))\b"
+    r"(?i:\b(?:answer|choice)\b)[ \t]*(?:(?i:is)\b|:)?[ \t]*\(?"
+    r"(?:([A-HJ]|I(?!\s+[a-z]|'))|([a-j])(?=[ \t]*(?:[.)!,;]|$)))\b",
+    re.M,
 )
+# the fallback when no explicit match: "is"/"it's" then a standalone upper-case letter
+# ("it is B." but not "This is A common mistake" or "A-grade")
+_CHOICE_IS = re.compile(r"(?i:\b(?:is|it's)\b)[ \t]*\(?([A-J])\)?(?=[ \t]*(?:[.!,;:?]|$))", re.M)
 _FENCE = re.compile(r"`{3}(?:json)?\s*(.*?)`{3}", re.S)
 
 
@@ -133,16 +143,22 @@ def grade(spec: GraderSpec, content: str | None, tool_calls: list[dict[str, Any]
     if isinstance(spec, Regex):
         if len(content or "") > MAX_GRADED_CHARS:
             return _ok(False, "answer longer than the regex limit")
-        flags = re.I if spec.ignore_case else 0
-        return _ok(re.search(spec.pattern, text, flags) is not None, f"pattern {spec.pattern!r}")
+        flags = regex.V0 | (regex.I if spec.ignore_case else 0)
+        try:
+            found = regex.search(
+                spec.pattern, text, flags, timeout=REGEX_TIMEOUT_S, concurrent=True
+            )
+        except TimeoutError:
+            return _ok(False, f"regex timed out after {REGEX_TIMEOUT_S:g} s")
+        return _ok(found is not None, f"pattern {spec.pattern!r}")
     if isinstance(spec, ContainsAll):
         hay = text if spec.case_sensitive else text.casefold()
         missing = [t for t in spec.terms if (t if spec.case_sensitive else t.casefold()) not in hay]
         return _ok(not missing, f"missing {missing}" if missing else "all terms present")
     if isinstance(spec, Choice):
         m = _CHOICE_ALONE.match(text)
-        said = [(up or low).upper() for up, low in _CHOICE_SAID.findall(text)]
-        got = said[-1] if said else (m.group(1) if m else None)
+        said = [(up or low).upper() for up, low in _CHOICE_SAID.findall(text)] or _CHOICE_IS.findall(text)
+        got = said[-1] if said else ((m.group(1) or m.group(2)) if m else None)
         return _ok(got == spec.answer, f"chose {got or 'nothing'}, expected {spec.answer}")
     if isinstance(spec, Number):
         nums = _NUM.findall(text)
