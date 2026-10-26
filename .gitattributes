@@ -1,0 +1,2 @@
+# SSE framing includes a required final blank line.
+tests/fixtures/splash-phase0/*.sse whitespace=-blank-at-eof

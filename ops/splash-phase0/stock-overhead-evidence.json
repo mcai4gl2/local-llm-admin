@@ -1,0 +1,182 @@
+{
+  "contract": "splash-clean-stock-overhead-evidence-1",
+  "cohort": "stock-8bit",
+  "scope": "Clean stock MLX collector overhead only; no native cross-engine speed verdict.",
+  "design_sha256": "e9fe48e1f3871d44c8fa592a74280cdd7c1f97b909cc180972e4206d4623a1a6",
+  "private_campaign_sha256": "7e2257476f7f5507b93e338164c9933b1d5e16239412f6c1ef4f4d8e8aceb0d3",
+  "sources": {
+    "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+    "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+    "collector_sha256": "00a81cf8769bc9b0e9af39cd9b8d119e380d62fdf467e6c6d086f25866809416"
+  },
+  "model_pins": {
+    "weights_sha256": "b5d511fe911490ff389642abb1b9671a3c75736c8faa990dfaf9dd113b646711",
+    "tokenizer_sha256": "ac82a3ef50a623a2cc41cb5094c6fee5bdc9068d88672885e745f66c0ad27760",
+    "template_sha256": "cd13b5b6d2a8c4eeab703d83ded6d1d4d92df3ab0cd23b11a8620219a38720c6"
+  },
+  "code_sha256": {
+    "bench.py": "361dd318aaf2f239bee33abeea3ca03e1fe52a894a85e09bb8b797c1aacaaa56",
+    "native_validation.py": "33502b054725afb9b6e10769163a471de16def031190389b07a3ecd1e1defdb7",
+    "native_timing.py": "4dbc8d8627cf1cd7555ba39eec1a4a74c8efd64b84712e3eba1495f3cfa540f3",
+    "overhead_validation.py": "f914d1873e004764e2516aa1097df276f0ecc561c2708c3d1108f0eeb58ff9d5"
+  },
+  "review": {
+    "contract": "splash-expanded-overhead-1",
+    "backend": "mlx",
+    "decision": "eligible",
+    "native_gate": "unassessed",
+    "scope": "collector_overhead_only",
+    "threshold": 1.05,
+    "issues": [],
+    "windows": 4,
+    "uncertainty": "10000 seed-0 hierarchical bootstrap draws over four independent ABBA windows, paired launches, categories and repetitions; 95% percentile bounds.",
+    "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+    "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+    "median_wall_ratio": 0.9990484771297183,
+    "ci95": [
+      0.9956635132927132,
+      1.0007283819417148
+    ],
+    "categories": {
+      "short": {
+        "median_wall_ratio": 1.0000919106704698,
+        "ci95": [
+          0.997377532580685,
+          1.0009231516035093
+        ],
+        "decision": "eligible"
+      },
+      "2k": {
+        "median_wall_ratio": 0.9995077597258937,
+        "ci95": [
+          0.9938714798669649,
+          1.0016333602929426
+        ],
+        "decision": "eligible"
+      },
+      "8k": {
+        "median_wall_ratio": 0.9984130200776733,
+        "ci95": [
+          0.9751503756076334,
+          1.0003004672016296
+        ],
+        "decision": "eligible"
+      }
+    },
+    "paired_requests": 48,
+    "excluded_warmups": 48,
+    "accounted_native_traces": 72,
+    "private_samples_sha256": "026e42d5c8184f7613a962774ebe951b7643049548c9185066d2cc2c37e0efc0"
+  },
+  "windows": [
+    {
+      "window": 0,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 18,
+      "restored": true,
+      "minimum_available_gib": 22.567596435546875,
+      "maximum_new_swap_mib": 0.0,
+      "thermal_samples": 46,
+      "failed_thermal_observations": 0,
+      "private_receipt_sha256": {
+        "ledger.json": "3be414e332c87ac03ee890dda85ede6f29b0cb7a56d6908bbe196104b109d5ce",
+        "samples.json": "6e5a64f09e9c7dfb8938b825479fa0af162ef1aa2e5949e483c0d214cfc11638",
+        "sidecar-restoration-proof.json": "612554b5e2d3534415aa975d6f01f63178b794ade4c96cbf89882b6809b249f8",
+        "mac-audit/restoration-proof.json": "b926189253024c2cfdbdf072e2711a7d6e693bf025d5e210d4ba264ca0988b2e",
+        "mac-audit/resources.jsonl": "f0a297b111d07fda51cd1952fbc9f4d812b88d761a59a87bd44665bb439735b1",
+        "mac-audit/target-fingerprints-after.json": "d902bdd54ca69da45793b565be80c0c7710905a65f1d19be55d03e6984140a45"
+      }
+    },
+    {
+      "window": 1,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 18,
+      "restored": true,
+      "minimum_available_gib": 15.245529174804688,
+      "maximum_new_swap_mib": 0.0,
+      "thermal_samples": 46,
+      "failed_thermal_observations": 0,
+      "private_receipt_sha256": {
+        "ledger.json": "3b407d7699096213f3979480275e44d16fc1679768763bcf9627ffac49f3c3f9",
+        "samples.json": "20e7227f18570d04589e19719b58eda9b5c4f6eb142c500f2beeb47b18a9edf3",
+        "sidecar-restoration-proof.json": "b980d47fec5a2aa26c42d2a13b25cbd0f86af42afe7b5bb6cef72b81c387d23f",
+        "mac-audit/restoration-proof.json": "2a8f6024905a8922738115acd2edc854b864967f5c9d9ec9be7eeedc50dc5596",
+        "mac-audit/resources.jsonl": "5a53f0ca30c08c29c2e12be169d2481c7c7f2ef5cdd0b60f9db7965a1b849a20",
+        "mac-audit/target-fingerprints-after.json": "7551f05c90675bce296b51149f14b1b76e5530600aecadf1fcf3a7f5159cfe82"
+      }
+    },
+    {
+      "window": 2,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 18,
+      "restored": true,
+      "minimum_available_gib": 12.50616455078125,
+      "maximum_new_swap_mib": 0.0,
+      "thermal_samples": 46,
+      "failed_thermal_observations": 0,
+      "private_receipt_sha256": {
+        "ledger.json": "652a2ac93acac11f68ca3c905ff0b270a5b000441a000493c828af0e237c1694",
+        "samples.json": "ec6674daad353bef50e95129a7c8681d066ade8935f7530183efa1b3af927222",
+        "sidecar-restoration-proof.json": "44fef2c26d1aba50a2733a28029421862d5bee0e3b3580b08b273fbf40ee591e",
+        "mac-audit/restoration-proof.json": "318497ac54a9c73f2216f009ef2b57abe83073167fddcbf264990e7b11c291a0",
+        "mac-audit/resources.jsonl": "0b74c6a3587f3cbdb71d4143d1d452af23a3bc96355791266cfb787a7be3b569",
+        "mac-audit/target-fingerprints-after.json": "f992dfce2932baa904b62ee01500833baaef692438149b3bd76b85ca2bbd200b"
+      }
+    },
+    {
+      "window": 3,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 18,
+      "restored": true,
+      "minimum_available_gib": 15.307357788085938,
+      "maximum_new_swap_mib": 0.0,
+      "thermal_samples": 46,
+      "failed_thermal_observations": 0,
+      "private_receipt_sha256": {
+        "ledger.json": "339fb583b9f7656ab12dc550667e2add6c2e65502a8aae02fc46cfe9d413a06b",
+        "samples.json": "fb02f39a9ab411132877b419a360627f8b6736c6916a64ba12ea827611173809",
+        "sidecar-restoration-proof.json": "d1390ea96fc65633e05d97c4d08a368a2c0f1569533f7161667339831fc2b00c",
+        "mac-audit/restoration-proof.json": "089d2f93aa4e82eb29f237e5e6dd01940f4c9466a0fec3c510a853e26ddde570",
+        "mac-audit/resources.jsonl": "5dc08ea56d975887b5f382f3cfcac8b424b46d1bdef8783b7ee9c3371b94837e",
+        "mac-audit/target-fingerprints-after.json": "4af1ea371300e03524f6edbd3c441e8b14b0fd51fcea51cab0fc95cb8fd6ddd7"
+      }
+    }
+  ],
+  "source_audit": {
+    "private_receipt_sha256": "6849fd21063b8e7f8ab9ef29f7f6b5c29a73131eda4479f0232c6487997934cb",
+    "source_manifest_sha256": "4521a844efdc132cef086d1a20eb97441043013d860409c2e818ec3c4bb1f972",
+    "installed_runtime_files_unchanged": 57,
+    "bootstrap_unchanged": true,
+    "launch_receipts": 62,
+    "isolated_source_checks": {
+      "mlx-original": {
+        "files": 1477,
+        "unchanged": true
+      },
+      "mlx-instrumented": {
+        "files": 1478,
+        "unchanged": true
+      },
+      "splash-original": {
+        "files": 35,
+        "unchanged": true
+      },
+      "splash-instrumented": {
+        "files": 36,
+        "unchanged": true
+      }
+    }
+  },
+  "transport_status_at_publication": "Retained for the already authorized native series; each experiment server is stopped and original service restored.",
+  "incomplete_attempt_evidence_sha256": "7e2a7ad2210bebbea56f5d2c83f13134934dcaa6059e1d68059869dd5926a772",
+  "limitations": [
+    "The initial clean audit stopped on a launcher transport failure after one complete window; it remains incomplete and is not pooled.",
+    "Earlier stock pilot, modified-checkpoint audit and incomplete attempts remain unchanged and are not pooled.",
+    "Four whole ABBA windows are the independent bootstrap units; no optional extension until eligible.",
+    "This estimates collector overhead, including complete request execution, not isolated GPU compute."
+  ]
+}

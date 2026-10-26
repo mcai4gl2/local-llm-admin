@@ -1,9 +1,13 @@
-Overall Progress: 0%
+Overall Progress: 39%
 
 # Splash: prove the 27B speedup, then integrate another engine backend
 
 Date: 2026-10-24
-Status: Proposed. Planning only; no benchmarks, installations or service changes performed.
+Status: The primary client timing matrix and fresh native emission comparison are complete
+for both checkpoints. Emission speed, p95 TTFT and completion criteria pass in the fresh
+series. Original service restoration and owned cleanup are verified. Overall adoption is
+**inconclusive** while broader quality and secondary qualification remain open; backend
+integration and deployment stay gated. See the [native report](../ops/splash-phase0/native-comparison-report.md).
 
 ## Summary
 
@@ -26,8 +30,8 @@ single-engine policy, lifecycle job slot and stable LiteLLM endpoint.
 - Initial target: the currently used 27B model, including any locally selected derivative.
   The tracked registry includes both Qwen3.8-27B 4-bit and 8-bit; confirm the actual
   selected checkpoint and profile during preflight rather than assuming either.
-- Do not change the default engine based on upstream benchmark claims. No implementation
-  in this planning change; no automatic rollout after a successful experiment.
+- Do not change the default engine based on upstream benchmark claims. Full backend integration
+  remains gated; no automatic rollout after a successful experiment.
 - Do not add an inference proxy, concurrent residency of full engines, a plugin loader,
   a universal model downloader, or a refactor of every sidecar. Flash-Next on Splash is a
   possible later experiment, not part of proving a faster 27B.
@@ -80,23 +84,23 @@ use deterministic tasks and explicit quality checks.
 
 ## Phase 0A — Build the experiment only
 
-- [ ] 🟥 Record a read-only preflight: actual engine/model/profile, hardware/OS, free disk,
+- [x] 🟩 Record a read-only preflight: actual engine/model/profile, hardware/OS, free disk,
   memory pressure/swap, model asset hashes and tokenizer/template, serving configuration,
   running sidecars and recovery intent. Resolve SSH target through `MAC_HOST`/`MAC_DEST`
   and the existing deploy-env mechanism; never put deployment facts in tracked output.
-- [ ] 🟥 Add failing tests in `tests/test_splash_phase0.py` for fragmented/multi-token SSE,
+- [x] 🟩 Add failing tests in `tests/test_splash_phase0.py` for fragmented/multi-token SSE,
   reasoning-only deltas, final usage, missing counts, HTTP/SSE failures, cancellation,
   timeout, settings translation, result comparability and restoring experiment state.
-- [ ] 🟥 Add `ops/splash-phase0/` with an audited launch/capture runbook, a small HTTP
+- [x] 🟩 Add `ops/splash-phase0/` with an audited launch/capture runbook, a small HTTP
   benchmark runner and a manifest schema. Reuse measurement concepts from `quality.py`
   and existing Phase 0 scripts; do not copy the old Strata runner unchanged: it uses
   Strata-specific model/process handling and falls back to counting chunks as tokens.
-- [ ] 🟥 Test malformed/partial samples and the comparison calculation first, then add a
+- [x] 🟩 Test malformed/partial samples and the comparison calculation first, then add a
   report command that rejects incompatible manifests or insufficient valid samples.
   Errors, early stops and missing metrics stay visible; never discard them to improve
   the reported speed. Run the tooling tests before touching the Mac.
 
-Proposed tooling interface (to implement, not existing commands):
+Implemented tooling interface:
 
 ```bash
 # Inside the devcontainer, against an explicitly established SSH tunnel to the Mac.
@@ -111,36 +115,195 @@ settings, corpus/version/hash, context/cache policy, concurrency, repetition ord
 sample count. Credentials come from environment only. Raw local manifests/results remain
 untracked; only scrubbed fixtures and the aggregate report enter this public repository.
 
+### Initial Phase 0 delivery checkpoint (first window) — 2026-10-25
+
+Nine of 23 tasks are complete. The [runbook](../ops/splash-phase0/README.md),
+[manifest schema](../ops/splash-phase0/manifest.schema.json), frozen initial corpus,
+checkpointed runner and independent window supervisor implement the isolated experiment.
+The intentionally unfinished example cannot qualify an engine. Private inventory distinguishes
+the original serving engine, inactive MLX selection and two explicitly selected benchmark targets.
+
+The user approved the [two-hour window](../ops/splash-phase0/benchmark-window.md). The pinned
+Splash archive and DFlash2 config/weights were verified and installed only in the isolated
+area. Stock 27B 8-bit and modified 27B 4-bit each completed one MLX-then-Splash paired
+session: 60 measured requests plus 12 excluded warmups, with no benchmark errors or early
+stops, identical paired prompt counts and zero reported prefix reuse. All four target/runtime
+combinations passed the selected text smoke checks. Scrubbed actual protocol/probe fixtures
+are under `tests/fixtures/splash-phase0/`; raw data remains private.
+
+Observed client output/wall throughput gains were 2.20–3.08× for stock 8-bit and 1.95–2.70×
+for modified 4-bit across the short/code/prose tasks. Native timing intervals are recorded
+separately and do not qualify the decode gate. Only one of three required paired sessions
+fit the window; p95, confidence-bound and full adoption claims remain unqualified. See the
+[report and evidence](../ops/splash-phase0/report.md) for distributions and raw-run digests.
+
+The original engine/admin passed identity, real inference and health checks; reviewed snapshot
+verification passed, experiment processes/port were gone, original sidecar states/intent were
+preserved and both targets' weight/tokenizer/template hashes were unchanged. Gateway liveness
+and readiness passed, but the existing read-only key exposes no routes, so authenticated
+end-to-end gateway inference remains unverified. No production source, registry or default changed.
+
+Validation: 135 focused tests pass, with 81.98% standalone branch-aware tooling coverage.
+The full suite passes with 2,243 tests, one skip and 98.10% application coverage; Ruff,
+strict mypy, shell syntax, instruction-file parity and supplemental public-safety checks pass.
+See the [devlog](../devlogs/2026-10-25.md) for validation details.
+The configured private denylist is unavailable; supplemental deployment-derived scans pass,
+but changes remain unstaged/uncommitted until the required gate can run.
+
+### Continuation preparation — 2026-10-25
+
+Added a test-first [offline continuation planner](../ops/splash-phase0/continuation.py). It
+validates complete paired evidence without dropping failures, preserves frozen conditions and
+alternates the remaining session order. Budgets use the slowest recorded request per case,
+including warmups, plus a declared slowdown margin, setup/switch and restoration reserves.
+Whole pairs must fit; output overwrite is refused; no HTTP, SSH or lifecycle operation runs.
+
+The [worksheet](../ops/splash-phase0/continuation-windows.md) specified two additional windows,
+each capped at two hours, with original-service restoration and verification between them.
+Each estimated 107.20 minutes including reserves and covered one remaining paired session for
+both selected checkpoints. The user approved both windows. Sessions 2 and 3 completed and
+proved original service restoration and real inference within their bounds. Fresh inventories,
+identity/readiness checks and unchanged asset fingerprints were reviewed before activation.
+
+The [pinned native timing audit](../ops/splash-phase0/native-timing-audit.md) confirms different
+emission/completion boundaries and MLX's reconstructed `predicted_ms`. Keep the original wall
+metric and frozen session-1 evidence unchanged; completing sessions 2 and 3 still cannot pass
+the native decode gate. Preparation adds no measured samples or completed matrix task.
+
+Validation: 30 new planner tests pass; the combined focused suite passes 165 tests with 84.15%
+branch-aware tooling coverage (97% for the planner). The full regression run exposed an existing
+download-test timing race: its first download could reach publishing before the final running
+assertion. The test now retains the busy rejection check and verifies successful first-download
+completion; its isolated regression passes. The full rerun also exposed a pre-existing
+log-rotation submission/completion race. Three deterministic failing callback-order regressions
+confirmed it; a narrow metadata-lock/merge fix now passes 115 maintenance/job/control tests at
+100% log-rotation branch coverage. See the [debug plan](20261025_log-rotation-completion-race.md).
+No live deployment has occurred. The final full suite passes: 2,276 tests, one skip, 98.11%
+application coverage. Ruff and strict mypy pass. Results and public-safety limitations are
+recorded in the [devlog](../devlogs/2026-10-25.md).
+
+### Three-session timing result — 2026-10-25
+
+Both approved continuation windows completed. Each selected checkpoint now has three paired
+sessions in MLX-first, Splash-first, MLX-first order, with 90 measured requests and 18 excluded
+warmups per checkpoint. All 180 measured requests and 36 warmups completed without benchmark
+errors or early stops, at their frozen output caps with matching paired prompts and no cache
+reuse. Original service restoration and real inference passed within every approved bound.
+Independent admin, sidecar, configuration and target-asset reviews passed; session 2's expanded
+read-only audit completed later, before session 3, as recorded in the report.
+
+Stock 8-bit: paired client wall ratio 2.49× (bootstrap 95% interval 2.20–3.09×); pooled TTFT
+and fixed-length completion gates pass.
+
+modified 4-bit: paired client wall ratio 2.22× (bootstrap 95% interval 1.94–2.78×); pooled
+TTFT and fixed-length completion gates pass.
+
+Native timing boundaries remain incomparable; these client results do not qualify native
+decode or task quality. Required context/replay/concurrency/service-mix/restart and gateway
+inference checks remain pending. Nine of 23 full-plan tasks remain complete (39%); no backend
+integration or deployment is implied. See the [final report](../ops/splash-phase0/report.md).
+
+### Offline qualification preparation — 2026-10-26
+
+Added the [qualification harness plan](20261026_splash-qualification-harness.md) and
+[run guide](../ops/splash-phase0/qualification.md). A separate native emission trace validator
+requires explicit engine token batches, finalized IDs and monotonic callback timestamps;
+structural validation never qualifies native decode. Actual pinned callback adapters and an
+equivalent-boundary/overhead audit remain prerequisites for a new native series.
+
+The quality pilot freezes 35 deterministic cases, reuses existing graders and captures private
+nonstreaming replies without executing generated code/tools. It refuses stale/draft manifests,
+validates accounting and cache reuse, checkpoints cancellation/errors, stops on the first
+failed/truncated request and recomputes paired case/category scores with approximate
+conservative uncertainty. Identical inputs cannot inflate sample size; required single-tool
+cases reject extra calls. A small all-tied pilot remains inconclusive for the 2-point margin.
+Quality uses its own versioned contract and cannot rewrite the completed speed comparison.
+
+Prepared private drafts for both selected checkpoints from their saved complete source pairs.
+Each proposed quality-only window budgets 70 requests at 60-second deadlines, 15 minutes for
+setup/switching and 10 minutes for restoration: 95 minutes within a 120-minute cap. New live
+approval, fresh assets/process/preflight reviews and an independent host supervisor remain
+mandatory. Context/replay/concurrency/operations campaigns are listed separately in the guide.
+No additional live requests, native adapters, service changes, deployment or gate pass occurred;
+the parent plan remains nine of 23 full tasks complete (39%).
+Validation: 113 new tests pass; 278 focused tooling tests at 87.68% branch-aware coverage.
+The full suite passes with 2,389 tests, one skip and 98.10% application coverage; Ruff and
+strict mypy pass. The full private scan is now available but flags an existing public cohort
+label; staging remains blocked until that collision is resolved.
+
+### Qualification continuation — 2026-10-26
+
+The user requested the remaining Phase 0 work. Added source-pinned native collector bundles,
+explicit ID/final accounting and private native-input companions under the
+[campaign plan](20261026_splash-phase0-qualification-campaign.md). No adapter is installed
+on the Mac. Native accounting tests pass; native equivalence and live overhead remain unassessed.
+Fresh read-only preflight first failed with "No route to host". A later retry reaches SSH
+but cannot authenticate because the forwarded agent has no identities loaded. No new live
+requests, service changes or qualification passes occurred; the parent remains 39% complete.
+
+### Measured quality follow-up — 2026-10-26
+
+The [quality report](../ops/splash-phase0/quality-report.md) records both completed
+35-case-per-backend follow-up pairs: stock 8-bit scored 31/35 on both engines; modified
+4-bit scored 30/35 on both, with identical per-case passes/failures. All 140 replies have
+valid accounting, matching paired prompts, zero reuse and no request errors/truncations;
+required tool cases pass. Approximate paired intervals remain [-12.55, +12.55] percentage
+points, so the two-point quality margin is inconclusive. The original truncated baseline
+pilot and zero-case controller failure are retained separately. Both checkpoints use the
+same separately frozen 512-token suite; no score is spliced from the failed pilot.
+
+Original service/admin real inference, intent/configuration/sidecars, target hashes and
+cleanup are verified within all attempt bounds, with normal pressure and no new swap.
+The original timing evidence is unchanged. Native, secondary matrix, required context/mix,
+quality precision and authenticated gateway inference remain open; the parent remains 39%.
+
+### Native collector live pilot — 2026-10-26
+
+The [pilot report](../ops/splash-phase0/native-validation-report.md) records complete
+stock/modified collector validations plus the retained incomplete original stock series.
+All 90 successful native traces reconcile with input companions and HTTP counts; stop/EOS,
+reasoning and cancellation checks pass. Modified MLX's 8K overhead upper bound is 1.0764
+against the predeclared 1.05 limit, leaving collector overhead inconclusive. Audit activity
+overlapping MLX segments is a disclosed possible timing confound. The native gate remains
+unassessed and this does not advance integration. Original service and exact preserved state
+are verified restored for all attempts; installed runtimes/defaults remain unchanged.
+
+The user confirmed that 32K context testing is sufficient for now. Near-limit 32K, replay,
+concurrency, operations, quality precision and authenticated gateway inference remain open.
+Main progress remains 9/23 (39%).
+
 ## Phase 0B — Isolated Mac benchmark and decision
 
-This phase temporarily stops live inference and sidecars. Request approval for its concrete
-maintenance window, exact commands, memory cap and restoration procedure before execution,
-as required by `AGENTS.md` for changes to a running Mac service. The plan itself needs no
-live changes. Run project tooling from the devcontainer; only engine/OS operations execute
-remotely on the Mac. Docker/VM GPU emulation is not a benchmark substitute.
+The initial approved window was restored inside its two-hour limit. Later live windows require
+their own bounded maintenance scope; this completed session does not authorize a rollout.
+Run project tooling from the devcontainer; engine/OS operations execute remotely on the Mac.
+The primary comparison task below remains partial: all three primary client timing sessions
+are complete, while native decode qualification and the secondary matrix remain outstanding.
 
-- [ ] 🟥 Prepare an isolated directory, e.g. `/Volumes/Models/splash-spike`, containing the
+- [x] 🟩 Prepare an isolated directory, e.g. `/Volumes/Models/splash-spike`, containing the
   verified runtime, private configuration, draft, caches, logs and results. Audit writes
   and redirect supported caches/temp paths under it. Keep the existing MLX environment
   and model registry untouched; read shared target weights without modifying them.
   Account for target copies, draft and caches in the disk budget. Stop if required writes
   cannot be confined and document the prerequisite before proceeding.
-- [ ] 🟥 Capture the original engine/model/pack, sidecar intent and recovery state; prevent
+- [x] 🟩 Capture the original engine/model/pack, sidecar intent and recovery state; prevent
   watchdog/reconciliation from restarting another engine during the experiment using the
   supported maintenance mechanism. Stop through existing controls and wait for verified
   process exit before starting Splash. Use loopback and an unused experiment port (8086
   after checking availability), not the production endpoint. Start with all GPU sidecars
   stopped and an explicit memory/context cap and idle-release policy.
-- [ ] 🟥 Verify exact target compatibility and real inference, then capture scrubbed health,
+- [x] 🟩 Verify exact target compatibility and real inference, then capture scrubbed health,
   readiness, identity, model list, status/metrics, streamed response and log fixtures from
   the pinned version. Explicitly test reasoning off/on, tools, structured output,
   cancellation and image input if used by the current workload.
 - [ ] 🟥 Run the primary comparison below with the same 27B checkpoint. If local preparation
   or its draft is incompatible, report that blocker. Run a separate stock-27B comparison
   only with explicit model identity and quality labels; it cannot pass the current-model gate.
-- [ ] 🟥 Publish the benchmark report and a pass/fail/inconclusive decision with raw-sample
+  **Partial:** all three counterbalanced client timing sessions per selected checkpoint
+  are complete. Native decode qualification and the secondary matrix remain outstanding.
+- [x] 🟩 Publish the benchmark report and a pass/fail/inconclusive decision with raw-sample
   references, distributions and settings. Only then decide whether Phases 1–3 are justified.
-- [ ] 🟥 Always stop Splash and verify its process group/port are gone and memory is released;
+- [x] 🟩 Always stop Splash and verify its process group/port are gone and memory is released;
   restore the exact previous engine/pack/model, sidecar intent and recovery state on success,
   failure or interruption. Check original serving readiness and host/config drift. If an
   external operator changed intent, do not overwrite it; report incomplete restoration.
@@ -319,3 +482,54 @@ Resolve these in Phase 0 without blocking creation of this plan:
 
 Related repository references: [Strata integration plan](20261015_strata-qwen38-flash-next.md),
 [token accounting plan](20261022_token-usage.md), [design](../docs/DESIGN.md).
+
+### Near-limit 32K retrieval smoke — 2026-10-26
+
+The user confirmed 32K is sufficient for now. Both selected checkpoints passed six distinct
+near-limit retrieval cases per engine, all 24 correct at exact 31,858–31,864 prompt tokens,
+with no HTTP errors, reuse or truncation. All declared warmups and independent original-
+service restoration checks pass. See the [context report](../ops/splash-phase0/context-report.md).
+This fixed synthetic check does not qualify the broader quality margin, native speed,
+replay, concurrency, idle/restart, sidecar coexistence or authenticated gateway route.
+
+### Modified-MLX collector overhead follow-up — 2026-10-26
+
+The [separate expanded audit](../ops/splash-phase0/overhead-followup-report.md) meets the
+frozen 5% collector-overhead criterion overall and for every category after four complete
+independently restored windows. It captures 144 valid requests, 48 measured pairs and 72
+accounted native traces; the 8K upper 95% bound is 1.002261. The initial reviewer-failure
+attempt and earlier inconclusive pilot remain unchanged and are not pooled. Original
+service, assets, configuration/intent and sidecars are restored; temporary owned helpers
+are closed. This resolves modified-MLX collector overhead for that profile. Full native
+speed, quality precision and secondary requirements still gate integration and deployment;
+overall project progress remains 9/23 tasks (39%).
+
+## Fresh native emission comparison complete — 2026-10-27
+
+Six independently restored paired windows completed 216 requests/native traces: 180 measured
+responses and 36 excluded category warmups. Three alternating paired sessions per checkpoint
+use unchanged short/2K/8K cases, 512/1024 caps, 32K settings and fresh namespaces. All explicit
+native input/final-ID and HTTP accounting reconciles; prior measurements remain unchanged.
+
+- stock-8bit: emission speed pass, p95 TTFT pass, completion pass; ratio 2.4949961802269556, 95% interval [2.389975934189482, 3.328202089354354].
+- modified-4bit: emission speed pass, p95 TTFT pass, completion pass; ratio 2.365861424040426, 95% interval [2.2750806109009956, 2.9449391336223347].
+
+Overall adoption: **inconclusive**. Rates measure native delivery-callback emission,
+including runtime IPC, with the entire first batch excluded. GPU compute is not isolated.
+The clean stock collector audit is eligible; earlier pilot confounds remain in their frozen
+reports. Overhead calibration used 256-token caps; no 512/1024-cap bound is invented.
+All source/import, original inference/admin/configuration/intent/assets/sidecars and owned
+transport/observer cleanup proofs pass. All 19 earlier publication/design digests match.
+
+Still pending: broader representative quality precision for the two-point margin; replay
+at 8K/32K; concurrency 2/4; representative reasoning behavior/performance; deliberate cold/
+idle/restart x3 and memory release; any required selected sidecar mix; and actual authenticated
+gateway inference. Near-limit 32K synthetic retrieval already passes, and larger contexts
+are outside the user's current requirement. Integration/deployment remain gated.
+
+Final code validation: 40 focused tests, 92.52% reviewer coverage; full suite 2628 passed,
+1 skipped, 98.10% application coverage; Ruff and strict mypy pass (62 source files).
+The failure-reporting regression was fixed and frozen before any native-series request;
+actual request inputs, schedule, thresholds and statistics remained unchanged.
+
+Full-project progress remains 9/23 (39%); the primary comparison task still includes secondary qualification. See the [new report](../ops/splash-phase0/native-comparison-report.md).

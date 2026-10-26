@@ -1,0 +1,384 @@
+{
+  "contract": "splash-context-evidence-1",
+  "date": "2026-10-26",
+  "scope": "Fixed synthetic near-limit 32K retrieval and resources; no primary speed, representative quality or native-rate verdict.",
+  "effective_context_tokens": 32768,
+  "expected_prompt_band": [
+    31744,
+    32000
+  ],
+  "observed_frozen_prompt_tokens": [
+    31858,
+    31864
+  ],
+  "output_cap": 512,
+  "positions_percent": [
+    10,
+    50,
+    90
+  ],
+  "distinct_documents_per_cohort": 6,
+  "excluded_short_warmups_per_engine": 1,
+  "request_deadline_s": 300,
+  "worst_case_window_budget_s": 5400,
+  "independent_collection_cutoff_s": 6600,
+  "independent_restore_deadline_s": 7200,
+  "native_gate": "unassessed",
+  "quality_gate": "unassessed",
+  "prior_evidence_unchanged": true,
+  "rendering_review": {
+    "actual_native_fixtures_reproduced": 4,
+    "frozen_paired_request_bodies": 24,
+    "calibration_receipt_sha256": "d4a2e60c079620525f869c1d576e2f88ca3618f50dd6b4a58777fc2298e4ef35",
+    "exact_tokenization_receipt_sha256": "637c78aec5e7913c4bad6eb8a43fdf69b34dd506f35881601d559290dbc35243"
+  },
+  "source_sha256": {
+    "bench.py": "361dd318aaf2f239bee33abeea3ca03e1fe52a894a85e09bb8b797c1aacaaa56",
+    "context_inputs.py": "312f0f4731ecbbb99199b099ed6a926c9e4dfafafc8ffbffb69496c9a71db030",
+    "context_validation.py": "50ae400f3f9a428b79811fc0d645032ed514a0c35f86319e993a7aa3690a05ca"
+  },
+  "cohorts": [
+    {
+      "cohort": "stock-8bit",
+      "status": "complete",
+      "review": {
+        "contract": "splash-context-review-1",
+        "scope": "fixed_synthetic_context_smoke_only",
+        "decision": "pass",
+        "native_gate": "unassessed",
+        "quality_gate": "unassessed",
+        "prompt_token_band": [
+          31744,
+          32000
+        ],
+        "cases_per_engine": 6,
+        "issues": [],
+        "engines": {
+          "mlx": {
+            "correct": 6,
+            "cases": [
+              {
+                "case_id": "needle-10-0",
+                "position": 10,
+                "correct": true,
+                "prompt_tokens": 31863,
+                "completion_tokens": 20,
+                "ttft_s": 92.45494751099613,
+                "total_s": 94.50342354000168
+              },
+              {
+                "case_id": "needle-10-1",
+                "position": 10,
+                "correct": true,
+                "prompt_tokens": 31862,
+                "completion_tokens": 20,
+                "ttft_s": 93.37406438099424,
+                "total_s": 95.26600173599581
+              },
+              {
+                "case_id": "needle-50-0",
+                "position": 50,
+                "correct": true,
+                "prompt_tokens": 31864,
+                "completion_tokens": 22,
+                "ttft_s": 94.211555777998,
+                "total_s": 96.51707673499914
+              },
+              {
+                "case_id": "needle-50-1",
+                "position": 50,
+                "correct": true,
+                "prompt_tokens": 31861,
+                "completion_tokens": 20,
+                "ttft_s": 94.40567431400268,
+                "total_s": 96.52768933300104
+              },
+              {
+                "case_id": "needle-90-0",
+                "position": 90,
+                "correct": true,
+                "prompt_tokens": 31863,
+                "completion_tokens": 20,
+                "ttft_s": 94.667865798001,
+                "total_s": 96.75073842099664
+              },
+              {
+                "case_id": "needle-90-1",
+                "position": 90,
+                "correct": true,
+                "prompt_tokens": 31861,
+                "completion_tokens": 20,
+                "ttft_s": 94.91968679799902,
+                "total_s": 96.94381917599821
+              }
+            ],
+            "private_run_sha256": "c28d42edce7c2ac4b08e847b94a7d946e0452142b45191b8c397a991923959c3"
+          },
+          "splash": {
+            "correct": 6,
+            "cases": [
+              {
+                "case_id": "needle-10-0",
+                "position": 10,
+                "correct": true,
+                "prompt_tokens": 31863,
+                "completion_tokens": 20,
+                "ttft_s": 66.65438100300526,
+                "total_s": 67.44929472500371
+              },
+              {
+                "case_id": "needle-10-1",
+                "position": 10,
+                "correct": true,
+                "prompt_tokens": 31862,
+                "completion_tokens": 20,
+                "ttft_s": 67.19512266899983,
+                "total_s": 68.06647181000153
+              },
+              {
+                "case_id": "needle-50-0",
+                "position": 50,
+                "correct": true,
+                "prompt_tokens": 31864,
+                "completion_tokens": 22,
+                "ttft_s": 67.62042899600056,
+                "total_s": 68.45124915299675
+              },
+              {
+                "case_id": "needle-50-1",
+                "position": 50,
+                "correct": true,
+                "prompt_tokens": 31861,
+                "completion_tokens": 20,
+                "ttft_s": 67.62655294500291,
+                "total_s": 68.4452393879983
+              },
+              {
+                "case_id": "needle-90-0",
+                "position": 90,
+                "correct": true,
+                "prompt_tokens": 31863,
+                "completion_tokens": 20,
+                "ttft_s": 67.47577869599627,
+                "total_s": 68.31553390499903
+              },
+              {
+                "case_id": "needle-90-1",
+                "position": 90,
+                "correct": true,
+                "prompt_tokens": 31861,
+                "completion_tokens": 20,
+                "ttft_s": 67.64271191000444,
+                "total_s": 68.5571866140017
+              }
+            ],
+            "private_run_sha256": "b889549e470b2c8ea88cf132d35cec53280de018160e9193b20668eef4d5470f"
+          }
+        },
+        "cohort": "stock-8bit"
+      },
+      "campaign_sha256": "c318fc50e4efebad77cb867cb1fb42a191ccf6d67a61b63c23a2600aa0b12c7f",
+      "attempted_requests": 14,
+      "resources": {
+        "samples": 520,
+        "minimum_available_gib": 10.122268676757812,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 28.010635375976562
+      },
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "admin_loaded": true,
+        "preserved_state_and_config": true,
+        "experiment_cleanup": true,
+        "sidecars_restored": true,
+        "within_approved_window": true
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "2b73b7e2a9a636991ada2279e96c3a0577c57f7c265a0d915ea743bcd1ff9e8f",
+        "context-review.json": "96a4ae7d1f9ba49c94d6504008debebf951f83edfd42b8770817a8c1bc269fb6",
+        "mlx-run.json": "81cd3e87dddded11617d0ef8831fbee8f8eead8dd6b291b54dc879c57e1aaff7",
+        "splash-run.json": "649afb81839966a5d1ce7908d1a8dacf7789d60fc942ddbfb137ac211cfc4a3c",
+        "sidecar-restoration-proof.json": "c7a6fe392f4ac799f15bce0663653e4e829741fe1293a000300d2ed261e68935",
+        "mac-audit/restoration-proof.json": "058f0dcbeb4a6b4a108fc400199169fa63ae411b5d7540ad8e53331787590a46",
+        "mac-audit/target-fingerprints-after.json": "24d2904f833db11928c0d2e0c27751d6465f2cb8ce41cba6f86fe8c875aef0e9",
+        "mac-audit/resources.jsonl": "5f53b897edb3050b46fe2f87fb4793e12b4afbdcc19827c1b69c4130adc56510"
+      }
+    },
+    {
+      "cohort": "modified-4bit",
+      "status": "complete",
+      "review": {
+        "contract": "splash-context-review-1",
+        "scope": "fixed_synthetic_context_smoke_only",
+        "decision": "pass",
+        "native_gate": "unassessed",
+        "quality_gate": "unassessed",
+        "prompt_token_band": [
+          31744,
+          32000
+        ],
+        "cases_per_engine": 6,
+        "issues": [],
+        "engines": {
+          "mlx": {
+            "correct": 6,
+            "cases": [
+              {
+                "case_id": "needle-10-0",
+                "position": 10,
+                "correct": true,
+                "prompt_tokens": 31858,
+                "completion_tokens": 20,
+                "ttft_s": 88.6787970209989,
+                "total_s": 89.88593022299756
+              },
+              {
+                "case_id": "needle-10-1",
+                "position": 10,
+                "correct": true,
+                "prompt_tokens": 31864,
+                "completion_tokens": 20,
+                "ttft_s": 89.59423860500101,
+                "total_s": 90.80588131900004
+              },
+              {
+                "case_id": "needle-50-0",
+                "position": 50,
+                "correct": true,
+                "prompt_tokens": 31861,
+                "completion_tokens": 22,
+                "ttft_s": 89.6854564000023,
+                "total_s": 91.04130190399883
+              },
+              {
+                "case_id": "needle-50-1",
+                "position": 50,
+                "correct": true,
+                "prompt_tokens": 31864,
+                "completion_tokens": 20,
+                "ttft_s": 89.78182482799457,
+                "total_s": 90.98226600899943
+              },
+              {
+                "case_id": "needle-90-0",
+                "position": 90,
+                "correct": true,
+                "prompt_tokens": 31862,
+                "completion_tokens": 20,
+                "ttft_s": 89.6296818999981,
+                "total_s": 90.84930148499552
+              },
+              {
+                "case_id": "needle-90-1",
+                "position": 90,
+                "correct": true,
+                "prompt_tokens": 31860,
+                "completion_tokens": 20,
+                "ttft_s": 89.76924805300223,
+                "total_s": 90.81857629300066
+              }
+            ],
+            "private_run_sha256": "eca7646f0c4351db79486b4003f3c0a79936515eea6540e3a730fec7f22e4f51"
+          },
+          "splash": {
+            "correct": 6,
+            "cases": [
+              {
+                "case_id": "needle-10-0",
+                "position": 10,
+                "correct": true,
+                "prompt_tokens": 31858,
+                "completion_tokens": 20,
+                "ttft_s": 65.16846761100169,
+                "total_s": 65.18304709900258
+              },
+              {
+                "case_id": "needle-10-1",
+                "position": 10,
+                "correct": true,
+                "prompt_tokens": 31864,
+                "completion_tokens": 20,
+                "ttft_s": 63.84296765500039,
+                "total_s": 64.18583981799748
+              },
+              {
+                "case_id": "needle-50-0",
+                "position": 50,
+                "correct": true,
+                "prompt_tokens": 31861,
+                "completion_tokens": 22,
+                "ttft_s": 63.951869343,
+                "total_s": 78.1010534599991
+              },
+              {
+                "case_id": "needle-50-1",
+                "position": 50,
+                "correct": true,
+                "prompt_tokens": 31864,
+                "completion_tokens": 20,
+                "ttft_s": 64.13175238599797,
+                "total_s": 64.64408603300399
+              },
+              {
+                "case_id": "needle-90-0",
+                "position": 90,
+                "correct": true,
+                "prompt_tokens": 31862,
+                "completion_tokens": 20,
+                "ttft_s": 64.83601310299855,
+                "total_s": 65.20476831799897
+              },
+              {
+                "case_id": "needle-90-1",
+                "position": 90,
+                "correct": true,
+                "prompt_tokens": 31860,
+                "completion_tokens": 20,
+                "ttft_s": 64.46122218800156,
+                "total_s": 65.07624136900267
+              }
+            ],
+            "private_run_sha256": "13046e843565b97f5e84f0ab20f4a93cb2a9587a1547b08ded481013bd017331"
+          }
+        },
+        "cohort": "modified-4bit"
+      },
+      "campaign_sha256": "c318fc50e4efebad77cb867cb1fb42a191ccf6d67a61b63c23a2600aa0b12c7f",
+      "attempted_requests": 14,
+      "resources": {
+        "samples": 486,
+        "minimum_available_gib": 15.883529663085938,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.317779541015625
+      },
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "admin_loaded": true,
+        "preserved_state_and_config": true,
+        "experiment_cleanup": true,
+        "sidecars_restored": true,
+        "within_approved_window": true
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "b19f09ba8d43040638a50688320f315986046c72f3eb419a08cae5628b7977c0",
+        "context-review.json": "fc8962a8e2eb2a25357fc9cbceebf5c4ca0173c7cbe1efe135d94e4d5fdf6b9f",
+        "mlx-run.json": "642117472769485d9d55f297422ffbede6dd471fac57d359f26e9de562c1f6f6",
+        "splash-run.json": "904ea940ecfdffe42cddf7c7f80537fbff354a99351db61583f3525955f62c67",
+        "sidecar-restoration-proof.json": "d665b2c115b41d38a40873a0b9c17c86a235b25c9a951ddd0ab90cde4cc1cd8b",
+        "mac-audit/restoration-proof.json": "471c365493694b3b194f9c77d5262d42a878b795703b88fd80996bc7979e0eb7",
+        "mac-audit/target-fingerprints-after.json": "e2078616671ad89337e92cc1a541827b23e99e7348fef6952f10282867abd292",
+        "mac-audit/resources.jsonl": "743429cfba84a366e96a829453807d9d8f8b01ba939ae6263e56855d9f159807"
+      }
+    }
+  ],
+  "limitations": [
+    "Six synthetic documents per checkpoint are a fixed retrieval smoke and not independent evidence for a broad quality margin.",
+    "Early-stop retrieval replies do not qualify a fixed-output speed gate; TTFT/total times are diagnostic.",
+    "Fresh isolated cache only; replay, concurrency, idle/restart and sidecar coexistence remain separate.",
+    "The initial stock thermal observer started after activation; independent memory/swap/restoration guarding ran throughout."
+  ]
+}

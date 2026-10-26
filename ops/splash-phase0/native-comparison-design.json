@@ -1,0 +1,143 @@
+{
+  "contract": "splash-native-public-design-1",
+  "date": "2026-10-26",
+  "scope": "Native callback emission including runtime delivery/IPC; isolated GPU compute remains unassessed.",
+  "boundary_audit_sha256": "7c76116a2c8cc60de358ebc08578ff8ecaf8034b96c87480669e4b4f8af2e5f9",
+  "code_sha256": {
+    "bench.py": "361dd318aaf2f239bee33abeea3ca03e1fe52a894a85e09bb8b797c1aacaaa56",
+    "native_timing.py": "4dbc8d8627cf1cd7555ba39eec1a4a74c8efd64b84712e3eba1495f3cfa540f3",
+    "native_validation.py": "33502b054725afb9b6e10769163a471de16def031190389b07a3ecd1e1defdb7",
+    "native_comparison.py": "565b26a0f0fb5adfec42601e3493015bc6b4449ab7d8d4190202a9076b20f442"
+  },
+  "cohorts": {
+    "stock-8bit": {
+      "sources": {
+        "mlx": {
+          "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+          "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67"
+        },
+        "splash": {
+          "source_sha256": "0ce85023177d4029942e9505a4b0f8c67dddb29a7fef37ac9c0fd15ce1b0bcd6",
+          "adapter_sha256": "635904e4052151e5533be770caa0b83ec0e40b6471333959e29ca6b5d7c98311"
+        }
+      },
+      "model_pins": {
+        "weights_sha256": "b5d511fe911490ff389642abb1b9671a3c75736c8faa990dfaf9dd113b646711",
+        "tokenizer_sha256": "ac82a3ef50a623a2cc41cb5094c6fee5bdc9068d88672885e745f66c0ad27760",
+        "template_sha256": "cd13b5b6d2a8c4eeab703d83ded6d1d4d92df3ab0cd23b11a8620219a38720c6"
+      },
+      "runtime_pins": {
+        "mlx": {
+          "version": "mlx-vlm-0.7.3-mlx-0.32.2",
+          "sha256": "9c65e7603fc136cec2801abb606a222a25e860406894339bc6826ec56167dd6e"
+        },
+        "splash": {
+          "version": "1.4.0",
+          "sha256": "4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d"
+        }
+      },
+      "corpus_sha256": "db28c084ec4f36b0da18b7680927af5d86720c4fde6c09120c7046feb19086b0"
+    },
+    "modified-4bit": {
+      "sources": {
+        "mlx": {
+          "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+          "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67"
+        },
+        "splash": {
+          "source_sha256": "0ce85023177d4029942e9505a4b0f8c67dddb29a7fef37ac9c0fd15ce1b0bcd6",
+          "adapter_sha256": "635904e4052151e5533be770caa0b83ec0e40b6471333959e29ca6b5d7c98311"
+        }
+      },
+      "model_pins": {
+        "weights_sha256": "fe4b166f932a8215bb3be532d49c581396d2d91b6c0687106c5b255118d95e0d",
+        "tokenizer_sha256": "5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836",
+        "template_sha256": "b6e05e626073de17d62afe10ce1078e70cf16fcc2ffb521f2f6a2e05af6abf31"
+      },
+      "runtime_pins": {
+        "mlx": {
+          "version": "mlx-vlm-0.7.3-mlx-0.32.2",
+          "sha256": "9c65e7603fc136cec2801abb606a222a25e860406894339bc6826ec56167dd6e"
+        },
+        "splash": {
+          "version": "1.4.0",
+          "sha256": "4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d"
+        }
+      },
+      "corpus_sha256": "db28c084ec4f36b0da18b7680927af5d86720c4fde6c09120c7046feb19086b0"
+    }
+  },
+  "schedule": {
+    "paired_sessions_per_cohort": 3,
+    "orders": [
+      "mlx-first",
+      "splash-first",
+      "mlx-first"
+    ],
+    "cases": [
+      "short",
+      "2k",
+      "8k"
+    ],
+    "output_caps": [
+      512,
+      1024,
+      1024
+    ],
+    "measured_repetitions_per_case_launch": 5,
+    "excluded_warmups_per_case_launch": 1,
+    "requests": 216,
+    "measured_requests": 180,
+    "excluded_warmups": 36,
+    "all_expected_native_traces": 216
+  },
+  "settings": {
+    "context_tokens": 32768,
+    "temperature": 0.0,
+    "seed": 0,
+    "reasoning": false,
+    "concurrency": 1,
+    "kv_precision": "bf16-kv-fp32-recurrent",
+    "gpu_sidecars": "stopped"
+  },
+  "budget": {
+    "request_deadlines_s": {
+      "short": 90,
+      "2k": 150,
+      "8k": 210
+    },
+    "requests_per_paired_window": 36,
+    "request_budget_s": 5400,
+    "setup_s": 600,
+    "restore_s": 600,
+    "total_s": 6600,
+    "independent_collection_cutoff_s": 6600,
+    "independent_restore_deadline_s": 7200
+  },
+  "analysis": {
+    "native_rate": "(completion_tokens - complete_first_batch_token_count)/(last_callback_entry_ns-first_callback_entry_ns)*1e9",
+    "summary": "Median of per-prompt paired repetition medians, then session/prompt bootstrap; no pooling across cohorts or earlier experiments.",
+    "draws": 2000,
+    "seed": 0,
+    "median_ratio_minimum": 1.25,
+    "lower_95_bound_above": 1.0,
+    "category_regression_forbidden": true,
+    "p95_ttft_ratio_maximum": 1.1,
+    "fixed_length_median_e2e_ratio_maximum": 1.0,
+    "early_stop": "Only capture/guard failure; preserve incomplete evidence. No statistical optional stopping or extension."
+  },
+  "prerequisites": [
+    "Complete source/model/runtime-matched collector eligibility for each selected backend and checkpoint.",
+    "Clean separately frozen stock-MLX overhead audit; preserve the old confounded pilot.",
+    "Fresh original readiness/ownership/assets/jobs/sidecar review, independent guard and restoration between each paired window.",
+    "Exact native rendered inputs and final token-ID/HTTP accounting for every request including warmups."
+  ],
+  "limitations": [
+    "Different in-process and native wire-reader delivery paths are included; isolated GPU compute is unassessed.",
+    "Three paired sessions are independent top-level bootstrap units; requests/tokens are not independent sessions.",
+    "Quality precision, replay/concurrency, deliberate operations, service coexistence and actual authenticated gateway inference remain separate adoption gates."
+  ],
+  "pre_capture_correction": "Add a failing TTFT-gate regression before any native-series capture; failed measurement gates now report failure. Inputs, schedule, thresholds and statistics are unchanged.",
+  "transport_setup_correction": "Initial clean-stock audit stopped on a zero-request launcher authentication failure after one complete window. Preserve it separately; use a fresh four-window stock follow-up with inherited-transport checks before activation. No native-series inputs, counts, thresholds or statistics changed.",
+  "incomplete_stock_attempt_evidence_sha256": "7e2a7ad2210bebbea56f5d2c83f13134934dcaa6059e1d68059869dd5926a772"
+}

@@ -1,0 +1,635 @@
+{
+  "contract": "splash-native-live-validation-1",
+  "date": "2026-10-26",
+  "native_gate": "unassessed",
+  "scope": "Collector accounting, functional behavior and instrumented/original overhead pilot; no cross-engine speed qualification.",
+  "threshold": 1.05,
+  "uncertainty": "2000 seed-0 cluster bootstrap draws over two launch pairs, prompt categories and paired repetitions; 95% percentile bounds.",
+  "sources": {
+    "mlx": {
+      "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+      "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+      "collector_sha256": "00a81cf8769bc9b0e9af39cd9b8d119e380d62fdf467e6c6d086f25866809416"
+    },
+    "splash": {
+      "source_sha256": "0ce85023177d4029942e9505a4b0f8c67dddb29a7fef37ac9c0fd15ce1b0bcd6",
+      "adapter_sha256": "635904e4052151e5533be770caa0b83ec0e40b6471333959e29ca6b5d7c98311",
+      "collector_sha256": "00a81cf8769bc9b0e9af39cd9b8d119e380d62fdf467e6c6d086f25866809416"
+    }
+  },
+  "attempts": [
+    {
+      "id": "native-stock-1",
+      "cohort": "stock-8bit",
+      "series_version": 1,
+      "status": "failed",
+      "campaign_sha256": "91f305698064ef61fda7967ecc64a38f31d8f25aae1dbc5c4ee436c0e5c24ecd",
+      "attempted_requests": 34,
+      "successful_http_requests": 31,
+      "intentional_cancellations": 2,
+      "http_errors": {
+        "timeout": 1
+      },
+      "accounted_native_traces": 18,
+      "phases": [
+        {
+          "backend": "mlx",
+          "phase": 0,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        },
+        {
+          "backend": "mlx",
+          "phase": 1,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "mlx",
+          "phase": 2,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "mlx",
+          "phase": 3,
+          "kind": "original",
+          "status": "interrupted",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        }
+      ],
+      "overhead": {
+        "mlx": {
+          "contract": "splash-native-overhead-1",
+          "backend": "mlx",
+          "decision": "inconclusive",
+          "native_gate": "unassessed",
+          "issues": [
+            "incompatible_pair",
+            "invalid_capture"
+          ],
+          "threshold": 1.05,
+          "scope": "Collector overhead eligibility only; no cross-engine native speed claim.",
+          "uncertainty": "95% cluster bootstrap of launch-pair blocks, categories and paired repetitions."
+        },
+        "splash": {
+          "contract": "splash-native-overhead-1",
+          "backend": "splash",
+          "decision": "inconclusive",
+          "native_gate": "unassessed",
+          "issues": [
+            "missing_or_duplicate_samples"
+          ],
+          "threshold": 1.05,
+          "scope": "Collector overhead eligibility only; no cross-engine native speed claim.",
+          "uncertainty": "95% cluster bootstrap of launch-pair blocks, categories and paired repetitions."
+        }
+      },
+      "first_batch_tokens": {
+        "mlx": {
+          "minimum": 1,
+          "maximum": 1,
+          "multiple_token_batches": 0
+        }
+      },
+      "resources": {
+        "samples": 488,
+        "minimum_available_gib": 14.837265014648438,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 28.020553588867188
+      },
+      "thermal_samples": 32,
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "intent_and_config_preserved": true,
+        "admin_loaded": true,
+        "experiment_cleanup": true,
+        "within_approved_window": true,
+        "sidecars_independently_reviewed": true
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "6b097dd6ae5ed38826bac8b0f992d4c79bc231ffae10d765e60a011c8eda63d2",
+        "overhead-reports.json": "30a24969fa68439b521c898203b98e193121de30ca08139656bb535e865568f2",
+        "sidecar-restoration-proof.json": "d87887ccc265f91f4749b8305daed2b2dccc63eb21d0f75e7883d7c48fadb7f0",
+        "mac-audit/restoration-proof.json": "2ebacaeece3b22aa17fea5b9a666b957f38fb91478f2e8d830770d784dd07cd0",
+        "mac-audit/target-fingerprints-after.json": "458146145edfd4d2ba8165aba051d404fdf595491284047470708f40073ad750",
+        "mac-audit/resources.jsonl": "3d946b015cc5c4576520dd53fc6effecda8318f66c81218f42e9e6edb7c26769"
+      },
+      "request_deadlines_s": {
+        "all": 60
+      },
+      "worst_case_budget_s": 5400
+    },
+    {
+      "id": "native-modified-1",
+      "cohort": "modified-4bit",
+      "series_version": 1,
+      "status": "complete",
+      "campaign_sha256": "91f305698064ef61fda7967ecc64a38f31d8f25aae1dbc5c4ee436c0e5c24ecd",
+      "attempted_requests": 68,
+      "successful_http_requests": 64,
+      "intentional_cancellations": 4,
+      "http_errors": {},
+      "accounted_native_traces": 36,
+      "phases": [
+        {
+          "backend": "mlx",
+          "phase": 0,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        },
+        {
+          "backend": "mlx",
+          "phase": 1,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "mlx",
+          "phase": 2,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "mlx",
+          "phase": 3,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        },
+        {
+          "backend": "splash",
+          "phase": 0,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        },
+        {
+          "backend": "splash",
+          "phase": 1,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "splash",
+          "phase": 2,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "splash",
+          "phase": 3,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        }
+      ],
+      "overhead": {
+        "mlx": {
+          "contract": "splash-native-overhead-1",
+          "backend": "mlx",
+          "decision": "inconclusive",
+          "native_gate": "unassessed",
+          "issues": [],
+          "threshold": 1.05,
+          "scope": "Collector overhead eligibility only; no cross-engine native speed claim.",
+          "uncertainty": "95% cluster bootstrap of launch-pair blocks, categories and paired repetitions.",
+          "median_wall_ratio": 0.9983913313944257,
+          "ci95": [
+            0.9882532047096033,
+            1.027648728164994
+          ],
+          "categories": {
+            "short": {
+              "median_wall_ratio": 0.9990640775042082,
+              "ci95": [
+                0.9968550994548558,
+                0.9998270549497814
+              ],
+              "decision": "eligible"
+            },
+            "2k": {
+              "median_wall_ratio": 1.005279875144281,
+              "ci95": [
+                0.9882532047096033,
+                1.0425402644531099
+              ],
+              "decision": "eligible"
+            },
+            "8k": {
+              "median_wall_ratio": 0.994212651607081,
+              "ci95": [
+                0.9639906240802365,
+                1.0763964630107337
+              ],
+              "decision": "inconclusive"
+            }
+          },
+          "paired_requests": 12,
+          "excluded_warmups": 4
+        },
+        "splash": {
+          "contract": "splash-native-overhead-1",
+          "backend": "splash",
+          "decision": "eligible",
+          "native_gate": "unassessed",
+          "issues": [],
+          "threshold": 1.05,
+          "scope": "Collector overhead eligibility only; no cross-engine native speed claim.",
+          "uncertainty": "95% cluster bootstrap of launch-pair blocks, categories and paired repetitions.",
+          "median_wall_ratio": 0.9983562062765596,
+          "ci95": [
+            0.9863623379204043,
+            1.0069781689351884
+          ],
+          "categories": {
+            "short": {
+              "median_wall_ratio": 0.9972288918472648,
+              "ci95": [
+                0.9863623379204043,
+                1.0069781689351884
+              ],
+              "decision": "eligible"
+            },
+            "2k": {
+              "median_wall_ratio": 0.9966899989497517,
+              "ci95": [
+                0.9916074437784838,
+                1.0470989925610306
+              ],
+              "decision": "eligible"
+            },
+            "8k": {
+              "median_wall_ratio": 1.0014267492207671,
+              "ci95": [
+                0.9698623938675542,
+                1.0050905908177419
+              ],
+              "decision": "eligible"
+            }
+          },
+          "paired_requests": 12,
+          "excluded_warmups": 4
+        }
+      },
+      "first_batch_tokens": {
+        "mlx": {
+          "minimum": 1,
+          "maximum": 1,
+          "multiple_token_batches": 0
+        },
+        "splash": {
+          "minimum": 1,
+          "maximum": 1,
+          "multiple_token_batches": 0
+        }
+      },
+      "resources": {
+        "samples": 495,
+        "minimum_available_gib": 15.419754028320312,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.488449096679688
+      },
+      "thermal_samples": 22,
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "intent_and_config_preserved": true,
+        "admin_loaded": true,
+        "experiment_cleanup": true,
+        "within_approved_window": true,
+        "sidecars_independently_reviewed": true
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "293fed3a5954433bf99a5a4e4ac444321b1f95c2f2a8261dbe6f0006fbad2a4a",
+        "overhead-reports.json": "1c4bc838dd957f64c986737fa2c244ee0dd6b4141c16b3adeac2092b7e88b9c7",
+        "sidecar-restoration-proof.json": "1fb4d5df31a1238daf205f4ea7208a19909499bb9c22af80d311d1ce73be1007",
+        "mac-audit/restoration-proof.json": "31466cce250fbc16412d555dd4a671121ff11d4e4520607484194f117c2f9f9c",
+        "mac-audit/target-fingerprints-after.json": "eab57e9a770cf11b7be45d46c9c98a896f4329a372abff88e2a7c6412603d4c3",
+        "mac-audit/resources.jsonl": "af07f2583c674316a01bfba978981ee09bc153d7c814f9ff53724f22e81908d1"
+      },
+      "thermal_limit": "Optional observer started late after an environment error; guard resources were recorded throughout.",
+      "request_deadlines_s": {
+        "all": 60
+      },
+      "worst_case_budget_s": 5400
+    },
+    {
+      "id": "native-stock-2",
+      "cohort": "stock-8bit",
+      "series_version": 2,
+      "status": "complete",
+      "campaign_sha256": "d4c245300736fd1c9c151d50af5abc9a09d960edc0373b8d658138eea0352058",
+      "attempted_requests": 68,
+      "successful_http_requests": 64,
+      "intentional_cancellations": 4,
+      "http_errors": {},
+      "accounted_native_traces": 36,
+      "phases": [
+        {
+          "backend": "mlx",
+          "phase": 0,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        },
+        {
+          "backend": "mlx",
+          "phase": 1,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "mlx",
+          "phase": 2,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "mlx",
+          "phase": 3,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        },
+        {
+          "backend": "splash",
+          "phase": 0,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        },
+        {
+          "backend": "splash",
+          "phase": 1,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "splash",
+          "phase": 2,
+          "kind": "instrumented",
+          "status": "complete",
+          "attempted": 10,
+          "accounted_native_traces": 9,
+          "intentional_failed_traces": 1
+        },
+        {
+          "backend": "splash",
+          "phase": 3,
+          "kind": "original",
+          "status": "complete",
+          "attempted": 7,
+          "accounted_native_traces": 0,
+          "intentional_failed_traces": 0
+        }
+      ],
+      "overhead": {
+        "mlx": {
+          "contract": "splash-native-overhead-1",
+          "backend": "mlx",
+          "decision": "eligible",
+          "native_gate": "unassessed",
+          "issues": [],
+          "threshold": 1.05,
+          "scope": "Collector overhead eligibility only; no cross-engine native speed claim.",
+          "uncertainty": "95% cluster bootstrap of launch-pair blocks, categories and paired repetitions.",
+          "median_wall_ratio": 0.9998024616513109,
+          "ci95": [
+            0.9778458968919842,
+            1.0036509908368942
+          ],
+          "categories": {
+            "short": {
+              "median_wall_ratio": 1.0020940466018449,
+              "ci95": [
+                1.000532847869837,
+                1.0036509908368942
+              ],
+              "decision": "eligible"
+            },
+            "2k": {
+              "median_wall_ratio": 1.0059699947917498,
+              "ci95": [
+                0.9939803959742572,
+                1.0343061875109902
+              ],
+              "decision": "eligible"
+            },
+            "8k": {
+              "median_wall_ratio": 0.9825948742362036,
+              "ci95": [
+                0.9776176519707872,
+                0.9944586582399808
+              ],
+              "decision": "eligible"
+            }
+          },
+          "paired_requests": 12,
+          "excluded_warmups": 4
+        },
+        "splash": {
+          "contract": "splash-native-overhead-1",
+          "backend": "splash",
+          "decision": "eligible",
+          "native_gate": "unassessed",
+          "issues": [],
+          "threshold": 1.05,
+          "scope": "Collector overhead eligibility only; no cross-engine native speed claim.",
+          "uncertainty": "95% cluster bootstrap of launch-pair blocks, categories and paired repetitions.",
+          "median_wall_ratio": 0.9989812938090765,
+          "ci95": [
+            0.9921827915809017,
+            1.0075355735187022
+          ],
+          "categories": {
+            "short": {
+              "median_wall_ratio": 1.0019436478612191,
+              "ci95": [
+                0.9977606133383207,
+                1.0035749144045165
+              ],
+              "decision": "eligible"
+            },
+            "2k": {
+              "median_wall_ratio": 0.9949247760444393,
+              "ci95": [
+                0.9877997271936404,
+                1.0173411251215696
+              ],
+              "decision": "eligible"
+            },
+            "8k": {
+              "median_wall_ratio": 0.9989812938090765,
+              "ci95": [
+                0.9909092320488504,
+                1.011496232632888
+              ],
+              "decision": "eligible"
+            }
+          },
+          "paired_requests": 12,
+          "excluded_warmups": 4
+        }
+      },
+      "first_batch_tokens": {
+        "mlx": {
+          "minimum": 1,
+          "maximum": 1,
+          "multiple_token_batches": 0
+        },
+        "splash": {
+          "minimum": 1,
+          "maximum": 1,
+          "multiple_token_batches": 0
+        }
+      },
+      "resources": {
+        "samples": 741,
+        "minimum_available_gib": 13.215621948242188,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 28.020462036132812
+      },
+      "thermal_samples": 51,
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "intent_and_config_preserved": true,
+        "admin_loaded": true,
+        "experiment_cleanup": true,
+        "within_approved_window": true,
+        "sidecars_independently_reviewed": true
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "242604a6c20eafb6e54d235c8ff6bac1af1367ea50cabca979f4413d2f361332",
+        "overhead-reports.json": "47fe47842176ae17f9423f2cc5d8522f4eef59e46e13457e2b87e9a53d99b12c",
+        "sidecar-restoration-proof.json": "8738335c390398ace383484f576084b2de62b992dacc5bf3047c38148c81fdc4",
+        "mac-audit/restoration-proof.json": "3278ba7577dfc5bbe40803c0bdb7d2009bf945120a4d2ad75351b710b9e8f334",
+        "mac-audit/target-fingerprints-after.json": "95556035a61ad4558339f800de4f79b11aa21df981f5699f56c57b1febb5a407",
+        "mac-audit/resources.jsonl": "4444d0c425027b9219142d6c4fcb0b41fd80fc3c3de3008e22d7fd09e6ab8dc4"
+      },
+      "request_deadlines_s": {
+        "8k": 90,
+        "other": 60
+      },
+      "worst_case_budget_s": 5880
+    }
+  ],
+  "complete_cohorts": [
+    "modified-4bit",
+    "stock-8bit"
+  ],
+  "collector_eligibility": "inconclusive",
+  "limitations": [
+    "Read-only source and EOS-policy audits overlapped MLX segments and may add CPU/disk noise; retained pilot statistics are not an isolated compute finding.",
+    "Two launch-pair blocks per engine are a pilot, not a full native speed series.",
+    "MLX in-process emission and Splash wire-reader callback include different queue/transport paths; kernel time is not isolated.",
+    "Whole first native batches are excluded; HTTP chunk counts never substitute for token IDs.",
+    "The first stock series remains incomplete and is neither pooled nor repaired.",
+    "No native result is inserted into existing client timing evidence."
+  ],
+  "stop_policy": {
+    "private_receipt_sha256": "126dc609ff30d1bf3460932380ffcb5ad9457bca0493ab7b0f557bb8a1b73754",
+    "reviewed_traces": 90,
+    "natural_stops_with_one_terminal_eos": 20,
+    "length_capped_traces_without_eos": 70
+  },
+  "final_operational_review": {
+    "private_receipt_sha256": "54820d7753944af0bc90017a1bb585c65cdb1468b1ecf0cfe24e9b373c207579",
+    "current_original_generation_matches_readiness_proof": true,
+    "active_jobs": 0,
+    "preserved": true,
+    "experiment_cleanup": true
+  },
+  "cleanup": {
+    "owned_helpers_closed": [
+      "native-stock-1-thermal",
+      "native-modified-1-thermal",
+      "native-stock-2-thermal",
+      "master",
+      "relay",
+      "agent"
+    ],
+    "tunnel_closed": true,
+    "agent_socket_removed": true,
+    "temporary_path_removed": true,
+    "host_agent_untouched": true,
+    "private_receipt_sha256": "ed59ef7e66e75391589d7af55d799e0899a680fd4902f136af6aab6ad9a5a4e5"
+  },
+  "observer_audit_notes_sha256": "49750ed3d47b42d4a4e0cb74539d14ba9f2069f02be73befe43e600e7df48db3",
+  "source_audit": {
+    "private_receipt_sha256": "1375c6ba5f6dd3230025527940ce8065bf7bdae6a879412ea37fa8334d2e83bb",
+    "isolated_source_checks": {
+      "mlx-original": {
+        "files": 1477,
+        "unchanged": true
+      },
+      "mlx-instrumented": {
+        "files": 1478,
+        "unchanged": true
+      },
+      "splash-original": {
+        "files": 35,
+        "unchanged": true
+      },
+      "splash-instrumented": {
+        "files": 36,
+        "unchanged": true
+      }
+    },
+    "installed_runtime_files_unchanged": 57,
+    "bootstrap_unchanged": true,
+    "launch_receipts": 24
+  }
+}

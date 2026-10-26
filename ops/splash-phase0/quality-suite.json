@@ -1,0 +1,823 @@
+{
+  "id": "splash-quality-pilot-v1",
+  "version": 1,
+  "title": "Splash deterministic quality pilot",
+  "description": "Core eval cases plus coding-output questions. Fixed-suite binary accuracy only; no code execution or general quality claim.",
+  "cases": [
+    {
+      "id": "if-ready",
+      "category": "instruction",
+      "prompt": "Reply with exactly the word READY in capital letters and nothing else.",
+      "max_tokens": 16,
+      "grader": {
+        "type": "regex",
+        "pattern": "^\\s*READY\\s*$"
+      }
+    },
+    {
+      "id": "if-colors",
+      "category": "instruction",
+      "prompt": "List the three primary colors of light as a comma-separated list in lowercase, with no other text.",
+      "max_tokens": 32,
+      "grader": {
+        "type": "regex",
+        "pattern": "^(?=.*\\bred\\b)(?=.*\\bgreen\\b)(?=.*\\bblue\\b)\\s*[a-z]+\\s*,\\s*[a-z]+\\s*,\\s*[a-z]+\\s*$"
+      }
+    },
+    {
+      "id": "if-five-words",
+      "category": "instruction",
+      "prompt": "Write one sentence about the sea that is exactly five words long and ends with a period. Output only the sentence.",
+      "max_tokens": 32,
+      "grader": {
+        "type": "regex",
+        "pattern": "^\\s*[^\\s.]+(\\s+[^\\s.]+){4}\\.\\s*$"
+      }
+    },
+    {
+      "id": "if-json-capital",
+      "category": "instruction",
+      "prompt": "Reply with a JSON object only, with the keys \"city\" and \"country\", naming the capital city of Japan.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "json_fields",
+        "fields": {
+          "city": "Tokyo",
+          "country": "Japan"
+        }
+      }
+    },
+    {
+      "id": "if-backwards",
+      "category": "instruction",
+      "prompt": "Write the word banana backwards, in lowercase, and nothing else.",
+      "max_tokens": 16,
+      "grader": {
+        "type": "exact",
+        "answer": "ananab"
+      }
+    },
+    {
+      "id": "ex-invoice",
+      "category": "extraction",
+      "prompt": "Extract the fields invoice_number, vendor, date, total and currency from this text as a JSON object, with total as a number:\n\nInvoice 4471 from Northwind Traders, dated 2026-03-14, total 1,250.00 EUR.",
+      "max_tokens": 128,
+      "grader": {
+        "type": "json_fields",
+        "fields": {
+          "invoice_number": 4471,
+          "vendor": "Northwind Traders",
+          "date": "2026-03-14",
+          "total": 1250,
+          "currency": "EUR"
+        }
+      }
+    },
+    {
+      "id": "ex-meeting",
+      "category": "extraction",
+      "prompt": "Return a JSON object with the keys day, time, room and host for this message:\n\nMeeting moved: the design review is now on Thursday at 15:30 in Room B4, hosted by Priya.",
+      "max_tokens": 96,
+      "grader": {
+        "type": "json_fields",
+        "fields": {
+          "day": "Thursday",
+          "time": "15:30",
+          "room": "B4",
+          "host": "Priya"
+        }
+      }
+    },
+    {
+      "id": "ex-contact",
+      "category": "extraction",
+      "prompt": "Return a JSON object with the keys last_name, email and phone for this text:\n\nYou can reach Dr. Alan Ortiz at a.ortiz@example.org or +1-555-0142 (office).",
+      "max_tokens": 96,
+      "grader": {
+        "type": "json_fields",
+        "fields": {
+          "last_name": "Ortiz",
+          "email": "a.ortiz@example.org",
+          "phone": "+1-555-0142"
+        }
+      }
+    },
+    {
+      "id": "ex-order",
+      "category": "extraction",
+      "prompt": "Return a JSON object with item_count (the total number of units) and total (the total price as a number) for this order:\n\n2 x USB-C cable at 9.50 each and 1 x charger at 24.00.",
+      "max_tokens": 96,
+      "grader": {
+        "type": "json_fields",
+        "fields": {
+          "item_count": 3,
+          "total": 43
+        }
+      }
+    },
+    {
+      "id": "ex-flight",
+      "category": "extraction",
+      "prompt": "Return a JSON object shaped like {\"flight\": str, \"from\": {\"city\": str, \"code\": str}, \"to\": {\"city\": str, \"code\": str}} for this text:\n\nFlight QX218 departs Lisbon (LIS) at 07:05 and arrives in Oslo (OSL) at 11:40.",
+      "max_tokens": 128,
+      "grader": {
+        "type": "json_fields",
+        "fields": {
+          "flight": "QX218",
+          "from.code": "LIS",
+          "from.city": "Lisbon",
+          "to.code": "OSL",
+          "to.city": "Oslo"
+        }
+      }
+    },
+    {
+      "id": "ma-speed",
+      "category": "math",
+      "prompt": "A train travels 180 km in 2.5 hours. What is its average speed in km/h? Put the final number alone on the last line.",
+      "max_tokens": 256,
+      "grader": {
+        "type": "number",
+        "answer": 72
+      }
+    },
+    {
+      "id": "ma-percent",
+      "category": "math",
+      "prompt": "What is 17% of 2,400? Put the final number alone on the last line.",
+      "max_tokens": 256,
+      "grader": {
+        "type": "number",
+        "answer": 408
+      }
+    },
+    {
+      "id": "ma-discount",
+      "category": "math",
+      "prompt": "A shirt costs 40 after a 20% discount. What was the original price? Put the final number alone on the last line.",
+      "max_tokens": 256,
+      "grader": {
+        "type": "number",
+        "answer": 50
+      }
+    },
+    {
+      "id": "ma-marbles",
+      "category": "math",
+      "prompt": "Tom has three times as many marbles as Ana. Together they have 48. How many marbles does Tom have? Put the final number alone on the last line.",
+      "max_tokens": 256,
+      "grader": {
+        "type": "number",
+        "answer": 36
+      }
+    },
+    {
+      "id": "ma-sum",
+      "category": "math",
+      "prompt": "What is the sum of the integers from 1 to 50? Put the final number alone on the last line.",
+      "max_tokens": 256,
+      "grader": {
+        "type": "number",
+        "answer": 1275
+      }
+    },
+    {
+      "id": "re-feathers",
+      "category": "reasoning",
+      "prompt": "Which is heavier: a kilogram of feathers or a kilogram of steel?\nA) feathers\nB) steel\nC) they weigh the same\nD) it depends on the volume\nAnswer with the letter only.",
+      "max_tokens": 16,
+      "grader": {
+        "type": "choice",
+        "answer": "C"
+      }
+    },
+    {
+      "id": "re-syllogism",
+      "category": "reasoning",
+      "prompt": "All bloops are razzies and all razzies are lazzies. Are all bloops lazzies?\nA) yes\nB) no\nC) cannot be determined\nAnswer with the letter only.",
+      "max_tokens": 16,
+      "grader": {
+        "type": "choice",
+        "answer": "A"
+      }
+    },
+    {
+      "id": "re-weekday",
+      "category": "reasoning",
+      "prompt": "Today is Wednesday. What day of the week will it be 10 days from now?\nA) Friday\nB) Saturday\nC) Sunday\nD) Monday\nAnswer with the letter only.",
+      "max_tokens": 16,
+      "grader": {
+        "type": "choice",
+        "answer": "B"
+      }
+    },
+    {
+      "id": "re-bat-ball",
+      "category": "reasoning",
+      "prompt": "A bat and a ball cost 1.10 in total. The bat costs 1.00 more than the ball. How much does the ball cost?\nA) 0.10\nB) 0.05\nC) 0.15\nD) 0.01\nAnswer with the letter only.",
+      "max_tokens": 16,
+      "grader": {
+        "type": "choice",
+        "answer": "B"
+      }
+    },
+    {
+      "id": "re-sequence",
+      "category": "reasoning",
+      "prompt": "Which number comes next: 2, 6, 12, 20, 30, ?\nA) 42\nB) 40\nC) 44\nD) 36\nAnswer with the letter only.",
+      "max_tokens": 16,
+      "grader": {
+        "type": "choice",
+        "answer": "A"
+      }
+    },
+    {
+      "id": "tl-weather",
+      "category": "tools",
+      "prompt": "What's the weather in Paris, in celsius?",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Current weather for a city.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "celsius",
+                    "fahrenheit"
+                  ]
+                }
+              },
+              "required": [
+                "city",
+                "unit"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "create_event",
+            "description": "Add a calendar event.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "time": {
+                  "type": "string",
+                  "description": "HH:MM, 24-hour"
+                }
+              },
+              "required": [
+                "title",
+                "date",
+                "time"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "convert_currency",
+            "description": "Convert an amount between ISO 4217 currencies.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "from_currency": {
+                  "type": "string"
+                },
+                "to_currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amount",
+                "from_currency",
+                "to_currency"
+              ]
+            }
+          }
+        }
+      ],
+      "max_tokens": 128,
+      "grader": {
+        "type": "tool_call",
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris",
+          "unit": "celsius"
+        }
+      }
+    },
+    {
+      "id": "tl-event",
+      "category": "tools",
+      "prompt": "Put 'Dentist' in my calendar on 2026-11-03 at 09:30.",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Current weather for a city.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "celsius",
+                    "fahrenheit"
+                  ]
+                }
+              },
+              "required": [
+                "city",
+                "unit"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "create_event",
+            "description": "Add a calendar event.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "time": {
+                  "type": "string",
+                  "description": "HH:MM, 24-hour"
+                }
+              },
+              "required": [
+                "title",
+                "date",
+                "time"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "convert_currency",
+            "description": "Convert an amount between ISO 4217 currencies.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "from_currency": {
+                  "type": "string"
+                },
+                "to_currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amount",
+                "from_currency",
+                "to_currency"
+              ]
+            }
+          }
+        }
+      ],
+      "max_tokens": 128,
+      "grader": {
+        "type": "tool_call",
+        "name": "create_event",
+        "arguments": {
+          "title": "Dentist",
+          "date": "2026-11-03",
+          "time": "09:30"
+        }
+      }
+    },
+    {
+      "id": "tl-currency",
+      "category": "tools",
+      "prompt": "Convert 250 US dollars to euros.",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Current weather for a city.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "celsius",
+                    "fahrenheit"
+                  ]
+                }
+              },
+              "required": [
+                "city",
+                "unit"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "create_event",
+            "description": "Add a calendar event.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "time": {
+                  "type": "string",
+                  "description": "HH:MM, 24-hour"
+                }
+              },
+              "required": [
+                "title",
+                "date",
+                "time"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "convert_currency",
+            "description": "Convert an amount between ISO 4217 currencies.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "from_currency": {
+                  "type": "string"
+                },
+                "to_currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amount",
+                "from_currency",
+                "to_currency"
+              ]
+            }
+          }
+        }
+      ],
+      "max_tokens": 128,
+      "grader": {
+        "type": "tool_call",
+        "name": "convert_currency",
+        "arguments": {
+          "amount": 250,
+          "from_currency": "USD",
+          "to_currency": "EUR"
+        }
+      }
+    },
+    {
+      "id": "tl-weather-f",
+      "category": "tools",
+      "prompt": "How warm is it in Tokyo? Fahrenheit, please.",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Current weather for a city.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "celsius",
+                    "fahrenheit"
+                  ]
+                }
+              },
+              "required": [
+                "city",
+                "unit"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "create_event",
+            "description": "Add a calendar event.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "time": {
+                  "type": "string",
+                  "description": "HH:MM, 24-hour"
+                }
+              },
+              "required": [
+                "title",
+                "date",
+                "time"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "convert_currency",
+            "description": "Convert an amount between ISO 4217 currencies.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "from_currency": {
+                  "type": "string"
+                },
+                "to_currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amount",
+                "from_currency",
+                "to_currency"
+              ]
+            }
+          }
+        }
+      ],
+      "max_tokens": 128,
+      "grader": {
+        "type": "tool_call",
+        "name": "get_weather",
+        "arguments": {
+          "city": "Tokyo",
+          "unit": "fahrenheit"
+        }
+      }
+    },
+    {
+      "id": "tl-none",
+      "category": "tools",
+      "prompt": "What is 2 + 2? Answer directly without using any tool.",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Current weather for a city.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "celsius",
+                    "fahrenheit"
+                  ]
+                }
+              },
+              "required": [
+                "city",
+                "unit"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "create_event",
+            "description": "Add a calendar event.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "time": {
+                  "type": "string",
+                  "description": "HH:MM, 24-hour"
+                }
+              },
+              "required": [
+                "title",
+                "date",
+                "time"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "convert_currency",
+            "description": "Convert an amount between ISO 4217 currencies.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "from_currency": {
+                  "type": "string"
+                },
+                "to_currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amount",
+                "from_currency",
+                "to_currency"
+              ]
+            }
+          }
+        }
+      ],
+      "max_tokens": 32,
+      "grader": {
+        "type": "tool_call",
+        "name": null
+      }
+    },
+    {
+      "id": "code-slice",
+      "category": "coding",
+      "prompt": "What does Python print? print([0,1,2,3,4][1:4:2])\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "[1, 3]",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-alias",
+      "category": "coding",
+      "prompt": "What does Python print? a=[1]; b=a; b.append(2); print(a)\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "[1, 2]",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-copy",
+      "category": "coding",
+      "prompt": "What does Python print? a=[1]; b=a[:]; b.append(2); print(a)\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "[1]",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-bool",
+      "category": "coding",
+      "prompt": "What does Python print? print(bool([]), bool([0]))\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "False True",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-range",
+      "category": "coding",
+      "prompt": "What does Python print? print(sum(range(1, 6)))\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "15",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-dict",
+      "category": "coding",
+      "prompt": "What does Python print? d={\"x\":1,\"y\":2}; d[\"x\"]=3; print(list(d))\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "['x', 'y']",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-sort",
+      "category": "coding",
+      "prompt": "What does Python print? print(sorted([3,1,2,1]))\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "[1, 1, 2, 3]",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-set",
+      "category": "coding",
+      "prompt": "What does Python print? print(len(set([1,2,2,3,1])))\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "3",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-closure",
+      "category": "coding",
+      "prompt": "What does Python print? f=[lambda i=i:i for i in range(3)]; print([g() for g in f])\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "[0, 1, 2]",
+        "normalize": false
+      }
+    },
+    {
+      "id": "code-exception",
+      "category": "coding",
+      "prompt": "What does Python print?\ntry:\n    int(\"x\")\nexcept ValueError:\n    print(\"invalid\")\nelse:\n    print(\"valid\")\nReply with the exact printed output only, with no Markdown or explanation.",
+      "max_tokens": 64,
+      "grader": {
+        "type": "exact",
+        "answer": "invalid",
+        "normalize": false
+      }
+    }
+  ]
+}

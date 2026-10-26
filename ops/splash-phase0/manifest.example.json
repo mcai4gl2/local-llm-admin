@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "mlx-example-01",
+  "session": 1,
+  "order": "mlx-first",
+  "backend": "mlx",
+  "base_url": "http://127.0.0.1:18080",
+  "api_key_env": null,
+  "request_model": "example/qwen-27b",
+  "response_model": "example/qwen-27b",
+  "runtime": {
+    "version": "REPLACE_WITH_PINNED_VERSION",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "draft": null,
+  "model": {
+    "checkpoint": "example/Qwen3.8-27B",
+    "revision": "REPLACE_WITH_EXACT_REVISION",
+    "weights_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "tokenizer_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "template_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "quantization": "REPLACE_WITH_OBSERVED_QUANTIZATION"
+  },
+  "settings": {
+    "temperature": 0.0,
+    "seed": 0,
+    "reasoning": false
+  },
+  "context_tokens": 32768,
+  "kv_precision": "REPLACE_WITH_VERIFIED_KV_PRECISION",
+  "cache_policy": "isolated",
+  "concurrency": 1,
+  "repeats": 5,
+  "warmups": 1,
+  "deadline_s": 300.0,
+  "corpus_version": "example-only-not-a-qualification-corpus",
+  "corpus_sha256": "4f52e98f2061176742e7dcf5a7c7f3027157f88cd3aef47e668cb9d91c063454",
+  "cases": [
+    {
+      "id": "short-example",
+      "category": "short",
+      "kind": "fresh",
+      "max_tokens": 512,
+      "messages": [
+        {
+          "role": "user",
+          "content": "Explain how a bounded queue handles backpressure. Give examples and discuss failure recovery."
+        }
+      ],
+      "primary": false
+    }
+  ],
+  "rate_metric": "client_output_wall_tok_s",
+  "evidence": {
+    "preflight_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "cache_control": "REPLACE_WITH_VERIFIED_CACHE_ISOLATION",
+    "native_timing_audit_sha256": null
+  }
+}
