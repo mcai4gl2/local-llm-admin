@@ -12,6 +12,32 @@ uv sync --all-extras
 .venv/bin/ruff check src tests && .venv/bin/mypy src
 ```
 
+### Private denylist setup
+
+The private pattern list is supplied separately; it must never be committed to this public
+repository. Copy it into the ignored workspace directory inside the devcontainer:
+
+```bash
+mkdir -p .private
+install -m 600 /path/to/private/public-denylist.txt .private/public-denylist.txt
+```
+
+On each container start, the devcontainer links
+`~/.config/local-llm-admin/public-denylist.txt` to this workspace copy, preserving an existing
+file or link. The patterns survive container rebuilds because `.private/` is in the mounted
+workspace. After the first copy, reopen the container or create the link in the current one:
+
+```bash
+mkdir -p "$HOME/.config/local-llm-admin"
+ln -s "$PWD/.private/public-denylist.txt" "$HOME/.config/local-llm-admin/public-denylist.txt"
+uv run python scripts/check_public.py --patterns-file ~/.config/local-llm-admin/public-denylist.txt --git .
+```
+
+Skip the `ln` command if a file or link already exists at that path. The pre-commit denylist
+hook permits an absent list for contributors; the required scan above fails if it is absent.
+GitHub Actions receives its separate copy through the `PUBLIC_DENYLIST` repository secret;
+keep that secret and the private source in sync when patterns change.
+
 ## Run
 
 ```bash

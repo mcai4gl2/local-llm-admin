@@ -310,3 +310,40 @@ def test_m4_settings_are_bounded(field, value):
 
     with pytest.raises(ValidationError):
         Settings(**{field: value})
+
+@pytest.mark.parametrize("output,status", [
+    ("", "succeeded"),
+    ("deferred mlx-server.log active-writer 73400320\n", "succeeded"),
+    ("error mlx-server.log rename-failed\n", "failed"),
+])
+async def test_completion_before_submission_returns_preserves_both_records(
+    maint, monkeypatch, output, status
+):
+    completed = []
+
+    async def finish_before_return(argv):
+        job = {"id": f"fast-{len(completed)}", "action": "rotate-logs", "status": status}
+        completed.append(job)
+        # Force the worker completion hook before on_tick can save submission metadata.
+        maint.on_job_complete(job)
+        return job
+
+    monkeypatch.setattr(maint.control, "rotate_logs", finish_before_return)
+    monkeypatch.setattr(maint.control.runner, "get", lambda job_id: {"output": output, "status": status})
+    await _tick(maint, engine="none", intent="off")
+    state = maint.control.store.get_kv(ROTATION_KEY)
+    assert state["day"] == "2026-10-01"
+    assert state["attempted_at"] == MORNING
+    assert state["outcome"] == status
+    assert state["result"] == parse_rotate_output(output)
+    assert state["finished"] == MORNING
+    await _tick(maint, engine="none", intent="off")
+    assert len(completed) == 1
+    if output.startswith("deferred"):
+        maint.clock_ctl.t += 3601
+        await _tick(maint, engine="none", intent="off")
+        assert len(completed) == 2
+        state = maint.control.store.get_kv(ROTATION_KEY)
+        assert state["reason"] == "retry"
+        assert state["attempted_at"] == MORNING + 3601
+        assert state["outcome"] == status

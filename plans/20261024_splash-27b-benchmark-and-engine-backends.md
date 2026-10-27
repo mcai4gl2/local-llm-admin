@@ -3,24 +3,23 @@ Overall Progress: 39%
 # Splash: prove the 27B speedup, then integrate another engine backend
 
 Date: 2026-10-24
-Status: The primary client timing matrix and fresh native emission comparison are complete
-for both checkpoints. Emission speed, p95 TTFT and completion criteria pass in the fresh
-series. The fixed 8K/32K replay/cache correctness pilot also passes; replay p95 latency
-remains unassessed. The separate reasoning/lifecycle series is complete: reasoning-on
-passes; the both-mode reasoning gate and MLX unload memory check fail, and stock Splash
-host reclamation is inconclusive. Original service restoration and owned cleanup are verified. Overall adoption is
-**inconclusive** while broader quality and secondary qualification remain open; backend
-integration and deployment stay gated. See the [native report](../ops/splash-phase0/native-comparison-report.md).
+Status: Phase 0 baseline feasibility accepted by the user on 2026-10-27. Further Phase 0
+experiments are deferred; their measured outcomes remain unchanged. Proceed with Phase 1
+shared backend development under the [focused implementation plan](20261027_splash-phase1-backend-contract.md).
+Production adoption and deployment remain separate decisions; MLX remains the default.
+The 39% figure retains the original checklist accounting, not a claim that all Phase 0
+qualification conditions passed.
 
 ## Summary
 
 Improve the speed of the existing Qwen3.8-27B workload by evaluating
 [incoai/Splash](https://github.com/incoai/splash) against the current MLX server on the
-same Mac. First deliver an isolated experiment and a measured go/no-go report. Full
-integration and the backend refactor depend on that report passing the gates below.
+same Mac. The isolated experiment and measured reports establish baseline feasibility. On 2026-10-27,
+the user chose to proceed with backend integration development and defer remaining Phase 0
+qualification; the earlier all-gates prerequisite is superseded for development only.
 A negative result is a valid completed experiment; keep MLX and retain the findings.
 
-If Splash qualifies, add it beside MLX and Strata as a separately managed engine.
+Develop Splash beside MLX and Strata as a separately managed, opt-in engine after Phase 1.
 Represent engine, model and runtime settings separately, and replace the repeated
 MLX/Strata branching with a small, typed backend registry. Preserve the existing
 single-engine policy, lifecycle job slot and stable LiteLLM endpoint.
@@ -33,8 +32,8 @@ single-engine policy, lifecycle job slot and stable LiteLLM endpoint.
 - Initial target: the currently used 27B model, including any locally selected derivative.
   The tracked registry includes both Qwen3.8-27B 4-bit and 8-bit; confirm the actual
   selected checkpoint and profile during preflight rather than assuming either.
-- Do not change the default engine based on upstream benchmark claims. Full backend integration
-  remains gated; no automatic rollout after a successful experiment.
+- Do not change the default engine based on upstream benchmark claims. Backend integration
+  development may proceed under the 2026-10-27 decision; live rollout requires separate approval.
 - Do not add an inference proxy, concurrent residency of full engines, a plugin loader,
   a universal model downloader, or a refactor of every sidecar. Flash-Next on Splash is a
   possible later experiment, not part of proving a faster 27B.
@@ -369,8 +368,10 @@ with that limitation rather than a general replacement recommendation. If sample
 incomplete or a model mismatch remains, decision = inconclusive. A failure stops full
 integration under this plan until the user chooses a revised scope.
 
-## Phase 1 — Shared backend contract, only after a pass
+## Phase 1 — Shared backend contract (development authorized 2026-10-27)
 
+The [focused Phase 1 plan](20261027_splash-phase1-backend-contract.md) is the current
+implementation sequence and supersedes the earlier all-gates prerequisite for development.
 Keep this a local, typed adapter design, not a framework. MLX remains the default.
 
 | Concept | Responsibility |
@@ -662,3 +663,13 @@ branch coverage; Ruff and strict mypy pass (66 source files). See the
 [report](../ops/splash-phase0/reclamation-report.md),
 [evidence](../ops/splash-phase0/reclamation-evidence.json) and
 [completed diagnostic plan](20261027_splash-stock-reclamation.md).
+
+## Scope decision — proceed beyond Phase 0, 2026-10-27
+
+The user accepted baseline feasibility and deferred further Phase 0 experiments. Development
+of Phases 1–2 may proceed without resolving every original adoption criterion. Historical
+failed/inconclusive/unassessed gates remain unchanged; production rollout is still separate.
+Follow the [Phase 1 implementation plan](20261027_splash-phase1-backend-contract.md): typed
+registry and existing-engine adapters, observation-based lifecycle planning, consumer
+migration and validation. No live change or extra benchmark run is part of that refactor.
+Phase 0 progress is committed as `7405b83`; unrelated working-tree changes were excluded.

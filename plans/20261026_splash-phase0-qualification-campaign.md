@@ -3,19 +3,17 @@ Overall Progress: 64%
 # Splash Phase 0 qualification campaign
 
 Date: 2026-10-26
-Status: Quality pilots, near-limit 32K context, collector overhead audits and the fresh
-native emission comparison and fixed 8K/32K replay/cache correctness pilot are complete. Both checkpoints pass the scoped emission speed
-and client latency criteria. Original service restoration and owned cleanup are verified.
-The separate reasoning/lifecycle series is now complete with failed/inconclusive conditions
-recorded below. Broader quality precision and remaining qualification stay open; adoption is inconclusive.
-Failed attempts remain separate from successful follow-up series.
+Status: Baseline feasibility accepted by the user on 2026-10-27. Further Phase 0
+experiments are deferred in favor of [Phase 1 development](20261027_splash-phase1-backend-contract.md).
+The 64% figure preserves the original checklist accounting. Failed, inconclusive and
+unassessed results remain as measured; this scope decision does not qualify general adoption.
+Historical gate-based integration restrictions below are superseded for repository development
+by this user decision. Production rollout/default changes still require a separate decision.
 
-The user resumed the next Phase 0 milestone on 2026-10-27. The fixed replay/cache pilot
-reached its declared terminal outcome; remaining conditions stay on the checklist below.
-
-The existing three-session client timing evidence remains frozen. This campaign keeps
-stock 8-bit and the selected modified 4-bit checkpoint separate. Integration and deployment
-remain gated by the original adoption criteria.
+The completed reports cover native emission/client latency, 32K and replay/cache correctness,
+reasoning/lifecycle and memory diagnostics. Both checkpoints remain separately identified.
+Phase 0 follow-up work is committed as `7405b83`. The unfinished checklist is a deferred
+backlog, not a prerequisite for beginning the backend contract. No new live test is scheduled.
 
 ## Implementation and validation
 
