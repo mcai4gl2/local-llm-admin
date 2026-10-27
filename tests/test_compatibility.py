@@ -310,3 +310,9 @@ async def test_mlx_requests_carry_no_chat_template_kwargs(server):
     for key in compat.CASES:
         await _run(server, key)
     assert server.requests and not any("chat_template_kwargs" in r for r in server.requests)
+
+
+async def test_adapter_metadata_selects_template_settings_without_engine_branch(server):
+    await _run(server, "plain", engine="fourth", model_id="served-model", template_kwargs=True)
+    assert server.requests[-1]["model"] == "served-model"
+    assert server.requests[-1]["chat_template_kwargs"] == {"enable_thinking": False}

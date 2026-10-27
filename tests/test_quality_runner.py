@@ -780,3 +780,62 @@ async def test_strata_refuses_benchmarks_and_other_scopes(strata_env, kind, scop
         await strata_env.start(kind, scope)
     assert err.value.code == 409 and "Strata" in err.value.message
     assert strata_env.control.runner.running() is None
+
+
+async def test_current_context_uses_adapter_metadata(strata_env, monkeypatch):
+    from dataclasses import replace
+    qr = strata_env
+    backend = qr.control.backends.get("strata")
+    original = backend.inference
+    monkeypatch.setattr(backend, "inference",
+                        lambda model=None: replace(original(model), context_field="custom_context"))
+    async def get(http, path):
+        return {"custom_context": 12345, "max_context": 32768}
+    monkeypatch.setattr(qr, "_get", get)
+    plan, _ = await qr._plan_run("compatibility", "current", None, False)
+    assert await qr.current_context(plan) == 12345
+
+
+async def test_registered_current_backend_quality_never_runs_mlx_commands(strata_env):
+    from dataclasses import replace
+
+    from local_llm_admin.backends import BackendRegistry, StrataBackend
+    qr = strata_env
+    class FourthCurrentBackend(StrataBackend):
+        @property
+        def spec(self):
+            return replace(super().spec, id="fourth", label="Fourth")
+        def observe(self):
+            return replace(super().observe(), backend="fourth")
+    qr.control.backends = BackendRegistry((
+        FourthCurrentBackend(qr.settings, qr.control.strata),
+        qr.control.backends.get("mlx"), qr.control.backends.get("comfyui"),
+    ))
+    run = await qr.start("compatibility", "current")
+    result = await _finish(qr, run)
+    assert result["status"] == "succeeded", result
+    assert qr.control.observe()["engine"] == "fourth"
+    assert not qr.control.mlx.engine_running()
+    assert result["cases"] and all(case["model"] == "fourth" for case in result["cases"])
+
+
+@pytest.mark.parametrize(("loaded", "engine", "message"), [
+    (False, "strata", "not loaded"),
+    (True, "mlx", "no longer owns"),
+])
+async def test_current_backend_readiness_refuses_loading_or_replaced_owner(
+    strata_env, monkeypatch, loaded, engine, message
+):
+    import httpx
+
+    from local_llm_admin.quality_runner import ModelLoadFailed
+    qr = strata_env
+    async def health(http, path):
+        return {"service": "strata", "loaded": loaded}
+    async def observed():
+        return {"engine": engine, "mlx_name": None, "generation": None}
+    monkeypatch.setattr(qr, "_get", health)
+    monkeypatch.setattr(qr, "_observe", observed)
+    async with httpx.AsyncClient(base_url="http://strata.test") as http:
+        with pytest.raises(ModelLoadFailed, match=message):
+            await qr._current_ready(http, "strata")

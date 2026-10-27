@@ -1,9 +1,9 @@
-Overall Progress: 0%
+Overall Progress: 100%
 
 # Splash Phase 1 — shared backend contract
 
 Date: 2026-10-27
-Status: Implementation plan ready; no implementation started. Phase 0 feasibility accepted
+Status: Complete; all six implementation packages are validated. Phase 0 feasibility accepted
 by the user; further experiments deferred. Current planning baseline: `f3802b8`.
 
 ## Decision and outcome
@@ -123,13 +123,13 @@ unknown IDs/ownership from assertions about what the old implementation already 
 Files: `tests/test_engine_plan.py`, `test_engines.py`, `test_control_strata.py`,
 `test_control_sidecars.py` and `test_engine_api.py`; reuse `tests/conftest.py` fake wrappers.
 
-- [ ] 🟥 Inventory existing assertions; add only missing cases for all existing engine-pair
+- [x] 🟩 Inventory existing assertions; add only missing cases for all existing engine-pair
   transitions/off, MLX in-engine switch, Strata default/explicit pack restart, same-target
   refusal, ComfyUI busy/unknown queue, forced stops and optional service restoration.
-- [ ] 🟥 Pin step labels/argv/order, optional flags, deadlines, `rollback_after`, rollback
+- [x] 🟩 Pin step labels/argv/order, optional flags, deadlines, `rollback_after`, rollback
   after target-readiness failure and refusal to restart the source before target exit.
   Include MLX Chat UI ownership with its API down, not just the API-server PID.
-- [ ] 🟥 Record persisted intent/history behavior, including plain `strata` intent versus
+- [x] 🟩 Record persisted intent/history behavior, including plain `strata` intent versus
   the actual observed pack used for rollback. Do not accidentally introduce a storage change
   by treating an existing lossy intent field as a new profile store.
 
@@ -147,16 +147,16 @@ Exit: existing behavior is pinned without production-code changes. Suggested com
 Files: new `src/local_llm_admin/backend_types.py`, `backends.py`, new
 `tests/test_backends.py`; compatibility re-exports in `engines.py` only as needed.
 
-- [ ] 🟥 Add failing tests for duplicate/unknown IDs, direct invalid targets, current enable
+- [x] 🟩 Add failing tests for duplicate/unknown IDs, direct invalid targets, current enable
   settings, model/pack validation, lifecycle deadlines and absent LLM capabilities. Assert
   unknown dispatch never builds an MLX command and disabled activation executes nothing.
-- [ ] 🟥 Add failing adapter tests using existing clients/fake transports for readiness,
+- [x] 🟩 Add failing adapter tests using existing clients/fake transports for readiness,
   wrapper command construction, Strata pack restart, MLX switch and inference/context
   metadata. Keep process observation separate from HTTP probing; unavailable data is unknown.
-- [ ] 🟥 Implement the neutral types, static registry and three adapters with a typed lookup
+- [x] 🟩 Implement the neutral types, static registry and three adapters with a typed lookup
   interface. Preserve existing client instances/transports and current Settings reads; no
   global registry, plugin discovery, additional model inventory or command executor.
-- [ ] 🟥 Add a test-only fourth adapter and demonstrate registered target parsing/lookup and
+- [x] 🟩 Add a test-only fourth adapter and demonstrate registered target parsing/lookup and
   plan inputs without adding production engine flags. Verify the import graph is acyclic.
 
 Run:
@@ -174,13 +174,13 @@ Exit: common contracts are usable alongside the old coordinator. Suggested commi
 Files: `src/local_llm_admin/engines.py`, `backend_types.py`, `backends.py`,
 `tests/test_engine_plan.py`, `tests/test_backends.py`.
 
-- [ ] 🟥 Add failing planner tests for the fourth adapter, ambiguous/unowned shared-port
+- [x] 🟩 Add failing planner tests for the fourth adapter, ambiguous/unowned shared-port
   listeners, conflicting ownership and unknown IDs. Require no target start while ownership
   is ambiguous; preserve existing recovery of verified known multi-engine conflicts.
-- [ ] 🟥 Replace growing `mlx_running`/`strata_running` argument lists and fallback dispatch
+- [x] 🟩 Replace growing `mlx_running`/`strata_running` argument lists and fallback dispatch
   with observation inputs plus typed adapter lookup. Keep resource-policy decisions and
   rollback in the planner; adapters construct only their own steps. Preserve `Transition`.
-- [ ] 🟥 Apply the characterization matrix to the new planner. Check all step order,
+- [x] 🟩 Apply the characterization matrix to the new planner. Check all step order,
   rollback boundary, queue confirmation, force and service-intent effects. Add the fourth
   adapter to pair tests without adding a coordinator branch. Keep temporary compatibility
   shims only until package 4 migrates their final caller.
@@ -201,18 +201,18 @@ Files: `src/local_llm_admin/control.py`, `app.py`, `mlx.py` only for shared-port
 needed by the new observation path; `tests/test_control*.py`, `test_engine_api.py`,
 `test_jobs.py`, `test_mlx.py` and `test_backends.py`. Keep `jobs.py` execution/storage intact.
 
-- [ ] 🟥 Add failing tests for slot contention, observation/preflight failure, stale/reused
+- [x] 🟩 Add failing tests for slot contention, observation/preflight failure, stale/reused
   generations and an owner changing before execution. Include known disabled-engine process
   ownership during activation: disabled means unavailable to start, not safe to ignore.
-- [ ] 🟥 Construct/inject the shared registry and migrate `EngineOpsBinding`, `engine()`,
+- [x] 🟩 Construct/inject the shared registry and migrate `EngineOpsBinding`, `engine()`,
   `observe()` and `exclusive_running()`. Keep the cheap synchronous observation path for
   the watchdog; offload blocking work from async routes. Revalidate the relevant generation
   before a destructive step and before start/rollback after stop. Unknown ownership blocks
   activation, never authorizes killing an unrelated process.
-- [ ] 🟥 Preserve claim-before-observation, existing drive/CLI lock checks, validation and
+- [x] 🟩 Preserve claim-before-observation, existing drive/CLI lock checks, validation and
   release-on-error. Use existing `Step` predicates/callbacks and `JobRunner`; do not create
   a second lifecycle executor or infer success from HTTP liveness.
-- [ ] 🟥 Test and preserve successful/failed/rolled-back/cancelled/interrupted job intent,
+- [x] 🟩 Test and preserve successful/failed/rolled-back/cancelled/interrupted job intent,
   job/history field shapes and original-engine restoration. Existing rows must round-trip
   without migration or rewriting. Remove the now-unused planner/binding compatibility shims.
 
@@ -231,23 +231,23 @@ Files: `src/local_llm_admin/app.py`, `chat.py`, `quality_runner.py`, `sidecars.p
 `watchdog.py`; minimal compatibility changes in `alerts.py`, `availability.py`, `logs.py`,
 `metrics.py` and UI files only where their actual consumers require them.
 
-- [ ] 🟥 Add failing resolver tests and preserve API response fields/badges for MLX,
+- [x] 🟩 Add failing resolver tests and preserve API response fields/badges for MLX,
   ComfyUI, Strata, loading, off, conflict and unavailable observations. Disabled status must
   retain its current no-HTTP/no-PID-probe behavior; local ownership checks needed for safe
   lifecycle activation belong to that control path, not every selector refresh.
-- [ ] 🟥 Route status and chat through common observations/inference metadata. Test exact
+- [x] 🟩 Route status and chat through common observations/inference metadata. Test exact
   upstream base URL/model/auth/settings for MLX and Strata, rejection for non-LLM/ambiguous
   states, stream cancellation and final usage. Keep current `ChatTarget`, profile defaults,
   request validation and direct HTTP streaming; never put credentials into public descriptors.
-- [ ] 🟥 Add failing quality-resolution tests, then migrate context/model/settings and
+- [x] 🟩 Add failing quality-resolution tests, then migrate context/model/settings and
   generation checks. Preserve MLX multi-model runs, Strata current-only scope, cancellation,
   deadlines, shutdown and refusal to restore over an external operator switch. Do not
   generalize all quality scheduling or add cross-engine runs during this refactor.
-- [ ] 🟥 Add failing policy tests, then resolve coexistence/recovery eligibility through
+- [x] 🟩 Add failing policy tests, then resolve coexistence/recovery eligibility through
   the registry. Preserve MLX allowlists, Strata/ComfyUI exclusivity, forced-stop intent and
   optional service restoration. Keep the same MLX-only watchdog restart evidence/grace/job
   checks; starting/released/recovering is not a crash signal for a new recovery loop.
-- [ ] 🟥 Audit log sources, process metrics, alert and availability consumers. Reuse the
+- [x] 🟩 Audit log sources, process metrics, alert and availability consumers. Reuse the
   common selected observation where needed, retaining legacy fields and existing availability
   denominator/telemetry attribution. Do not change ingest/deduplication or historical rollups.
 
@@ -266,17 +266,17 @@ scope and recovery behavior are preserved. Suggested commit:
 Files: changed implementation/tests, `docs/DESIGN.md`, this plan, parent progress and the
 current append-only devlog.
 
-- [ ] 🟥 Search remaining old planner calls and explicit engine branches. Remove unused
+- [x] 🟩 Search remaining old planner calls and explicit engine branches. Remove unused
   migration shims; keep intentional engine-specific payload parsing inside adapters and
   preserve compatibility exports still used externally. Do not turn every engine string
   comparison into a generic framework merely to make a search return zero results.
-- [ ] 🟥 Run the full quality gates below. Check new ownership/dispatch/rollback decisions
+- [x] 🟩 Run the full quality gates below. Check new ownership/dispatch/rollback decisions
   at 100% coverage and explicitly verify HTTP/probe counts and stream behavior. Fix actual
   failures; do not broaden testing into another live Phase 0 campaign.
-- [ ] 🟥 Update design/plan/devlog with final contracts, validation and deliberate behavior
+- [x] 🟩 Update design/plan/devlog with final contracts, validation and deliberate behavior
   changes. Scan tracked/new files with the private denylist, review the diff and stage only
   intended files. Leave implementation commits for explicit user authorization.
-- [ ] 🟥 Write the Phase 2 handoff: adapter extension points, wrapper/profile inputs,
+- [x] 🟩 Write the Phase 2 handoff: adapter extension points, wrapper/profile inputs,
   parent/native-child ownership, reciprocal guards and feature-gated registration. Record
   exactly what remains before Splash can be enabled; no live installation or deployment.
 
@@ -375,7 +375,51 @@ open-ended Phase 0 campaign before Phase 1 development.
 
 ## First next action
 
-Start package 1 by running the existing lifecycle suites and filling only missing
-characterization coverage. Then write the failing registry tests in package 2 before adding
-`backend_types.py` and `backends.py`. This request delivers the plan only; implementation
-has not begun.
+Phase 1 is complete. The next implementation scope is the opt-in Splash adapter and owning
+host wrapper described in the Phase 2 handoff. No commit or live action was performed.
+
+## Implemented contract and handoff
+
+Packages 1–5 are implemented on the existing checkout. The initial characterization suite
+passed 158 tests before production changes. The final contract is documented in
+[Design §13](../docs/DESIGN.md#13-shared-backend-contract-2026-10-27).
+
+The registry also owns adapter intent serialization, configured listener resources and
+current-engine quality readiness/model/compatibility metadata. These small additions were
+needed to migrate actual consumers: a test-only fourth backend now reaches status, intent
+and a current-only quality run without falling into MLX command execution. The existing
+lossy Strata intent is preserved without a storage change.
+
+Deliberate safety changes: unknown IDs fail explicitly; unowned or reused ownership blocks
+activation; HTTP-only health cannot authorize chat; queue cancellation and engine commands
+revalidate the observed generation; a failed command's unrecorded process is not killed
+during rollback. The older HTTP-only app chat fixture now starts the existing fake owning
+wrapper before expecting a stream.
+
+Execution guards add local process/socket observations before destructive commands and
+activation/restoration, plus generation capture after successful activation. Selector status
+does not acquire the full control listener check or poll disabled backends. No additional
+upstream inference request or per-token registry work was added. Mock transport tests pin
+Strata status/chat to the existing health + metrics requests and MLX chat to one health
+request.
+
+Phase 2 must implement the disabled Splash adapter, validated private profiles, pinned
+runtime/wrapper inventory, parent/native-child generation ownership, reciprocal wrapper
+guards, selector/log-source presentation and current-engine tests. Keep 32K, reasoning-on
+and GPU-sidecar exclusion as the initial profile. Validate aliases and authenticated gateway
+inference before live use. Phase 3 owns ingestion and the separately approved live rollout.
+No unresolved Phase 0 item has become a pass.
+
+Final quality-gate results and staging review are recorded below.
+
+## Final validation — 2026-10-27
+
+- Full suite in the devcontainer: **2,882 passed, one skipped; 98.15% coverage**.
+- Neutral contracts and registry/adapters: **100% statement/branch coverage**.
+- New pure planner, badges, intent, engine submission, execution ownership/generation
+  predicates, MLX listener identification and current-backend readiness: **100%**.
+- Ruff and strict mypy pass (51 source files); AGENTS.md and CLAUDE.md compare equal.
+- Existing chat/SSE/cancellation and persistence tests pass. Mock transports pin the
+  existing MLX and Strata status/chat request budgets.
+- Private denylist scan passes with zero hits across 23 patterns, including all new files.
+- Diff reviewed and intended changes staged; no commit, installation or live deployment.

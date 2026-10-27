@@ -437,3 +437,15 @@ async def test_chat_follows_strata(fake_strata, fake_comfy, mlx_health):
     assert seen[0].headers["authorization"] == "Bearer k-strata"
     assert json.loads(seen[0].content)["model"] == "qwen3.8-flash-next-q2_0"
     assert json.loads(seen[0].content)["max_tokens"] == 8192
+
+
+async def test_unowned_listener_is_unknown_and_chat_is_refused(eng, mlx_health, monkeypatch):
+    from local_llm_admin.mlx import MlxClient
+    c, _ = eng
+    monkeypatch.setattr(MlxClient, "engine_running", lambda self: True)
+    monkeypatch.setattr(MlxClient, "owned_listener_pid", lambda self, port: None)
+    status = (await c.get("/api/status")).json()
+    assert status["engine"]["active"] == "unknown"
+    assert status["state"] == "unknown"
+    result = await c.post("/api/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+    assert result.status_code == 409 and "unknown" in result.json()["detail"]

@@ -35,7 +35,9 @@ from . import quality as quality_mod
 from .alerts import AlertStore, Snapshot
 from .auth import COOKIE_NAME, LoginLimiter, SessionManager, csrf_ok, verify_password
 from .availability import AvailabilityRecorder, AvailabilityStore, summarize
-from .chat import STRATA_CHAT, ChatRequest, ChatTarget, stream_chat
+from .backend_types import resolve_observations
+from .backends import BackendUnavailable
+from .chat import ChatRequest, stream_chat
 from .comfy_outputs import (
     ID_RE,
     Entry,
@@ -58,7 +60,7 @@ from .download_store import DownloadStore
 from .downloads import DownloadError, DownloadService
 from .embed import QUERY_INSTRUCTION, EmbedClient, EmbedError, validate_embed, validate_rerank
 from .embed_store import EmbedStore
-from .engines import ComfyClient, StrataClient, badge_state, resolve_active
+from .engines import ComfyClient, StrataClient, observation_badge
 from .eval_graders import grade_response
 from .eval_judge import judge_target
 from .eval_stats import paired
@@ -90,7 +92,7 @@ from .logs import (
     tail_lines,
 )
 from .metrics import Sampler, window_seconds
-from .mlx import MlxClient, is_serving, parse_start_markers, validate_name
+from .mlx import MlxClient, parse_start_markers, validate_name
 from .performance_store import (
     PARSER,
     PERF_SOURCE,
@@ -300,11 +302,12 @@ def create_app(
         sidecars=sidecar_registry,
         strata=strata,
     )
-    # the metrics "engine process" tile follows whichever engine owns the GPU
-    sampler = Sampler(
-        settings,
-        mlx_pid=lambda: mlx.pid_from_file() or comfy.pid_from_file() or strata.pid_from_file(),
-    )
+    # The process tile follows the same unambiguous generation as lifecycle control.
+    def engine_pid() -> int | None:
+        generation = control.observe()["generation"]
+        return int(generation["pid"]) if generation else None
+
+    sampler = Sampler(settings, mlx_pid=engine_pid)
     usage = LiteLLMUsage(settings)
     db_path = settings.admin_data_dir / "admin.sqlite"
     events = IngestStore(db_path)
@@ -360,6 +363,7 @@ def create_app(
             store,
             alerts,
             history=decision_history,
+            backends=control.backends,
             prune_extra=[tts_history.prune, embed_history.prune],
         )
     )
@@ -434,6 +438,7 @@ def create_app(
         openapi_url=None,
     )
     app.state.control = control
+    app.state.backends = control.backends
     app.state.decision = decision
     app.state.sidecars = sidecar_registry
     app.state.tts = tts
@@ -562,16 +567,18 @@ def create_app(
     @app.get("/api/status")
     async def status() -> dict[str, Any]:
         job = runner.running()
-        st = await mlx.status(job_running=job is not None)
-        mlx_running = await asyncio.to_thread(mlx.engine_running)
-        comfy_st = await comfy.status()
-        # a deployment without Strata never probes its port or pid file
-        strata_st = await strata.status() if settings.strata_enabled else None
-        strata_running = bool(strata_st and strata_st["running"])
-        active = resolve_active(mlx_running, comfy_st["running"], strata_running)
-        st["state"] = badge_state(
-            st["state"], active, comfy_st["ready"], bool(strata_st and strata_st["ready"])
-        )
+        details = await control.backends.status_details(job_running=job is not None)
+        # Keep the existing public fields; normalized metadata stays internal.
+        st = dict(details["mlx"])
+        st.pop("ready", None)
+        st.pop("reference", None)
+        comfy_st = dict(details["comfyui"])
+        strata_st = dict(details["strata"]) if "strata" in details else None
+        if strata_st is not None:
+            strata_st.pop("reference", None)
+        observations = await asyncio.to_thread(control.backends.from_status, details)
+        active = resolve_observations(observations)
+        st["state"] = observation_badge(st["state"], observations)
         st["engine"] = {
             "active": active,
             "comfyui": comfy_st,
@@ -1706,28 +1713,13 @@ def create_app(
     async def chat(req: ChatRequest) -> StreamingResponse:
         if quality.active():
             raise HTTPException(409, "a quality run is in progress; test chat is paused")
-        if (await asyncio.to_thread(comfy.running)).running:
-            raise HTTPException(409, "ComfyUI owns the GPU; the LLM is stopped")
-        if settings.strata_enabled and (await asyncio.to_thread(strata.running)).running:
-            st = await strata.status()
-            if not st["ready"] or not st["model"]:
-                raise HTTPException(409, "Strata is still loading the model")
-            target = ChatTarget(
-                settings.strata_api_base, st["model"], settings.strata_api_key.get_secret_value()
-            )
-            return StreamingResponse(
-                stream_chat(
-                    settings, req, transport=chat_transport, defaults=STRATA_CHAT, target=target
-                ),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-            )
-        if not is_serving(await mlx.health()):
-            raise HTTPException(409, "model server is not serving")
-        name = (await asyncio.to_thread(mlx.active_env)).get("MLX_ACTIVE_NAME")
-        defaults = await asyncio.to_thread(profiles.chat_defaults, name)
+        try:
+            descriptor = await control.backends.resolve_inference(profiles.chat_defaults)
+        except BackendUnavailable as exc:
+            raise HTTPException(409, str(exc)) from None
         return StreamingResponse(
-            stream_chat(settings, req, transport=chat_transport, defaults=defaults),
+            stream_chat(settings, req, transport=chat_transport,
+                        defaults=dict(descriptor.defaults), target=descriptor.target),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

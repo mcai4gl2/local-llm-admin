@@ -25,9 +25,9 @@ from urllib.parse import urlsplit
 
 import psutil
 
+from .backend_types import resolve_observations
 from .config import Settings
 from .control import UNKNOWN, ControlService
-from .engines import resolve_active
 from .ingestion import IngestStore, error_hint
 from .mlx import MlxClient
 from .sidecars import SidecarSpec, read_intent, read_service_intent
@@ -279,12 +279,12 @@ class Diagnostics:
         )
 
     def _conflict(self) -> dict[str, Any]:
-        up = {
-            "MLX": self.mlx.engine_running(),
-            "ComfyUI": self.control.comfy.running().running,
-            "Strata": self.control.strata.running().running,
-        }
-        active = resolve_active(*up.values())
+        observations = self.control.backends.observe(include_disabled=True)
+        up = {self.control.backends.get(o.backend).spec.label: o.running for o in observations}
+        active = resolve_observations(observations)
+        if active == "unknown":
+            return _check("engine_conflict", "Engines", "unknown", "engine ownership is unknown",
+                          "Inspect the owning PID files and shared-port listener.")
         if active == "conflict":
             return _check(
                 "engine_conflict",

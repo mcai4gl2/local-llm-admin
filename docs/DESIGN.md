@@ -421,3 +421,82 @@ Decisions made during implementation (each is cheap to reverse):
 - **Log follow SSE** ends after 30 min. The browser's EventSource reconnects, and the follow resumes from the end of the file.
 - **Download summary** (§5.5) is per run (start, finish, failures, files requested) plus the latest curl progress line, because parallel downloads interleave their meters. `GET /api/downloads`; shown on the logs page for the download source.
 - **Login** needs `ADMIN_PASSWORD_HASH`, generated with `local-llm-admin-hash`. With no hash set, every login fails. With no `ADMIN_SESSION_SECRET`, sessions last only until the admin restarts.
+
+## 13. Shared backend contract (2026-10-27)
+
+Phase 1 of the [Splash integration plan](../plans/20261027_splash-phase1-backend-contract.md)
+introduces one static registry per ControlService/application. The registry wraps the
+existing injected MLX, ComfyUI and Strata clients and reads the current Settings on each
+lookup. MLX remains the default; Strata remains opt-in. There is no plugin discovery,
+second model inventory, new job executor, database migration or runtime installation.
+
+The neutral, standard-library-only contracts live in `backend_types.py`:
+`EngineTarget` (re-exported as `engines.Target`), `EngineSpec`, `EngineObservation`,
+`InferenceDescriptor`, `EngineBackend` and the planner's small `BackendLookup` protocol.
+Concrete adapters and `BackendRegistry` live in `backends.py`; `engines.py` never imports
+that concrete module. Targets retain their existing strings. The registry validates direct
+Python targets too, rejects duplicate/reserved/unknown IDs and refuses disabled activation.
+Off is a transition target; none, unknown and conflict are observation results.
+
+The pure transition planner consumes observations and typed adapter lookup. Adapters build
+their own argv/readiness steps; the planner retains sidecar policy, stop ordering,
+rollback boundaries and optional service restoration. The coordinator still claims the
+existing JobRunner slot before observation and preflight, and uses the same Step executor.
+MLX switches in-engine; changing a Strata pack stops and restarts it. Existing intent and
+history fields remain unchanged: Strata intent stays plain `strata`, while the observed
+pack is retained separately for rollback. Adapter intent serialization supplies the seam
+for a future backend profile. Old persisted MLX labels continue to round-trip.
+
+Process identity, resource ownership and serving readiness are distinct. An observation
+can be absent, starting, ready, released, recovering or unknown; unsupported information
+remains unknown. A generation uses PID plus creation time. PID-file timestamps reject a
+process created after the ownership file. The MLX adapter can identify a Chat UI listener
+with the API down. An unowned listener is never assumed to be MLX.
+
+Full control observations also check configured listener resources against verified
+generations, including disabled owners. A live PID file does not claim an unrelated process
+on the shared port. Restricted global socket visibility falls back to the known processes'
+socket tables and refuses remaining unowned listeners. Selector status reuses its existing
+details observations; disabled backends receive no status HTTP or PID probes.
+
+Before an engine command or ComfyUI queue cancellation, the coordinator rechecks ownership
+and generation. Before start or restoration it also requires resource release and an enabled
+target. A successful activation records the new generation before readiness polling.
+Rollback never restores the source before the target's mandatory exit wait. If a failed
+command leaves an unrecorded generation, rollback refuses to stop that generation and
+suspends recovery through the existing failed-rollback outcome. Verification uses additional
+local process/socket observations at execution boundaries; it adds no HTTP readiness loop.
+
+Status, chat, quality connections, health context/model fields, compatibility request
+metadata, sidecar exclusions, process metrics, diagnostics and watchdog eligibility use the
+shared registry. ComfyUI has no LLM inference capability. MLX model sweeps and Strata's
+current-only compatibility/eval scope are preserved. A test-only fourth backend exercises
+target parsing, transition planning, status, intent and current-engine quality without new
+engine booleans. Existing payloads, cancellation, SSE forwarding, usage ingestion,
+availability denominators, source attribution and historical rollups are preserved.
+Chat resolves connection/defaults metadata once before streaming; the descriptor stays
+internal and its repr excludes the credential-bearing ChatTarget.
+
+### Phase 2 handoff
+
+Implement a disabled-by-default Splash adapter and its owning host wrapper against these
+contracts. The adapter must supply validated private profile targets, live capabilities,
+ports/deadlines/resource policy, cheap ownership observations, bounded details and readiness,
+lifecycle steps, inference/context/model metadata, compatibility settings and intent
+serialization. The wrapper must supply generation-safe parent/native-child ownership and
+start/stop behavior. Include every owned generation in the observation's generation record
+before relying on it to authorize a stop; extend the typed contract if the wrapper requires
+a richer record. Keep command construction stable so execution guards can identify the
+adapter's start/switch/stop steps.
+
+Before enabling Splash, add wrapper tests, pinned runtime inventory, reciprocal exclusion
+guards in all owning wrappers, selector/log-source presentation and current-engine quality
+tests. Initially use a 32K reasoning-on profile with GPU sidecars excluded. Verify aliases
+and an authenticated gateway inference request before live use. Usage/log ingestion and a
+reviewable deploy/rollback/verification sequence remain Phase 3 work. No Phase 0 measurement
+has been rescored, and no installation, deployment or default-engine change occurs here.
+
+Phase 1 validation: 2,882 passed, one skipped; 98.15% coverage. Neutral contracts, registry/
+adapters and new ownership/planning decisions have 100% statement/branch coverage. Ruff,
+strict mypy, instruction-file comparison and private-pattern scanning pass. See the
+[implementation devlog](../devlogs/2026-10-27.md) for the completed handoff.

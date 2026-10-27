@@ -12,7 +12,7 @@ import json
 import os
 import re
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 import httpx
 import psutil
 
+from .backend_types import BackendLookup, EngineObservation, resolve_observations
+from .backend_types import EngineTarget as Target
 from .config import Settings
 from .jobs import Step
 from .mlx import _RECENT_WRITE_S, MlxClient, ProcessStatus, validate_name
@@ -37,16 +39,10 @@ STRATA_PACKS = ("Q2_0", "IQ2_XS", "IQ3_XXS", "IQ3_S")
 STRATA_MODEL_PREFIX = "qwen3.8-flash-next-"
 
 
-@dataclass(frozen=True)
-class Target:
-    kind: EngineKind
-    name: str | None = None
-
-
 def parse_target(raw: str) -> Target:
     """``off`` | ``comfyui`` | ``strata`` | ``strata:<pack>`` | ``mlx:<registered name>``."""
     if raw in ("off", "comfyui", "strata"):
-        return Target(raw)  # type: ignore[arg-type]
+        return Target(raw)
     if raw.startswith("mlx:"):
         return Target("mlx", validate_name(raw[4:]))
     if raw.startswith("strata:") and raw[7:] in STRATA_PACKS:
@@ -114,6 +110,18 @@ def badge_state(mlx_state: str, active: str, comfy_ready: bool, strata_ready: bo
         return "comfyui" if comfy_ready else "comfyui-starting"
     if active == "strata":
         return "strata" if strata_ready else "strata-starting"
+    return mlx_state
+
+
+def observation_badge(mlx_state: str, observations: Sequence[EngineObservation]) -> str:
+    if mlx_state in ("switching", "drive-missing"):
+        return mlx_state
+    active = resolve_observations(observations)
+    if active in ("conflict", "unknown"):
+        return active
+    selected = next((o for o in observations if o.backend == active), None)
+    if selected is not None and active != "mlx":
+        return active if selected.ready else f"{active}-starting"
     return mlx_state
 
 
@@ -289,7 +297,7 @@ class ComfyClient:
             http.post("/interrupt", json={}).raise_for_status()
 
     async def status(self) -> dict[str, Any]:
-        proc = self.running()
+        proc = await asyncio.to_thread(self.running)
         stats = await self.system_stats() if proc.running else None
         q = await self.queue() if stats else None
         return {
@@ -429,7 +437,7 @@ class StrataClient:
         return data if isinstance(data, dict) else None
 
     async def status(self) -> dict[str, Any]:
-        proc = self.running()
+        proc = await asyncio.to_thread(self.running)
         health = await self.get_json("/health") if proc.running else None
         ok = health is not None and health.get("service") == "strata"
         metrics = await self.get_json("/metrics") if ok else None
@@ -447,20 +455,11 @@ class StrataClient:
 
 
 class EngineOps(Protocol):
-    stop_timeout_s: float
-    ready_timeout_s: float
-    strata_ready_timeout_s: float
-    job_timeout_s: float
+    @property
+    def stop_timeout_s(self) -> float: ...
+    @property
+    def job_timeout_s(self) -> float: ...
 
-    def mlx_argv(self, action: str, name: str | None) -> list[str]: ...
-    def comfy_argv(self, action: str) -> list[str]: ...
-    def mlx_down(self) -> bool: ...
-    def comfy_down(self) -> bool: ...
-    def comfy_ready(self) -> bool: ...
-    def comfy_cancel_all(self) -> None: ...
-    def strata_argv(self, action: str, pack: str | None = None) -> list[str]: ...
-    def strata_down(self) -> bool: ...
-    def strata_ready(self) -> bool: ...
     def sidecar_argv(self, name: str, action: str) -> list[str]: ...
     def sidecar_down(self, name: str) -> bool: ...
     def sidecar_ready(self, name: str) -> bool: ...
@@ -485,65 +484,6 @@ class TransitionRefused(Exception):
         self.message = message
 
 
-def _stop_comfy(ops: EngineOps, optional: bool = False) -> list[Step]:
-    return [
-        Step(
-            "comfyui stop",
-            argv=ops.comfy_argv("stop"),
-            timeout_s=ops.job_timeout_s,
-            optional=optional,
-        ),
-        # never optional: nothing may start until the engine is confirmed down
-        Step("wait for :8188 to close", wait=ops.comfy_down, timeout_s=ops.stop_timeout_s),
-    ]
-
-
-def _stop_mlx(ops: EngineOps, optional: bool = False) -> list[Step]:
-    return [
-        Step(
-            "mlx-model stop",
-            argv=ops.mlx_argv("stop", None),
-            timeout_s=ops.job_timeout_s,
-            optional=optional,
-        ),
-        # never optional: nothing may start until the engine is confirmed down
-        Step("wait for MLX to exit", wait=ops.mlx_down, timeout_s=ops.stop_timeout_s),
-    ]
-
-
-def _stop_strata(ops: EngineOps, optional: bool = False) -> list[Step]:
-    return [
-        Step(
-            "strata stop",
-            argv=ops.strata_argv("stop"),
-            timeout_s=ops.job_timeout_s,
-            optional=optional,
-        ),
-        # never optional: nothing may start until the engine is confirmed down
-        Step("wait for Strata to exit", wait=ops.strata_down, timeout_s=ops.stop_timeout_s),
-    ]
-
-
-def _start_strata(ops: EngineOps, pack: str | None = None) -> list[Step]:
-    label = f"strata start {pack}" if pack else "strata start"
-    return [
-        Step(label, argv=ops.strata_argv("start", pack), timeout_s=ops.job_timeout_s),
-        Step(
-            "wait for Strata to be ready",
-            wait=ops.strata_ready,
-            timeout_s=ops.strata_ready_timeout_s,
-        ),
-    ]
-
-
-def _stop_engine(ops: EngineOps, kind: str, optional: bool = False) -> list[Step]:
-    if kind == "comfyui":
-        return _stop_comfy(ops, optional)
-    if kind == "strata":
-        return _stop_strata(ops, optional)
-    return _stop_mlx(ops, optional)
-
-
 def _stop_sidecar(ops: EngineOps, spec: SidecarSpec) -> list[Step]:
     return [
         Step(
@@ -558,18 +498,6 @@ def _stop_sidecar(ops: EngineOps, spec: SidecarSpec) -> list[Step]:
             timeout_s=ops.stop_timeout_s,
         ),
     ]
-
-
-def _start_comfy(ops: EngineOps) -> list[Step]:
-    return [
-        Step("comfyui start", argv=ops.comfy_argv("start"), timeout_s=ops.job_timeout_s),
-        Step("wait for ComfyUI to be ready", wait=ops.comfy_ready, timeout_s=ops.ready_timeout_s),
-    ]
-
-
-def _start_mlx(ops: EngineOps, name: str | None) -> list[Step]:
-    label = f"mlx-model start {name}" if name else "mlx-model start"
-    return [Step(label, argv=ops.mlx_argv("start", name), timeout_s=ops.job_timeout_s)]
 
 
 def _start_service(ops: EngineOps, spec: SidecarSpec) -> list[Step]:
@@ -600,70 +528,52 @@ def _start_service(ops: EngineOps, spec: SidecarSpec) -> list[Step]:
 def plan_transition(
     target: Target,
     *,
-    mlx_running: bool,
-    mlx_name: str | None,
-    comfy_running: bool,
-    comfy_queue: int | None,
+    observations: Sequence[EngineObservation],
+    registry: BackendLookup,
+    queues: Mapping[str, int | None],
     force: bool,
     ops: EngineOps,
     sidecar: SidecarSpec | None = None,
     services: Sequence[SidecarSpec] = (),
     restore: Sequence[SidecarSpec] = (),
-    strata_running: bool = False,
-    strata_pack: str | None = None,
 ) -> Transition:
-    """Ordered steps from the detected state to ``target``, plus rollback (D-C2).
+    """Pure transition planning over observations and adapter step builders.
 
-    ``comfy_queue`` is None when ComfyUI runs but its queue cannot be read: unknown is
-    never treated as empty, so stopping it then needs the same confirmation as queued work.
-
-    Rolling back to MLX without a known name runs ``mlx-model start``, which starts
-    ``MLX_ACTIVE_NAME``, the last active model (D-C5).
-
-    The running sidecar (M6/M7) is not an engine: it may run next to MLX models it allows,
-    never next to ComfyUI or Strata. Going to either stops it first; switching to a model it
-    does not allow needs ``force`` and stops it first. Rollback never restarts it.
-
-    Always-on services (M8) stop for ComfyUI and Strata (``EXCLUSIVE``) and for a forced
-    switch to a model they do not allow; leaving an exclusive engine for MLX or off restores
-    those meant to run (optional steps).
-
-    ``strata:<pack>`` while another (or an unknown) pack runs restarts Strata with it;
-    plain ``strata`` takes whichever pack runs, or the one ``bin/strata`` remembers.
+    Adapters validate references and construct only their own steps. Reservations,
+    resource policy, rollback boundaries and service restoration stay here.
     """
-    active = resolve_active(mlx_running, comfy_running, strata_running)
-    stop_comfy = comfy_running and target.kind != "comfyui"
-    repack = (
-        strata_running and target.kind == "strata" and target.name not in (None, strata_pack)
-    )
-    stop_strata = strata_running and (target.kind != "strata" or repack)
-    stop_mlx = mlx_running and target.kind != "mlx"
-    exclusive = target.kind in EXCLUSIVE
-    if stop_comfy and comfy_queue is None and not force:
-        raise TransitionRefused(
-            409,
-            "ComfyUI queue state is unknown (its API is not answering); confirm to stop it"
-            " and cancel any queued or running generation",
-        )
-    if stop_comfy and comfy_queue and not force:
-        raise TransitionRefused(
-            409,
-            f"ComfyUI has {comfy_queue} queued or running generation(s); confirm to cancel them",
-        )
+    registry.validate(target)
+    by_id: dict[str, EngineObservation] = {}
+    for observation in observations:
+        registry.get(observation.backend)  # unknown internal IDs are errors too
+        if observation.backend in by_id:
+            raise ValueError(f"duplicate observation: {observation.backend}")
+        by_id[observation.backend] = observation
+    active = resolve_observations(observations)
+    if active == "unknown":
+        raise TransitionRefused(409, "engine ownership is unknown; refusing lifecycle changes")
+    backend = registry.get(target.kind) if target.kind != "off" else None
+    policy = backend.spec if backend else None
+    exclusive = bool(policy and policy.exclusive)
+    model_sidecars = bool(policy and policy.model_sidecars)
+    running = [o for o in observations if o.running]
+    current = by_id.get(target.kind)
+    changed = bool(current and current.running and target.name is not None
+                   and current.reference != target.name)
+    restart = bool(changed and backend and backend.restart_on_change)
+    stopping = [o for o in running if o.backend != target.kind or restart]
     stop_sidecar = sidecar is not None and (
-        exclusive or (target.kind == "mlx" and not sidecar.allows(target.name))
+        exclusive or (model_sidecars and not sidecar.allows(target.name))
     )
-    if sidecar is not None and target.kind == "mlx" and not sidecar.allows(target.name) and not force:
+    if sidecar is not None and model_sidecars and not sidecar.allows(target.name) and not force:
         raise TransitionRefused(
-            409,
-            f"the {sidecar.label} sidecar is running and {target.name} is not allowed next to"
+            409, f"the {sidecar.label} sidecar is running and {target.name} is not allowed next to"
             " it; confirm to stop the sidecar first",
         )
-    blocked = [s for s in services if target.kind == "mlx" and not s.allows(target.name)]
+    blocked = [s for s in services if model_sidecars and not s.allows(target.name)]
     if blocked and not force:
         raise TransitionRefused(
-            409,
-            f"{blocked[0].noun} is running and {target.name} is not allowed next to it;"
+            409, f"{blocked[0].noun} is running and {target.name} is not allowed next to it;"
             " confirm to stop it first",
         )
     for_exclusive = list(services) if exclusive else []
@@ -673,72 +583,43 @@ def plan_transition(
         steps += _stop_sidecar(ops, sidecar)
     for spec in [*for_exclusive, *blocked]:
         steps += _stop_sidecar(ops, spec)
-    if stop_comfy:
-        if comfy_queue is None:
-            # the forced stop records that the queue was unknown and rechecks it first;
-            # an API that still does not answer must not block stopping the engine
-            steps.append(
-                Step(
-                    "cancel ComfyUI queue (queue state was unknown)",
-                    call=ops.comfy_cancel_all,
-                    optional=True,
-                )
-            )
-        elif comfy_queue > 0:
-            steps.append(Step("cancel ComfyUI queue", call=ops.comfy_cancel_all))
-        steps += _stop_comfy(ops)
-    if stop_strata:
-        steps += _stop_strata(ops)
-    if stop_mlx:
-        steps += _stop_mlx(ops)
+    for observation in stopping:
+        source = registry.get(observation.backend)
+        steps += source.stop_preparation(queues.get(observation.backend, 0), force)
+        steps += source.stop_steps()
     source_stopped_at = len(steps)
-    if target.kind == "mlx":
-        if not mlx_running:
-            steps += _start_mlx(ops, target.name)
-        elif mlx_name != target.name:
-            steps.append(
-                Step(
-                    f"mlx-model switch {target.name}",
-                    argv=ops.mlx_argv("switch", target.name),
-                    timeout_s=ops.job_timeout_s,
-                )
-            )
-    if target.kind == "comfyui" and not comfy_running:
-        steps += _start_comfy(ops)
-    if target.kind == "strata" and (not strata_running or repack):
-        steps += _start_strata(ops, target.name)
+    if backend is not None:
+        if current is None or not current.running or restart:
+            steps += backend.start_steps(target)
+        elif changed:
+            steps += backend.switch_steps(target)
     unrestored: list[str] = []
-    if (stop_comfy or stop_strata) and not exclusive:
+    leaving_exclusive = any(registry.get(o.backend).spec.exclusive for o in stopping)
+    if leaving_exclusive and not exclusive:
         for spec in restore:
-            if target.kind == "mlx" and not spec.allows(target.name):
+            if model_sidecars and not spec.allows(target.name):
                 unrestored.append(spec.name)
                 continue
             steps += _start_service(ops, spec)
     if not steps:
-        raise TransitionRefused(
-            409, f"{target.kind if target.kind != 'mlx' else target.name} is already active"
-        )
+        label = target.name if model_sidecars else target.kind
+        raise TransitionRefused(409, f"{label} is already active")
     rollback: list[Step] = []
-    if active in ("mlx", *EXCLUSIVE) and (target.kind not in (active, "off") or repack):
-        rollback = _stop_engine(ops, target.kind, optional=True)
-        if active == "mlx":
-            rollback += _start_mlx(ops, mlx_name)
+    if len(running) == 1 and backend is not None and stopping:
+        original = running[0]
+        source = registry.get(original.backend)
+        rollback = backend.stop_steps(optional=True)
+        rollback += source.start_steps(Target(original.backend, original.reference))
+        if source.spec.model_sidecars:
             for spec in for_exclusive:
                 rollback += _start_service(ops, spec)
-        elif active == "comfyui":
-            rollback += _start_comfy(ops)
-        else:
-            rollback += _start_strata(ops, strata_pack)
-    from_label = {"mlx": mlx_name, "comfyui": "comfyui", "strata": "strata", "conflict": "conflict"}.get(
-        active
+    selected = running[0] if len(running) == 1 else None
+    from_label = (
+        selected.reference if selected and registry.get(selected.backend).spec.model_sidecars
+        else selected.backend if selected else "conflict" if running else None
     )
-    to_label = target.name if target.kind == "mlx" else None if target.kind == "off" else target.kind
+    to_label = target.name if model_sidecars else target.kind if backend else None
     return Transition(
-        steps,
-        rollback,
-        source_stopped_at,
-        from_label,
-        to_label,
-        forced_stops=tuple(s.name for s in blocked),
-        unrestored=tuple(unrestored),
+        steps, rollback, source_stopped_at, from_label, to_label,
+        forced_stops=tuple(s.name for s in blocked), unrestored=tuple(unrestored),
     )

@@ -337,10 +337,11 @@ async def run_case(
 ) -> CompatResult:
     """``info``: ``tool_parser`` (from /health), ``vision`` (weights have a
     ``vision_config``), optionally ``model_id`` (default: MLX's active path) and
-    ``engine`` (``strata`` sends thinking in ``chat_template_kwargs``).
+    ``template_kwargs`` (send thinking in ``chat_template_kwargs``). Legacy
+    ``engine=strata`` inputs retain that setting.
     Cancellation propagates."""
     token = _MODEL_ID.set(info.get("model_id") or ACTIVE_MODEL_ID)
-    kw_token = _TEMPLATE_KWARGS.set(info.get("engine") == "strata")
+    kw_token = _TEMPLATE_KWARGS.set(bool(info.get("template_kwargs", info.get("engine") == "strata")))
     try:
         return await _RUNNERS[key](http, key, info, deadline_s)
     finally:

@@ -1,14 +1,13 @@
-Overall Progress: 39%
+Overall Progress: 57%
 
 # Splash: prove the 27B speedup, then integrate another engine backend
 
 Date: 2026-10-24
 Status: Phase 0 baseline feasibility accepted by the user on 2026-10-27. Further Phase 0
-experiments are deferred; their measured outcomes remain unchanged. Proceed with Phase 1
-shared backend development under the [focused implementation plan](20261027_splash-phase1-backend-contract.md).
+experiments are deferred; their measured outcomes remain unchanged. Phase 1 shared backend development is complete under the [focused implementation plan](20261027_splash-phase1-backend-contract.md).
 Production adoption and deployment remain separate decisions; MLX remains the default.
-The 39% figure retains the original checklist accounting, not a claim that all Phase 0
-qualification conditions passed.
+The 57% figure counts 13 of 23 parent checklist items, including the four implemented
+Phase 1 items; it does not rescore Phase 0 qualification conditions.
 
 ## Summary
 
@@ -384,19 +383,19 @@ Keep this a local, typed adapter design, not a framework. MLX remains the defaul
 | Inference capability | `ChatTarget`, public model aliases, request-setting translation, supported APIs/features and effective context; ComfyUI has no LLM capability |
 | Normalized observation | Backend/profile/model, process generation, running/ready/loading/released/recovering state, capabilities, optional metrics and telemetry source/coverage |
 
-- [ ] 🟥 Add characterization tests for current MLX/Strata/ComfyUI/off transitions and intent,
+- [x] 🟩 Add characterization tests for current MLX/Strata/ComfyUI/off transitions and intent,
   including failed stop/readiness, rollback boundaries, sidecar restoration and unknown
   listeners; retain all current behavior before changing the coordinator.
-- [ ] 🟥 Introduce a registry and adapters around existing clients. Migrate observation,
+- [x] 🟩 Introduce a registry and adapters around existing clients. Migrate observation,
   target parsing and transition construction first, then chat/quality/status consumers.
   Replace boolean parameters per engine with backend observations; do not add a growing
   list of `splash_running`, `splash_ready`, etc. Unknown backend IDs must fail explicitly,
   never fall through to MLX stop/start.
-- [ ] 🟥 Test engine-pair transitions parametrically, profile switches within an engine,
+- [x] 🟩 Test engine-pair transitions parametrically, profile switches within an engine,
   stale/reused PIDs, another engine on the same port, duplicate/conflicting ownership,
   cancellation and an external switch during a quality run. Then migrate callers to the
   shared interface without altering public target strings or existing stored identities.
-- [ ] 🟥 Resolve recovery and resource policy through capabilities: initially Splash excludes
+- [x] 🟩 Resolve recovery and resource policy through capabilities: initially Splash excludes
   GPU sidecars; readiness distinguishes alive from loaded/released/recovering. Keep
   automatic restart opt-in and avoid fighting Splash internal recovery. Preserve desired
   intent and prevent recovery during maintenance or lifecycle/quality jobs.
@@ -673,3 +672,17 @@ Follow the [Phase 1 implementation plan](20261027_splash-phase1-backend-contract
 registry and existing-engine adapters, observation-based lifecycle planning, consumer
 migration and validation. No live change or extra benchmark run is part of that refactor.
 Phase 0 progress is committed as `7405b83`; unrelated working-tree changes were excluded.
+
+## Phase 1 implementation — 2026-10-27
+
+The shared registry, existing-client adapters, observation-based planner, execution-boundary
+ownership guards and consumer migrations are implemented. Validation is complete; results are in the [focused plan](20261027_splash-phase1-backend-contract.md). The concrete extension
+contract and Phase 2 wrapper/profile/ownership handoff are in
+[Design §13](../docs/DESIGN.md#13-shared-backend-contract-2026-10-27). No new model-asset
+inventory, schema, runtime installation, benchmark campaign or deployment was introduced.
+Historical Phase 0 evidence and progress statements above remain historical.
+
+Phase 1 validation: 2,882 passed, one skipped; 98.15% coverage. Contracts, registry/adapters
+and new ownership/planning decisions have 100% statement/branch coverage. Ruff, strict mypy,
+instruction-file comparison and the private-pattern public scan pass. Changes are staged;
+no commit or live deployment was performed. Parent checklist progress is 13/23 (57%).

@@ -210,3 +210,70 @@ def test_in_flight_counter_is_authoritative_with_continuous_batching():
         "2026-09-29 06:00:09,000 - WARNING - Request failed: error=stream_closed_before_completion in_flight=0"
     )
     assert mlx.parse_server_log(lines).in_flight_count == 0
+
+
+@pytest.mark.parametrize(("listeners", "args", "expected"), [
+    ([], [], None),
+    ([(None, 8080)], ["mlx_vlm.server"], None),
+    ([(41, 8080), (42, 8080)], ["mlx_vlm.server"], None),
+    ([(41, 8080)], ["/opt/venv/bin/mlx_vlm.server"], 41),
+    ([(41, 8080)], ["python", "-m", "mlx_vlm.chat_ui"], 41),
+    ([(41, 8080)], ["python", "-m", "mlx_lm.server"], 41),
+    ([(41, 9999)], ["mlx_vlm.server"], None),
+    ([(41, 8080)], ["unrelated-server"], None),
+    ([(41, 8080)], ["python", "-m", "unrelated"], None),
+    ([(41, 8080)], ["python", "unrelated.py", "mlx_vlm.server"], None),
+])
+def test_listener_identity_requires_one_recognized_owner(monkeypatch, listeners, args, expected):
+    from types import SimpleNamespace
+
+    import psutil
+    connections = [SimpleNamespace(pid=pid, status=psutil.CONN_LISTEN,
+                                  laddr=SimpleNamespace(port=port)) for pid, port in listeners]
+    monkeypatch.setattr(psutil, "net_connections", lambda kind: connections)
+    monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(cmdline=lambda: args))
+    assert mlx.MlxClient.owned_listener_pid(8080) == expected
+
+
+def test_listener_identity_is_unknown_when_process_visibility_is_denied(monkeypatch):
+    import psutil
+    def denied(kind):
+        raise psutil.AccessDenied()
+    monkeypatch.setattr(psutil, "net_connections", denied)
+    assert mlx.MlxClient.owned_listener_pid(8080) is None
+
+
+def test_chat_ui_owner_can_be_read_without_global_socket_permission(monkeypatch):
+    from types import SimpleNamespace
+
+    import psutil
+    def denied(kind):
+        raise psutil.AccessDenied()
+    connection = SimpleNamespace(status=psutil.CONN_LISTEN, laddr=SimpleNamespace(port=7860))
+    owner = SimpleNamespace(pid=42, info={"cmdline": ["python", "-m", "mlx_vlm.chat_ui"]},
+                            net_connections=lambda kind: [connection])
+    monkeypatch.setattr(psutil, "net_connections", denied)
+    monkeypatch.setattr(psutil, "process_iter", lambda attrs: iter([owner]))
+    assert mlx.MlxClient.owned_listener_pid(7860) == 42
+
+
+@pytest.mark.parametrize("scenario", ("none", "not_listening", "denied", "ambiguous", "iteration_denied"))
+def test_restricted_chat_ui_ownership_remains_unknown_when_unproven(monkeypatch, scenario):
+    from types import SimpleNamespace
+
+    import psutil
+    def denied(*args, **kwargs):
+        raise psutil.AccessDenied()
+    connection = SimpleNamespace(status=psutil.CONN_LISTEN, laddr=SimpleNamespace(port=7860))
+    def owner(pid):
+        return SimpleNamespace(
+            pid=pid, info={"cmdline": ["mlx_vlm.chat_ui"]},
+            net_connections=denied if scenario == "denied" else
+                lambda kind: [] if scenario == "not_listening" else [connection],
+        )
+    unrelated = SimpleNamespace(pid=50, info={"cmdline": ["unrelated-server"]})
+    processes = [unrelated] if scenario == "none" else [owner(42), owner(43)] if scenario == "ambiguous" else [owner(42)]
+    monkeypatch.setattr(psutil, "net_connections", denied)
+    monkeypatch.setattr(psutil, "process_iter", denied if scenario == "iteration_denied"
+                        else lambda attrs: iter(processes))
+    assert mlx.MlxClient.owned_listener_pid(7860) is None

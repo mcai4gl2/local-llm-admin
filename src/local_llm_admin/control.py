@@ -12,22 +12,24 @@ import asyncio
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
-import psutil
-
 from . import sidecars as sidecars_mod
+from .backend_types import EngineObservation, EngineTarget, resolve_observations
+from .backends import BackendDisabled, BackendRegistry, build_registry
+from .backends import process_generation as process_generation
 from .config import Settings
 from .decision import DecisionClient
 from .engines import (
     ComfyClient,
     StrataClient,
+    Transition,
     TransitionRefused,
-    parse_target,
     plan_transition,
-    resolve_active,
 )
 from .inventory import build_remove_argv, removal_preview
 from .jobs import JobConflict, JobRunner, JobStorageError, JobStore, Step
@@ -59,53 +61,19 @@ class ControlError(Exception):
         self.message = message
 
 
-class EngineOpsBinding:
-    """``engines.EngineOps`` bound to this app's clients (argv via the owning CLIs only)."""
+class SidecarOpsBinding:
+    """The remaining sidecar operations used by the pure resource-policy planner."""
 
-    def __init__(
-        self,
-        settings: Settings,
-        mlx: MlxClient,
-        comfy: ComfyClient,
-        sidecars: SidecarRegistry,
-        strata: StrataClient,
-    ) -> None:
-        self._settings = settings
-        self._mlx = mlx
-        self._comfy = comfy
-        self._sidecars = sidecars
-        self._strata = strata
-        self.stop_timeout_s = settings.engine_stop_timeout_s
-        self.ready_timeout_s = settings.comfyui_ready_timeout_s
-        self.strata_ready_timeout_s = settings.strata_ready_timeout_s
-        self.job_timeout_s = settings.admin_job_timeout_s
+    def __init__(self, settings: Settings, sidecars: SidecarRegistry) -> None:
+        self._settings, self._sidecars = settings, sidecars
 
-    def mlx_argv(self, action: str, name: str | None) -> list[str]:
-        return build_command(self._settings.mlx_model_path, action, name)
+    @property
+    def stop_timeout_s(self) -> float:
+        return self._settings.engine_stop_timeout_s
 
-    def comfy_argv(self, action: str) -> list[str]:
-        return self._comfy.argv(action)
-
-    def mlx_down(self) -> bool:
-        return not self._mlx.engine_running()
-
-    def comfy_down(self) -> bool:
-        return self._comfy.down_sync()
-
-    def comfy_ready(self) -> bool:
-        return self._comfy.ready_sync()
-
-    def comfy_cancel_all(self) -> None:
-        self._comfy.cancel_all_sync()
-
-    def strata_argv(self, action: str, pack: str | None = None) -> list[str]:
-        return self._strata.argv(action, pack)
-
-    def strata_down(self) -> bool:
-        return self._strata.down_sync()
-
-    def strata_ready(self) -> bool:
-        return self._strata.ready_sync()
+    @property
+    def job_timeout_s(self) -> float:
+        return self._settings.admin_job_timeout_s
 
     def sidecar_argv(self, name: str, action: str) -> list[str]:
         return self._sidecars.argv(name, action)
@@ -120,17 +88,7 @@ class EngineOpsBinding:
         return self._sidecars.warmup(name)
 
 
-def process_generation(pid: int | None) -> dict[str, Any] | None:
-    """PID plus process creation time: a reused PID is a different generation."""
-    if pid is None:
-        return None
-    try:
-        return {"pid": pid, "started": psutil.Process(pid).create_time()}
-    except (psutil.Error, ValueError):
-        return None
-
-
-def intent_after(job: dict[str, Any]) -> str | None:
+def intent_after(job: dict[str, Any], registry: BackendRegistry | None = None) -> str | None:
     """Intended engine after a successful job; None for actions that leave it alone."""
     action, to_name = job["action"], job["to_name"]
     if action == "stop":
@@ -140,6 +98,15 @@ def intent_after(job: dict[str, Any]) -> str | None:
     if action == "engine":
         if to_name is None:
             return "off"
+        if registry is not None and to_name != job.get("name"):
+            try:
+                backend = registry.get(to_name)
+            except ValueError:
+                pass  # old rows use the MLX model label in to_name
+            else:
+                return backend.intent(EngineTarget(to_name, job.get("name")))
+        if registry is not None:
+            return f"mlx:{to_name}"
         return to_name if to_name in ("comfyui", "strata") else f"mlx:{to_name}"
     return None  # add (and later unlock) never change the intended engine
 
@@ -163,6 +130,7 @@ class ControlService:
         decision: DecisionClient | None = None,
         sidecars: SidecarRegistry | None = None,
         strata: StrataClient | None = None,
+        backends: BackendRegistry | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
@@ -174,7 +142,8 @@ class ControlService:
             settings, {"openjev": decision.transport} if decision else None
         )
         self.strata = strata or StrataClient(settings)
-        self.ops = EngineOpsBinding(settings, mlx, comfy, self.sidecars, self.strata)
+        self.backends = backends or build_registry(settings, mlx, comfy, self.strata)
+        self.ops = SidecarOpsBinding(settings, self.sidecars)
         # set when the database cannot record an outcome; blocks automatic recovery
         # for the life of this process even though nothing could be persisted
         self._unrecorded: str | None = None
@@ -267,7 +236,7 @@ class ControlService:
                         self._set_intent(UNKNOWN, "quality run not restored", job)
                         self._suspend(f"quality run (job {job['id']}) did not restore the engine")
                     return
-                target = intent_after(job)
+                target = intent_after(job, self.backends)
                 if target is None:
                     return
                 if job["status"] == "succeeded":
@@ -287,31 +256,115 @@ class ControlService:
 
     # --- observation -------------------------------------------------------
     def observe(self) -> dict[str, Any]:
-        """Which engine runs now, and its process generation."""
+        """Cheap synchronous monitoring snapshot; no HTTP or owning CLI invocation."""
+        return self._snapshot()[0]
+
+    def _snapshot(self) -> tuple[dict[str, Any], EngineObservation | None]:
         if not self.mlx.drive_mounted():
-            return {"engine": UNKNOWN, "mlx_name": None, "generation": None}
-        mlx_running = self.mlx.engine_running()
-        comfy = self.comfy.running()
-        strata = self.strata.running()
-        active = resolve_active(mlx_running, comfy.running, strata.running)
-        name: str | None = None
-        pid: int | None = None
-        if active == "mlx":
-            name = self.mlx.active_env().get("MLX_ACTIVE_NAME")
-            pid = self.mlx.pid_from_file()
-        elif active == "comfyui":
-            pid = comfy.pid
-        elif active == "strata":
-            pid = strata.pid
-        return {"engine": active, "mlx_name": name, "generation": process_generation(pid)}
+            return {"engine": UNKNOWN, "mlx_name": None, "generation": None}, None
+        observations = self.backends.observe(include_disabled=True)
+        active = resolve_observations(observations)
+        selected = next((o for o in observations if o.backend == active), None)
+        return {
+            "engine": active,
+            "mlx_name": selected.reference if selected and active == "mlx" else None,
+            "generation": dict(selected.generation) if selected and selected.generation else None,
+        }, selected
 
     def exclusive_running(self) -> str | None:
-        """``comfyui`` or ``strata`` when an engine that excludes every sidecar runs."""
-        if self.comfy.running().running:
-            return "comfyui"
-        if self.strata.running().running:
-            return "strata"
+        """Known or ambiguous exclusive ownership blocks sidecar activation."""
+        for backend in self.backends:
+            if backend.spec.exclusive and backend.observe().running:
+                return backend.spec.id
         return None
+
+    def _guard_transition(
+        self, plan: Transition, observations: Sequence[EngineObservation], target: EngineTarget
+    ) -> Transition:
+        """Add generation predicates at execution boundaries using the existing Step runner.
+
+        A newly started generation is captured before readiness polling, so rollback can
+        stop only that generation. A failed command that leaves an unrecorded process is
+        deliberately refused rather than granting permission to stop it.
+        """
+        expected = {o.backend: o for o in observations}
+        commands: dict[tuple[str, ...], tuple[str, str]] = {}
+        callbacks: dict[Callable[[], None], str] = {}
+        for backend in self.backends:
+            kind = backend.spec.id
+            if "queue" in backend.spec.operations:
+                for preparation in backend.stop_preparation(None, True):
+                    if preparation.call is not None:
+                        callbacks[preparation.call] = kind
+            references = ([EngineTarget(kind, expected[kind].reference)]
+                          if kind in expected and expected[kind].running else [])
+            if kind == target.kind:
+                references.append(target)
+            for step in backend.stop_steps():
+                if step.argv is not None:
+                    commands[tuple(step.argv)] = (kind, "stop")
+            for reference in references:
+                for step in backend.start_steps(reference):
+                    if step.argv is not None:
+                        commands[tuple(step.argv)] = (kind, "start")
+                if "switch" in backend.spec.operations and reference.name is not None:
+                    for step in backend.switch_steps(reference):
+                        if step.argv is not None:
+                            commands[tuple(step.argv)] = (kind, "switch")
+
+        def verify(kind: str, action: str) -> None:
+            current = self.backends.observe(include_disabled=True)
+            if resolve_observations(current) == "unknown":
+                raise RuntimeError("engine ownership is unknown at execution")
+            for observation in current:
+                previous = expected.get(observation.backend)
+                if observation.running and (
+                    previous is None or not previous.running
+                    or observation.generation != previous.generation
+                    or observation.reference is not None and observation.reference != previous.reference
+                ):
+                    raise RuntimeError(f"{observation.backend} generation changed before execution")
+            if action != "stop":
+                backend = self.backends.get(kind)
+                if not backend.spec.enabled:
+                    raise RuntimeError(f"the {backend.spec.label} engine is not enabled")
+                if any(o.running and (o.backend != kind or action == "start") for o in current):
+                    raise RuntimeError("an engine still owns resources before activation")
+
+        def capture(kind: str) -> None:
+            observation = self.backends.get(kind).observe()
+            if observation.running and observation.ownership != "verified":
+                raise RuntimeError(f"{kind} ownership is unknown after activation")
+            expected[kind] = observation
+
+        def guarded_callback(kind: str, callback: Callable[[], None]) -> None:
+            verify(kind, "stop")
+            callback()
+
+        def guard_steps(steps: list[Step], boundary: int = -1) -> tuple[list[Step], int]:
+            result: list[Step] = []
+            adjusted = 0
+            for index, step in enumerate(steps):
+                if index == boundary:
+                    adjusted = len(result)
+                command = commands.get(tuple(step.argv)) if step.argv is not None else None
+                if command:
+                    kind, action = command
+                    result.append(Step("verify engine ownership",
+                                       call=partial(verify, kind, action)))
+                if step.call is not None and step.call in callbacks:
+                    step = replace(step, call=partial(guarded_callback, callbacks[step.call], step.call))
+                result.append(step)
+                if command and command[1] != "stop":
+                    result.append(Step("record engine generation",
+                                       call=partial(capture, command[0])))
+            if boundary == len(steps):
+                adjusted = len(result)
+            return result, adjusted
+
+        steps, boundary = guard_steps(plan.steps, plan.rollback_after)
+        rollback, _ = guard_steps(plan.rollback)
+        return replace(plan, steps=steps, rollback=rollback, rollback_after=boundary)
 
     # --- startup -----------------------------------------------------------
     def reconcile(self) -> list[dict[str, Any]]:
@@ -337,8 +390,13 @@ class ControlService:
             return  # a job is deciding the intent right now
         try:
             if self.intent() is None:
-                observed = self.observe()
-                self._set_intent(adopted_intent(observed), "adopted")
+                observed, selected = self._snapshot()
+                intended = (
+                    self.backends.get(selected.backend).intent(
+                        EngineTarget(selected.backend, selected.reference)
+                    ) if selected else adopted_intent(observed)
+                )
+                self._set_intent(intended, "adopted")
                 log.info("adopted intended engine from %s", observed)
         finally:
             self.runner.release(claim)
@@ -434,7 +492,7 @@ class ControlService:
             if action in ("switch", "start"):
                 other = await asyncio.to_thread(self.exclusive_running)
                 if other is not None:
-                    label = "ComfyUI" if other == "comfyui" else "Strata"
+                    label = self.backends.get(other).spec.label
                     raise ControlError(
                         409, f"{label} is running; use the Engine control to switch to MLX"
                     )
@@ -443,8 +501,23 @@ class ControlService:
             if action in ("switch", "start"):
                 target = name or self.mlx.active_env().get("MLX_ACTIVE_NAME")
                 await self._check_sidecar_allows(target)
+            observations = await asyncio.to_thread(self.backends.observe, include_disabled=True)
+            if resolve_observations(observations) == "unknown":
+                raise ControlError(409, "engine ownership is unknown")
+            command = Step(
+                f"mlx-model {action} {name or ''}".strip(),
+                argv=build_command(self.settings.mlx_model_path, action, name),
+                timeout_s=self.settings.admin_job_timeout_s,
+            )
+            plan = self._guard_transition(
+                Transition([command], [], 0, self.mlx.active_env().get("MLX_ACTIVE_NAME"), name),
+                observations, EngineTarget("mlx", name),
+            )
             job = self._submitted(
-                lambda: self.runner.submit(action, name, source=source, claim=claim)
+                lambda: self.runner.submit_sequence(
+                    action, name=name, from_name=plan.from_label, to_name=name,
+                    steps=plan.steps, source=source, claim=claim,
+                )
             )
         finally:
             self.runner.release(claim)
@@ -601,26 +674,29 @@ class ControlService:
         self, target_raw: str, force: bool = False, *, source: str = "admin"
     ) -> dict[str, Any]:
         try:
-            target = parse_target(target_raw)
+            target = self.backends.parse(target_raw)
+        except BackendDisabled as exc:
+            raise ControlError(404, str(exc)) from None
         except ValueError:
             raise ControlError(
                 400, "target must be off, comfyui, strata, strata:<pack>, or mlx:<name>"
             ) from None
-        if target.kind == "strata" and not self.settings.strata_enabled:
-            raise ControlError(404, "the Strata engine is not enabled")
         claim = self._claim()
         try:
-            mlx_running = await asyncio.to_thread(self.mlx.engine_running)
-            comfy_running = (await asyncio.to_thread(self.comfy.running)).running
-            strata_running = (await asyncio.to_thread(self.strata.running)).running
-            # the running pack decides whether strata:<pack> is a restart or nothing to do
-            strata_pack = (await self.strata.status())["pack"] if strata_running else None
-            # drive always; mlx.lock only when mlx-model will be called
+            observations = await asyncio.to_thread(self.backends.observe, include_disabled=True)
+            mlx_running = any(o.backend == "mlx" and o.running for o in observations)
             await asyncio.to_thread(self._preflight, target.kind == "mlx" or mlx_running)
-            if target.kind == "mlx":
-                assert target.name is not None
-                await self._known_name(target.name)
-            q = await self.comfy.queue() if comfy_running else None
+            if target.kind != "off":
+                backend = self.backends.get(target.kind)
+                if "multi-model" in backend.spec.operations:
+                    targets = await asyncio.to_thread(backend.targets)
+                    if target not in targets:
+                        raise ControlError(404, "unknown model name")
+            observations = await self.backends.observed_details(observations, lifecycle=True)
+            queues: dict[str, int | None] = {}
+            for observation in observations:
+                if observation.running and "queue" in self.backends.get(observation.backend).spec.operations:
+                    queues[observation.backend] = await self.backends.get(observation.backend).queue_count()
             running_sidecars = await asyncio.to_thread(self.sidecars.running)
             if len(running_sidecars) > 1:
                 raise self._conflict(running_sidecars)
@@ -636,20 +712,20 @@ class ControlService:
             try:
                 plan = plan_transition(
                     target,
-                    mlx_running=mlx_running,
-                    mlx_name=self.mlx.active_env().get("MLX_ACTIVE_NAME") if mlx_running else None,
-                    comfy_running=comfy_running,
-                    comfy_queue=sum(q) if q is not None else None if comfy_running else 0,
+                    observations=observations,
+                    registry=self.backends,
+                    queues=queues,
                     force=force,
                     ops=self.ops,
                     sidecar=sidecar,
                     services=services,
                     restore=restore,
-                    strata_running=strata_running,
-                    strata_pack=strata_pack,
                 )
+            except BackendDisabled as exc:
+                raise ControlError(404, str(exc)) from None
             except TransitionRefused as exc:
                 raise ControlError(exc.code, exc.message) from None
+            plan = self._guard_transition(plan, observations, target)
             job = self._submitted(
                 lambda: self.runner.submit_sequence(
                     "engine",
@@ -705,13 +781,17 @@ class ControlService:
     def _sidecar_plan(
         self, spec: SidecarSpec, other: SidecarSpec | None, confirm: bool, pressure: str | None
     ) -> SidecarPlan:
-        mlx_running = self.mlx.engine_running()
-        name = self.mlx.active_env().get("MLX_ACTIVE_NAME") if mlx_running else None
+        observations = self.backends.observe(include_disabled=True)
+        if resolve_observations(observations) == "unknown":
+            raise ControlError(409, "engine ownership is unknown")
+        mlx_running = any(o.backend == "mlx" and o.running for o in observations)
+        name = next((o.reference for o in observations if o.backend == "mlx" and o.running), None)
         return plan_sidecar_start(
             spec=spec,
             other=other,
             confirm=confirm,
-            comfy_running=self.comfy.running().running,
+            comfy_running=False,
+            exclusive_engines=self.backends.exclusive_labels(observations),
             mlx_running=mlx_running,
             mlx_name=name,
             mlx_gb=self._mlx_estimate(name) if mlx_running else None,
@@ -720,7 +800,6 @@ class ControlService:
             wired_limit_gb=sidecars_mod.wired_limit_gb(),
             pressure=pressure,
             services=self.sidecars.services_running(),
-            strata_running=self.strata.running().running,
         )
 
     def _sidecar_start_steps(self, spec: SidecarSpec) -> list[Step]:
@@ -834,13 +913,17 @@ class ControlService:
             raise ControlError(404, f"the {name} service is not enabled") from None
 
     def _service_plan(self, spec: SidecarSpec, pressure: str | None) -> SidecarPlan:
-        mlx_running = self.mlx.engine_running()
-        name = self.mlx.active_env().get("MLX_ACTIVE_NAME") if mlx_running else None
+        observations = self.backends.observe(include_disabled=True)
+        if resolve_observations(observations) == "unknown":
+            raise ControlError(409, "engine ownership is unknown")
+        mlx_running = any(o.backend == "mlx" and o.running for o in observations)
+        name = next((o.reference for o in observations if o.backend == "mlx" and o.running), None)
         slot = self.sidecars.running()
         return plan_service_start(
             spec=spec,
             sidecar=slot[0] if slot else None,
-            comfy_running=self.comfy.running().running,
+            comfy_running=False,
+            exclusive_engines=self.backends.exclusive_labels(observations),
             mlx_running=mlx_running,
             mlx_name=name,
             mlx_gb=self._mlx_estimate(name) if mlx_running else None,
@@ -848,7 +931,6 @@ class ControlService:
             ram_gb=sidecars_mod.system_ram_gb(),
             wired_limit_gb=sidecars_mod.wired_limit_gb(),
             pressure=pressure,
-            strata_running=self.strata.running().running,
         )
 
     async def service_budget(self, name: str, pressure: str | None) -> SidecarPlan:
