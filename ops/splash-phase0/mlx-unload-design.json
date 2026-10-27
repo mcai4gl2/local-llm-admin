@@ -1,0 +1,66 @@
+{
+  "contract": "splash-mlx-unload-debug-1",
+  "campaign_sha256": "80e7bc6c185483dafa7109dde013b5021c0a50e402c853cda72d057fb0c3d275",
+  "source_app_sha256": "fa9a69353929219af82e71f7c8aa7c9ef8b4b1b2d93568fb43cac384c256afb1",
+  "fixed_app_sha256": "0ea4be4a1cf87e01365a02b55a7d40659f874e950b65ba902d9f6fbab1e5b697",
+  "patch_scope": "one-line cache-group-name snapshot before unload",
+  "source_tree_files": 1477,
+  "settings": {
+    "context_tokens": 32768,
+    "concurrency": 1,
+    "reasoning": false,
+    "temperature": 0,
+    "seed": 0,
+    "apc": "disabled",
+    "disk_cache": "disabled",
+    "gpu_sidecars": "stopped",
+    "metal_guideline_gib": 40
+  },
+  "windows": [
+    {
+      "cohort": "stock-8bit",
+      "order": [
+        "original",
+        "fixed"
+      ],
+      "budget_s": 2580
+    },
+    {
+      "cohort": "modified-4bit",
+      "order": [
+        "fixed",
+        "original"
+      ],
+      "budget_s": 2580
+    }
+  ],
+  "inference_requests": 8,
+  "launches": 4,
+  "unload_cycles": 8,
+  "duplicate_unloads": 4,
+  "explicit_post_observation_purges": 8,
+  "observation_offsets_s": [
+    2,
+    10,
+    30,
+    90
+  ],
+  "max_loaded_ready_s": 120,
+  "inference_deadline_s": 90,
+  "unload_deadline_s": 30,
+  "purge_deadline_s": 30,
+  "scope": "idle text model manual unload; automatic idle, active cancellation and deployment remain unqualified",
+  "confirmation": {
+    "dead_model_and_generator_weak_references": true,
+    "active_fraction_of_loaded_max": 0.1,
+    "original_cached_fraction_of_loaded_active_min": 0.5,
+    "original_rss_fraction_remaining_min": 0.8,
+    "fixed_cached_fraction_of_loaded_active_max": 0.1,
+    "fixed_rss_fraction_remaining_max": 0.5,
+    "post_explicit_purge_cached_fraction_max": 0.1,
+    "post_explicit_purge_rss_fraction_remaining_max": 0.5,
+    "repeated_cycles": 2,
+    "baseline_contradiction": "retain as falsification and stop; no unsupported fix claim"
+  },
+  "adoption_decision": "inconclusive; installed runtime and earlier failed lifecycle evidence unchanged"
+}

@@ -1,0 +1,473 @@
+{
+  "contract": "splash-replay-evidence-1",
+  "date": "2026-10-27",
+  "replay_pilot_gate": "pass",
+  "adoption_decision": "inconclusive",
+  "scope": "Fixed synthetic 8K/32K replay correctness and substantial reported shared-prefix reuse; descriptive client latency only.",
+  "public_design_sha256": "109a1601680508019159f16de7074cb5a18654f82de29f7c4ee1fad9ada83d9a",
+  "private_campaign_sha256": "87085bdbe9039c6d84bb8c532aed8e8e519d77a709998127b142a25c74d3712c",
+  "code_sha256": {
+    "bench.py": "361dd318aaf2f239bee33abeea3ca03e1fe52a894a85e09bb8b797c1aacaaa56",
+    "context_inputs.py": "312f0f4731ecbbb99199b099ed6a926c9e4dfafafc8ffbffb69496c9a71db030",
+    "context_validation.py": "50ae400f3f9a428b79811fc0d645032ed514a0c35f86319e993a7aa3690a05ca",
+    "replay_validation.py": "124eb3c139bf6f99c042c09909253559a23bc24b8e5c815589b69eac177687a1"
+  },
+  "tokenization_receipt_sha256": "5d1a080b5a167b20d8d9214422aa664da135200e05b927395eb34148b66baafd",
+  "windows": [
+    {
+      "cohort": "stock-8bit",
+      "context": "8k",
+      "session": 801,
+      "order": [
+        "mlx",
+        "splash"
+      ],
+      "status": "complete",
+      "attempted": 20,
+      "captured": 20,
+      "restored": true,
+      "review": {
+        "contract": "splash-replay-review-1",
+        "replay_gate": "pass",
+        "adoption_decision": "inconclusive",
+        "issues": [],
+        "long_requests": 18,
+        "cached_requests": 12,
+        "scope": "Fixed synthetic replay correctness and reported shared-prefix reuse; descriptive client latency only.",
+        "backends": {
+          "mlx": {
+            "prime": {
+              "requests": 3,
+              "median_ttft_s": 21.431945527001517,
+              "min_ttft_s": 21.38240913199843,
+              "max_ttft_s": 22.275040735999937,
+              "median_total_s": 23.5929761879961,
+              "min_cached_tokens": 0,
+              "max_cached_tokens": 0
+            },
+            "repeat": {
+              "requests": 3,
+              "median_ttft_s": 0.38788458199996967,
+              "min_ttft_s": 0.36076622499967925,
+              "max_ttft_s": 0.4936691370094195,
+              "median_total_s": 2.683372423009132,
+              "min_cached_tokens": 8004,
+              "max_cached_tokens": 8006
+            },
+            "extend": {
+              "requests": 3,
+              "median_ttft_s": 0.7978631330042845,
+              "min_ttft_s": 0.6927018410060555,
+              "max_ttft_s": 0.8008606460061856,
+              "median_total_s": 3.0091294610028854,
+              "min_cached_tokens": 8004,
+              "max_cached_tokens": 8006
+            }
+          },
+          "splash": {
+            "prime": {
+              "requests": 3,
+              "median_ttft_s": 15.076240933005465,
+              "min_ttft_s": 14.703750115004368,
+              "max_ttft_s": 15.259387611004058,
+              "median_total_s": 15.500580795996939,
+              "min_cached_tokens": 0,
+              "max_cached_tokens": 0
+            },
+            "repeat": {
+              "requests": 3,
+              "median_ttft_s": 0.2658091649936978,
+              "min_ttft_s": 0.19594291999237612,
+              "max_ttft_s": 0.2737499619979644,
+              "median_total_s": 0.8513077620009426,
+              "min_cached_tokens": 7968,
+              "max_cached_tokens": 8000
+            },
+            "extend": {
+              "requests": 3,
+              "median_ttft_s": 0.4266729899973143,
+              "min_ttft_s": 0.3467152450029971,
+              "max_ttft_s": 0.47834831300133374,
+              "median_total_s": 0.8162541439960478,
+              "min_cached_tokens": 7968,
+              "max_cached_tokens": 8000
+            }
+          }
+        }
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "0718e8539bdd87d957769b42ffdabd8fee3e040a515deb03d628a2009b002bfd",
+        "mac-audit/restoration-proof.json": "e1b7c9acd290c1e00b2de8925dc4fecfeb8e60a4894df51ce9af733bcde0e265",
+        "mac-audit/target-fingerprints-after.json": "e6701aef52de9359ce8bb851420aca9d81ee974254e1e964e2d58ff58b9df18d",
+        "sidecar-restoration-proof.json": "9d0c2fbc3d02bce713082b862a393c8a9c8d34b69530a55e75b64937c9a22baf",
+        "mac-audit/resources.jsonl": "7b7ef0a962662241e78b38ca3599ad1bdbbb98bb63c73632de648487db2c0530"
+      },
+      "private_runs_sha256": "6cae43ad069dca2b7faebd5b7103e6edffb07362c0afe2ad869248c0198ccbf7",
+      "thermal": {
+        "samples": 8,
+        "failed_observations": 0
+      },
+      "resources": {
+        "samples": 93,
+        "minimum_available_gib": 14.503036499023438,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 28.01123046875
+      }
+    },
+    {
+      "cohort": "modified-4bit",
+      "context": "8k",
+      "session": 802,
+      "order": [
+        "splash",
+        "mlx"
+      ],
+      "status": "complete",
+      "attempted": 20,
+      "captured": 20,
+      "restored": true,
+      "review": {
+        "contract": "splash-replay-review-1",
+        "replay_gate": "pass",
+        "adoption_decision": "inconclusive",
+        "issues": [],
+        "long_requests": 18,
+        "cached_requests": 12,
+        "scope": "Fixed synthetic replay correctness and reported shared-prefix reuse; descriptive client latency only.",
+        "backends": {
+          "mlx": {
+            "prime": {
+              "requests": 3,
+              "median_ttft_s": 21.59072095900774,
+              "min_ttft_s": 20.519741951997275,
+              "max_ttft_s": 21.667509313003393,
+              "median_total_s": 22.61403088500083,
+              "min_cached_tokens": 0,
+              "max_cached_tokens": 0
+            },
+            "repeat": {
+              "requests": 3,
+              "median_ttft_s": 0.2874037789879367,
+              "min_ttft_s": 0.2522442230110755,
+              "max_ttft_s": 0.3558823160128668,
+              "median_total_s": 1.6342469770024763,
+              "min_cached_tokens": 8003,
+              "max_cached_tokens": 8007
+            },
+            "extend": {
+              "requests": 3,
+              "median_ttft_s": 0.5945009190036217,
+              "min_ttft_s": 0.5736507319961675,
+              "max_ttft_s": 0.6485443559940904,
+              "median_total_s": 1.931075590007822,
+              "min_cached_tokens": 8003,
+              "max_cached_tokens": 8007
+            }
+          },
+          "splash": {
+            "prime": {
+              "requests": 3,
+              "median_ttft_s": 13.789061135001248,
+              "min_ttft_s": 13.665713836002396,
+              "max_ttft_s": 14.15509855900018,
+              "median_total_s": 14.150601715009543,
+              "min_cached_tokens": 0,
+              "max_cached_tokens": 0
+            },
+            "repeat": {
+              "requests": 3,
+              "median_ttft_s": 0.24943140998948365,
+              "min_ttft_s": 0.13983183099480812,
+              "max_ttft_s": 0.2738531270006206,
+              "median_total_s": 0.6158434629905969,
+              "min_cached_tokens": 7968,
+              "max_cached_tokens": 8000
+            },
+            "extend": {
+              "requests": 3,
+              "median_ttft_s": 0.3502969649998704,
+              "min_ttft_s": 0.32945886599191,
+              "max_ttft_s": 0.38761850498849526,
+              "median_total_s": 0.5423205699917162,
+              "min_cached_tokens": 7968,
+              "max_cached_tokens": 8000
+            }
+          }
+        }
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "80afd5ff638f09623172e6cf64af2d5ec42fddbd8dfc63bfd5e041f7771b9673",
+        "mac-audit/restoration-proof.json": "0a73d5eb5d6982d5d7e4d8b8a2f3bdd6a654cdd8e45c28a77ed061063ec4e6b0",
+        "mac-audit/target-fingerprints-after.json": "0fe9a9e63732025fe5c8ab041753200b6f490d01f417d345577a38f9b3233269",
+        "sidecar-restoration-proof.json": "3b06026ec4e31dbe052378646619147df6b3d49686e4857d29ec77a74bba9be1",
+        "mac-audit/resources.jsonl": "ea8319026e9b4c80e87db9bd0b3a803630340cb74726288f43c52879aad42892"
+      },
+      "private_runs_sha256": "faf838259cf83fd9bfcde826d070565bd843bfa14ef0eaf6ce3ad8ce516d998a",
+      "thermal": {
+        "samples": 7,
+        "failed_observations": 0
+      },
+      "resources": {
+        "samples": 80,
+        "minimum_available_gib": 16.371994018554688,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.489410400390625
+      }
+    },
+    {
+      "cohort": "stock-8bit",
+      "context": "32k",
+      "session": 803,
+      "order": [
+        "mlx",
+        "splash"
+      ],
+      "status": "complete",
+      "attempted": 20,
+      "captured": 20,
+      "restored": true,
+      "review": {
+        "contract": "splash-replay-review-1",
+        "replay_gate": "pass",
+        "adoption_decision": "inconclusive",
+        "issues": [],
+        "long_requests": 18,
+        "cached_requests": 12,
+        "scope": "Fixed synthetic replay correctness and reported shared-prefix reuse; descriptive client latency only.",
+        "backends": {
+          "mlx": {
+            "prime": {
+              "requests": 3,
+              "median_ttft_s": 95.07784725699457,
+              "min_ttft_s": 94.9089196260029,
+              "max_ttft_s": 95.45525141299004,
+              "median_total_s": 97.37585984299949,
+              "min_cached_tokens": 0,
+              "max_cached_tokens": 0
+            },
+            "repeat": {
+              "requests": 3,
+              "median_ttft_s": 0.5441565579967573,
+              "min_ttft_s": 0.5377057110017631,
+              "max_ttft_s": 0.5793146539945155,
+              "median_total_s": 3.360472143991501,
+              "min_cached_tokens": 31861,
+              "max_cached_tokens": 31863
+            },
+            "extend": {
+              "requests": 3,
+              "median_ttft_s": 1.1100394419918302,
+              "min_ttft_s": 1.0966771340026753,
+              "max_ttft_s": 1.2229406539991032,
+              "median_total_s": 3.902940961997956,
+              "min_cached_tokens": 31861,
+              "max_cached_tokens": 31863
+            }
+          },
+          "splash": {
+            "prime": {
+              "requests": 3,
+              "median_ttft_s": 67.27798148700094,
+              "min_ttft_s": 66.42722541499825,
+              "max_ttft_s": 67.6114588729979,
+              "median_total_s": 68.1173983070039,
+              "min_cached_tokens": 0,
+              "max_cached_tokens": 0
+            },
+            "repeat": {
+              "requests": 3,
+              "median_ttft_s": 0.25695995599380694,
+              "min_ttft_s": 0.24730802199337631,
+              "max_ttft_s": 0.35063394499593414,
+              "median_total_s": 1.1166141389985569,
+              "min_cached_tokens": 31840,
+              "max_cached_tokens": 31840
+            },
+            "extend": {
+              "requests": 3,
+              "median_ttft_s": 0.44584177898650523,
+              "min_ttft_s": 0.41417140398698393,
+              "max_ttft_s": 0.4659439559909515,
+              "median_total_s": 0.8601396439917153,
+              "min_cached_tokens": 31840,
+              "max_cached_tokens": 31840
+            }
+          }
+        }
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "fc8596c2d7b3d21ee8ae89a628a47e85563da58001b7a8ad9c45f38e452866fe",
+        "mac-audit/restoration-proof.json": "c7e582cc3236d397961311f0ee4d7257a24a5fc41e0c13719b26a630409f19bb",
+        "mac-audit/target-fingerprints-after.json": "e014e37200c678fe0560e1932d7a3133ed5f1cf89148be3d8ec3229f8b834325",
+        "sidecar-restoration-proof.json": "f68a0e3abbc89588f87457b16fd418c2316d5f41ff20ff022d3648f66f41d51f",
+        "mac-audit/resources.jsonl": "88e6e3b968266d7a0408af34221e38b2439f0fc70bbf13bf4428308a34548874"
+      },
+      "private_runs_sha256": "57807340cce75e31170e9b4a35673a66421cda820a9621f0d7ff512bc03cf727",
+      "thermal": {
+        "samples": 20,
+        "failed_observations": 0
+      },
+      "resources": {
+        "samples": 282,
+        "minimum_available_gib": 11.060806274414062,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 28.011703491210938
+      }
+    },
+    {
+      "cohort": "modified-4bit",
+      "context": "32k",
+      "session": 804,
+      "order": [
+        "splash",
+        "mlx"
+      ],
+      "status": "complete",
+      "attempted": 20,
+      "captured": 20,
+      "restored": true,
+      "review": {
+        "contract": "splash-replay-review-1",
+        "replay_gate": "pass",
+        "adoption_decision": "inconclusive",
+        "issues": [],
+        "long_requests": 18,
+        "cached_requests": 12,
+        "scope": "Fixed synthetic replay correctness and reported shared-prefix reuse; descriptive client latency only.",
+        "backends": {
+          "mlx": {
+            "prime": {
+              "requests": 3,
+              "median_ttft_s": 89.55619847899652,
+              "min_ttft_s": 89.21490249699855,
+              "max_ttft_s": 89.68653387499216,
+              "median_total_s": 90.82527103500615,
+              "min_cached_tokens": 0,
+              "max_cached_tokens": 0
+            },
+            "repeat": {
+              "requests": 3,
+              "median_ttft_s": 0.5534023240034003,
+              "min_ttft_s": 0.5294645050016697,
+              "max_ttft_s": 0.5627117520052707,
+              "median_total_s": 2.474850009995862,
+              "min_cached_tokens": 31860,
+              "max_cached_tokens": 31861
+            },
+            "extend": {
+              "requests": 3,
+              "median_ttft_s": 1.006892182995216,
+              "min_ttft_s": 0.951035979000153,
+              "max_ttft_s": 1.2107264730002498,
+              "median_total_s": 2.88124221599719,
+              "min_cached_tokens": 31860,
+              "max_cached_tokens": 31861
+            }
+          },
+          "splash": {
+            "prime": {
+              "requests": 3,
+              "median_ttft_s": 64.43702023700462,
+              "min_ttft_s": 64.43628110400459,
+              "max_ttft_s": 64.56401341600576,
+              "median_total_s": 64.91282447600679,
+              "min_cached_tokens": 0,
+              "max_cached_tokens": 0
+            },
+            "repeat": {
+              "requests": 3,
+              "median_ttft_s": 0.21107618098903913,
+              "min_ttft_s": 0.20052317500812933,
+              "max_ttft_s": 0.35533769299217965,
+              "median_total_s": 0.7208773890015436,
+              "min_cached_tokens": 31840,
+              "max_cached_tokens": 31840
+            },
+            "extend": {
+              "requests": 3,
+              "median_ttft_s": 0.42413271000259556,
+              "min_ttft_s": 0.37291984500188846,
+              "max_ttft_s": 0.4921816419955576,
+              "median_total_s": 0.6745562810101546,
+              "min_cached_tokens": 31840,
+              "max_cached_tokens": 31840
+            }
+          }
+        }
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "69aa7c9b4c80b825b73ba34354e949e654d50fa6d38edfe2549c70798774b308",
+        "mac-audit/restoration-proof.json": "510a577cf08a6e61aed7e53129859ea6c455b1ba93d1988e684eeb7e12774357",
+        "mac-audit/target-fingerprints-after.json": "9da3de40a7752b4912d216dbb21d65a19492d2dae4526ff5f6b7d4e6f124d446",
+        "sidecar-restoration-proof.json": "0b8182caf10363c6bbbe07952ad3b8684f71a46d2da47fbf25b467830eeb5ce8",
+        "mac-audit/resources.jsonl": "af3121d37a2c30af9e4eb9b3d482f92fb8dcd144d4e07a5f35a4fb0817e2c895"
+      },
+      "private_runs_sha256": "cecf8b8e765e4964c142eaa52376e30d010b3116cc289b7e11dda6bcb7934f72",
+      "thermal": {
+        "samples": 19,
+        "failed_observations": 0
+      },
+      "resources": {
+        "samples": 260,
+        "minimum_available_gib": 15.876937866210938,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.488800048828125
+      }
+    }
+  ],
+  "source_audit": {
+    "private_receipt_sha256": "0d22c6bbcf92d8e9fc826d00be2bfad346f802e94d0f60331ac15b81c1b2239e",
+    "installed_runtime_files_unchanged": 57,
+    "installed_mlx_python_source_files_unchanged": 1476,
+    "bootstrap_unchanged": true,
+    "isolated_source_checks": {
+      "mlx-original": {
+        "files": 1477,
+        "unchanged": true
+      },
+      "mlx-instrumented": {
+        "files": 1478,
+        "unchanged": true
+      },
+      "splash-original": {
+        "files": 35,
+        "unchanged": true
+      },
+      "splash-instrumented": {
+        "files": 36,
+        "unchanged": true
+      }
+    },
+    "launch_receipts": 82
+  },
+  "final_restoration": {
+    "real_readiness_proof_generation_matches": true,
+    "admin_loaded": true,
+    "preserved": true,
+    "active_jobs": 0,
+    "experiment_cleanup": true,
+    "sidecars_restored": true
+  },
+  "owned_cleanup": {
+    "restored_windows": 4,
+    "tunnel_closed": true,
+    "agent_socket_removed": true,
+    "previous_agent_environment_restored": true,
+    "host_agent_untouched": true
+  },
+  "unchanged_prior_publication_files": 53,
+  "limitations": [
+    "Three related synthetic histories per condition do not establish p95 latency, broad quality, independent-session bounds or a production workload distribution.",
+    "Cache usage counts are audited runtime reports; this is not isolated native decode or GPU timing.",
+    "Temperature/seed zero, reasoning off, one request at a time, 32K context and GPU sidecars stopped; other service mixes remain unqualified.",
+    "Earlier reports and measurement contracts are unchanged; no pooling, omitted failures, retries or statistical extension.",
+    "Cold means a fresh input-cache namespace after an excluded short warmup in an already loaded engine; process/OS cold-start and idle-resume behavior are separate.",
+    "The fixed extension asks for the same value already present in canonical assistant history; it checks continuation consistency, not independent retrieval of an unseen fact.",
+    "The parent replay p95 latency criterion remains unassessed; the fixed pilot has three trajectories per engine/condition and cannot close that latency gate."
+  ],
+  "replay_latency_gate": "unassessed"
+}

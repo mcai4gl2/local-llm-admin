@@ -5,7 +5,10 @@ Overall Progress: 39%
 Date: 2026-10-24
 Status: The primary client timing matrix and fresh native emission comparison are complete
 for both checkpoints. Emission speed, p95 TTFT and completion criteria pass in the fresh
-series. Original service restoration and owned cleanup are verified. Overall adoption is
+series. The fixed 8K/32K replay/cache correctness pilot also passes; replay p95 latency
+remains unassessed. The separate reasoning/lifecycle series is complete: reasoning-on
+passes; the both-mode reasoning gate and MLX unload memory check fail, and stock Splash
+host reclamation is inconclusive. Original service restoration and owned cleanup are verified. Overall adoption is
 **inconclusive** while broader quality and secondary qualification remain open; backend
 integration and deployment stay gated. See the [native report](../ops/splash-phase0/native-comparison-report.md).
 
@@ -533,3 +536,129 @@ The failure-reporting regression was fixed and frozen before any native-series r
 actual request inputs, schedule, thresholds and statistics remained unchanged.
 
 Full-project progress remains 9/23 (39%); the primary comparison task still includes secondary qualification. See the [new report](../ops/splash-phase0/native-comparison-report.md).
+
+## Replay/cache pilot result — 2026-10-27
+
+The fixed synthetic replay/cache pilot is **pass**; overall adoption remains
+**inconclusive**. The frozen four-window schedule retained 80 attempts
+and 80 responses, with cold prime, identical replay and fixed-history continuation.
+Every attempted maintenance window is independently restored and final owned cleanup passes.
+
+- stock-8bit / 8k: pass; 20 attempted, 20 captured; restored True.
+- modified-4bit / 8k: pass; 20 attempted, 20 captured; restored True.
+- stock-8bit / 32k: pass; 20 attempted, 20 captured; restored True.
+- modified-4bit / 32k: pass; 20 attempted, 20 captured; restored True.
+
+Exact prompt/tokenization and namespace receipts are retained privately; cold requests need
+zero reuse and repeated/extended requests need at least 80% shared-prefix reuse plus correct
+JSON answers. Original isolated sources and installed runtime fingerprints remain unchanged,
+including 1476 pinned MLX Python source files.
+All 53 previously committed experiment files remain byte-for-byte unchanged.
+Client latency is descriptive; this small pilot does not qualify p95 latency, native speed or
+broad quality. No measurement is pooled or previous report rewritten.
+
+Remaining Phase 0 work: replay p95 latency qualification, representative quality precision,
+concurrency 2/4, representative reasoning, deliberate cold/idle/restart cycles and memory release, any required selected
+sidecar mix and authenticated gateway inference. Any replay conditions without a pass remain
+open as shown above. Larger contexts remain outside the user's current 32K requirement.
+Integration/deployment remain gated; no default or installed source was changed.
+
+Validation: 55 new replay tests, 100% statement/branch reviewer coverage; full suite 2,685
+passed, one skipped, 98.10% application coverage; Ruff and strict mypy pass (63 source files).
+See the [replay report](../ops/splash-phase0/replay-report.md) and
+[evidence](../ops/splash-phase0/replay-evidence.json).
+
+## Reasoning and lifecycle results — 2026-10-27
+
+The fixed six-window series completed all 92 attempts/captures: 64 measured reasoning
+responses, eight excluded warmups and 20 lifecycle requests. All six original-service
+restorations, final source/import review and owned-helper/transport cleanup proofs pass.
+All 57 previously tracked experiment files remain byte-for-byte unchanged. No new swap,
+maximum pressure level 1 and minimum observed headroom 14.571 GiB across the windows.
+
+Reasoning on passes **32/32** strict checks (8/8 per engine/checkpoint). Reasoning off
+passes **5/32**: stock MLX 2/8, stock Splash 3/8, modified MLX and Splash 0/8. The fixed
+both-mode diagnostic gate is **fail**; wrong values and format violations are retained.
+These eight-case condition counts are not a general quality-precision or p95 result.
+Median reasoning-on first-answer latency: stock MLX 16.909 s / Splash 4.536 s; modified
+MLX 9.662 s / Splash 3.105 s. MLX does not emit explicit reasoning-token counts; they remain
+unknown. All four reasoning-on conditions pass their scoped correctness/mode check.
+
+Lifecycle: all **16 launches**, first inferences and owned stops pass, including three
+restart cycles per engine/checkpoint. Splash automatic idle release passes both checkpoints,
+with approximately 94%/90% lower runtime allocations and successful resumes in 6.354/3.191 s.
+Modified Splash passes its full supported lifecycle protocol. Stock Splash reclamation is
+**inconclusive**: after the initial stop, owned processes/listener were gone but shared-host
+available memory missed the frozen tolerance within 90 s. MLX manual unload clears loaded
+state and resumes successfully, but RSS falls only 0.065%/0.116% in the observation window,
+so the frozen memory-release criterion **fails** on both checkpoints. MLX automatic idle
+release is unsupported/unqualified. No OS-cold or GPU-allocation-leak claim is made.
+
+Both experiments are complete as measured experiments; their failed/inconclusive conditions
+are unresolved qualification blockers. Overall adoption remains **inconclusive**, with
+integration/deployment gated. Next work should investigate MLX unload RSS retention and the
+stock Splash host-reclamation observation before a separately frozen follow-up. Replay p95,
+quality precision, concurrency, actual authenticated gateway inference and any required
+selected sidecar mix remain open. No automatic retry, pooling or default change was made.
+See the [report](../ops/splash-phase0/reasoning-lifecycle-report.md) and
+[evidence](../ops/splash-phase0/reasoning-lifecycle-evidence.json).
+
+Validation for this milestone: final full suite **2,745 passed, one skipped**, 98.10%
+application coverage; 60 focused reviewer tests, 100% statement/branch coverage; Ruff and
+strict mypy pass (64 source files). Pinned publication formatting/JSON/conflict/size checks
+pass. Existing unrelated local setup/maintenance changes were left untouched; the full suite
+includes those working-tree fixes. No commit was created. Campaign remains 7/11 (64%) and
+the parent remains 9/23 (39%); failed/inconclusive qualification conditions remain blockers.
+
+## MLX unload cause and isolated fix confirmed — 2026-10-27
+
+A separate fixed diagnostic series confirms the manual-unload RSS cause: the unload loop
+holds its last resource-owning cache dictionary through GC and allocator purge, so model
+buffers enter the allocator cache only after that purge. After original unload, weak model/
+generator references are dead and active bytes are only 1,032, but cached memory remains
+27.483 GiB (stock) / 14.960 GiB (modified). An explicitly delayed purge removes it.
+
+A one-line source-pinned change snapshots only cache-group names. Across two cycles per
+variant/checkpoint, all four fixed unloads leave zero cached bytes before any diagnostic
+purge, with 90-second RSS 0.240–0.256 GiB for stock and 0.242–0.258 GiB for modified.
+Original 90-second RSS remains 27.812–28.023 / 15.290–15.500 GiB. All eight inference
+requests, repeated unload/idempotence/resume and owned stops pass. Both original-service
+restorations, final source/import checks and owned transport/helper cleanup pass. All 61
+prior tracked experiment files are unchanged; installed runtimes are unchanged.
+
+This resolves the cause and proves the fix in an isolated copy, while the earlier unmodified
+MLX lifecycle failure remains valid. No installed patch, deployment or commit was made.
+Active/draining requests, model replacement, APC-enabled unload, audio/vision and automatic
+idle release remain outside this fix's measured scope. Overall adoption remains inconclusive;
+other quality/replay/concurrency/gateway/coexistence and stock Splash reclamation conditions
+remain open. Full suite 2,754 passed, one skipped, 98.10% coverage; nine focused preparer
+regressions at 100% statement/branch coverage; Ruff and strict mypy pass (65 source files).
+See the [investigation report](../ops/splash-phase0/mlx-unload-report.md) and
+[patch preparer](../ops/splash-phase0/mlx_unload.py).
+
+## Stock Splash host-reclamation attribution — 2026-10-27
+
+Two independently restored default/GPU-only paired windows, with reversed order, completed
+four launches, eight correct requests, four automatic idle releases/resumes and 56 whole-host
+snapshots. Both first-position launches miss the frozen 90-second available-memory threshold:
+gaps 10.968/11.919 GiB track active-page increases 10.957/11.917 GiB, while wired deltas are
+only 0.012/0.010 GiB with no matching anonymous/compressor increase. Both second-position
+launches pass from lower inherited baselines. Disabling ANE does not prevent the gap.
+Pressure-query free remains 92–93% before/after shutdown. This supports active file-backed
+page classification as the main explanation, without uniquely identifying an owner or
+proving the absence of leaks under pressure. Restricted RSS/USS remains explicitly unknown.
+
+All owned stops/listeners, independent service restorations, final source review and helper/
+transport cleanup pass. All 65 earlier tracked experiment files and installed runtimes are
+unchanged. Pressure level never exceeds 1, new swap is zero, minimum observed available
+headroom is 14.853 GiB. No runtime patch, production default change, deployment or commit.
+The original and follow-up reclamation gates remain **inconclusive**. Define a prospective
+host-reclamation contract before fresh qualification; do not rescore the frozen evidence.
+Quality precision, replay p95, concurrency, authenticated gateway inference and any required
+sidecar mix remain open. Campaign stays 7/11 (64%); parent stays 9/23 (39%).
+
+Validation: 2,784 passed, one skipped, 98.11% coverage; 30 focused tests at 100% statement/
+branch coverage; Ruff and strict mypy pass (66 source files). See the
+[report](../ops/splash-phase0/reclamation-report.md),
+[evidence](../ops/splash-phase0/reclamation-evidence.json) and
+[completed diagnostic plan](20261027_splash-stock-reclamation.md).
