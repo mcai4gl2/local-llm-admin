@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
@@ -38,6 +39,28 @@ class EngineSpec:
 
 
 @dataclass(frozen=True)
+class OwnedProcess:
+    """One already-verified member; adapters establish executable/root ownership."""
+
+    pid: int
+    started: float
+    executable: str = field(repr=False)
+    role: Literal["controller", "native"]
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.pid) is not int
+            or self.pid <= 0
+            or isinstance(self.started, bool)
+            or not math.isfinite(self.started)
+            or self.started <= 0
+            or not self.executable.startswith("/")
+            or self.role not in ("controller", "native")
+        ):
+            raise ValueError("invalid owned process generation")
+
+
+@dataclass(frozen=True)
 class EngineObservation:
     backend: str
     reference: str | None = None
@@ -47,10 +70,34 @@ class EngineObservation:
     ownership: Literal["verified", "unknown"] = "unknown"
     # Identity and serving readiness are independent; HTTP alone cannot grant ownership.
     identity: Literal["verified", "unknown"] = "unknown"
+    processes: tuple[OwnedProcess, ...] = ()
+    # Port-only evidence can be attributed to a verified registered owner.
+    listener_ports: tuple[int, ...] = ()
 
     @property
     def running(self) -> bool:
         return self.state != "absent"
+
+
+def owned_pids(observation: EngineObservation) -> tuple[int, ...]:
+    if observation.ownership != "verified":
+        return ()
+    if observation.processes:
+        return tuple(p.pid for p in observation.processes)
+    generation = observation.generation
+    return (int(generation["pid"]),) if generation else ()
+
+
+def generation_record(observation: EngineObservation) -> dict[str, Any] | None:
+    if observation.generation is None:
+        return None
+    result = dict(observation.generation)
+    if observation.processes:
+        result["processes"] = [
+            {"pid": p.pid, "started": p.started, "executable": p.executable, "role": p.role}
+            for p in sorted(observation.processes, key=lambda p: (p.role, p.pid))
+        ]
+    return result
 
 
 @dataclass(frozen=True)
@@ -60,6 +107,9 @@ class InferenceDescriptor:
     context_field: str = "loaded_context_size"
     current_only: bool = False
     model_field: str = "loaded_model"
+    health_path: str = "/health"
+    profile_fingerprint: str | None = None
+    estimate_usage: bool = True
 
     def context(self, health: Any) -> int | None:
         value = health.get(self.context_field) if isinstance(health, dict) else None
@@ -68,7 +118,9 @@ class InferenceDescriptor:
         )
 
     def served_model(self, health: Any) -> str | None:
-        value = health.get(self.model_field) if isinstance(health, dict) else None
+        value = health
+        for part in self.model_field.split("."):
+            value = value.get(part) if isinstance(value, dict) else None
         return value if isinstance(value, str) and value else None
 
 
@@ -78,6 +130,7 @@ class EngineBackend(Protocol):
     @property
     def restart_on_change(self) -> bool: ...
     def validate(self, target: EngineTarget) -> None: ...
+    def preflight(self, target: EngineTarget) -> None: ...
     def targets(self) -> Sequence[EngineTarget]: ...
     def intent(self, target: EngineTarget) -> str: ...
     def observe(self) -> EngineObservation: ...

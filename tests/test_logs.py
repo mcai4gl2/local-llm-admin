@@ -277,3 +277,19 @@ def test_strata_engine_logs_without_an_app_folder(tmp_path):
 )
 def test_strata_warning_lines_have_a_level(line, level):
     assert logs.line_level(line) == level
+
+
+def test_splash_log_sources_are_feature_gated_and_allowlisted(tmp_path: Path) -> None:
+    from local_llm_admin.config import Settings
+    from local_llm_admin.logs import resolve_source, source_ids
+
+    settings = Settings(splash_root=tmp_path)
+    assert "splash" not in source_ids(settings)
+    with pytest.raises(KeyError):
+        resolve_source(settings, "splash")
+    settings.splash_enabled = True
+    assert "splash" in source_ids(settings)
+    assert resolve_source(settings, "splash") == tmp_path / "logs/splash.log"
+    for value in ("splash/../../etc/splash.env", "splash:secret", "splash-native/secret"):
+        with pytest.raises(KeyError):
+            resolve_source(settings, value)

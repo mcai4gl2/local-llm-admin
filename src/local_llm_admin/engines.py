@@ -121,6 +121,8 @@ def observation_badge(mlx_state: str, observations: Sequence[EngineObservation])
         return active
     selected = next((o for o in observations if o.backend == active), None)
     if selected is not None and active != "mlx":
+        if selected.state in ("released","recovering"):
+            return f"{active}-{selected.state}"
         return active if selected.ready else f"{active}-starting"
     return mlx_state
 
@@ -616,9 +618,15 @@ def plan_transition(
     selected = running[0] if len(running) == 1 else None
     from_label = (
         selected.reference if selected and registry.get(selected.backend).spec.model_sidecars
+        else registry.get(selected.backend).intent(Target(selected.backend,selected.reference))
+        if selected and "profiles" in registry.get(selected.backend).spec.operations
         else selected.backend if selected else "conflict" if running else None
     )
-    to_label = target.name if model_sidecars else target.kind if backend else None
+    to_label = (
+        target.name if model_sidecars
+        else backend.intent(target) if backend and "profiles" in backend.spec.operations
+        else target.kind if backend else None
+    )
     return Transition(
         steps, rollback, source_stopped_at, from_label, to_label,
         forced_stops=tuple(s.name for s in blocked), unrestored=tuple(unrestored),

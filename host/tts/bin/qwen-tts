@@ -4,6 +4,15 @@
 # Does not touch /Volumes/Models/models, /Volumes/Models/bin, or the MLX venv.
 set -euo pipefail
 
+ENGINE_GUARD="/Volumes/Models/bin/engine-guard.sh"
+if [[ -r "$ENGINE_GUARD" ]]; then
+  source "$ENGINE_GUARD"
+else
+  engine_splash_guard() { echo "Missing shared engine guard." >&2; return 1; }
+  engine_run() { echo "Missing shared engine guard." >&2; return 1; }
+fi
+
+
 VOLUME="/Volumes/Models"
 ROOT="$VOLUME/tts"
 VENV="$ROOT/venv"
@@ -179,6 +188,7 @@ cmd_status() {
 }
 
 cmd_start() {
+  engine_splash_guard
   local pid="" w=""
   if pid="$(current_pid)"; then
     echo "qwen-tts is already running (pid $pid)" >&2
@@ -244,8 +254,8 @@ cmd_stop() {
 }
 
 case "${1:-}" in
-  start) require_volume; cmd_start ;;
-  stop) require_volume; cmd_stop ;;
+  start) require_volume; engine_run cmd_start ;;
+  stop) require_volume; engine_run cmd_stop ;;
   status) require_volume; cmd_status ;;
   *) usage; exit 2 ;;
 esac

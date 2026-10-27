@@ -53,6 +53,17 @@ class Settings(BaseSettings):
     # STRATA_API_KEY from strata/etc/strata.env; empty when Strata runs without a key, like MLX
     strata_api_key: SecretStr = SecretStr("")
 
+    # Splash standalone runtime, driven only through its owning wrapper and HTTP.
+    splash_enabled: bool = False
+    splash_root: Path = Path("/Volumes/Models/splash")
+    splash_bin: Path | None = None
+    splash_profiles: Path | None = None
+    splash_api_base: str = "http://127.0.0.1:8080"
+    splash_port: Annotated[int, Field(ge=1, le=65535)] = 8080
+    splash_api_key: SecretStr = SecretStr("")
+    splash_ready_timeout_s: Annotated[float, Field(gt=0, le=900)] = 300.0
+    splash_stop_timeout_s: Annotated[float, Field(gt=0, le=120)] = 45.0
+
     # Admin
     admin_password_hash: SecretStr = SecretStr("")
     admin_session_secret: SecretStr = SecretStr("")
@@ -213,6 +224,14 @@ class Settings(BaseSettings):
     @property
     def strata_path(self) -> Path:
         return self.strata_bin or self.strata_root / "bin" / "strata"
+
+    @property
+    def splash_path(self) -> Path:
+        return self.splash_bin or self.splash_root / "bin/splash"
+
+    @property
+    def splash_profiles_path(self) -> Path:
+        return self.splash_profiles or self.splash_root / "etc/profiles.json"
 
     @property
     def decision_path(self) -> Path:

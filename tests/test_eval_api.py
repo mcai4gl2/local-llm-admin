@@ -375,12 +375,15 @@ async def test_evals_script_is_served_and_never_uses_innerhtml(client):
     assert r.status_code == 200
     assert "innerHTML" not in r.text
     assert "innerHTML" not in (await client.get("/static/quality.js")).text
-    assert "evals also run on Strata" in (await client.get("/static/quality.js")).text
+    assert "EngineUI.quality" in (await client.get("/static/quality.js")).text
+    ui = (await client.get("/static/engine_ui.js")).text
+    assert '["compatibility", "eval"].includes(kind)' in ui
+    assert 'scope === "current"' in ui
 
 
 async def test_eval_ui_texts_and_error_handling_present(client):
     q = (await client.get("/static/quality.js")).text
-    assert 'kind === "eval" ? "eval" : "compatibility checks"' in q
+    assert "EngineUI.quality(st, kind, scope)" in q
     assert "okLabel" in q
     e = (await client.get("/static/evals.js")).text
     assert '"Delete"))' in e

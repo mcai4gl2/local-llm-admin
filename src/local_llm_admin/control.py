@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import sidecars as sidecars_mod
-from .backend_types import EngineObservation, EngineTarget, resolve_observations
+from .backend_types import EngineObservation, EngineTarget, generation_record, resolve_observations
 from .backends import BackendDisabled, BackendRegistry, build_registry
 from .backends import process_generation as process_generation
 from .config import Settings
@@ -41,6 +41,7 @@ from .sidecars import (
     plan_service_start,
     plan_sidecar_start,
 )
+from .splash import SplashClient
 
 log = logging.getLogger("local_llm_admin")
 
@@ -98,6 +99,12 @@ def intent_after(job: dict[str, Any], registry: BackendRegistry | None = None) -
     if action == "engine":
         if to_name is None:
             return "off"
+        if registry is not None and ":" in to_name:
+            kind, _, reference = to_name.partition(":")
+            try:
+                return registry.get(kind).intent(EngineTarget(kind, reference))
+            except ValueError:
+                return UNKNOWN
         if registry is not None and to_name != job.get("name"):
             try:
                 backend = registry.get(to_name)
@@ -130,6 +137,7 @@ class ControlService:
         decision: DecisionClient | None = None,
         sidecars: SidecarRegistry | None = None,
         strata: StrataClient | None = None,
+        splash: SplashClient | None = None,
         backends: BackendRegistry | None = None,
     ) -> None:
         self.settings = settings
@@ -142,7 +150,8 @@ class ControlService:
             settings, {"openjev": decision.transport} if decision else None
         )
         self.strata = strata or StrataClient(settings)
-        self.backends = backends or build_registry(settings, mlx, comfy, self.strata)
+        self.splash = splash or SplashClient(settings)
+        self.backends = backends or build_registry(settings, mlx, comfy, self.strata, self.splash)
         self.ops = SidecarOpsBinding(settings, self.sidecars)
         # set when the database cannot record an outcome; blocks automatic recovery
         # for the life of this process even though nothing could be persisted
@@ -268,7 +277,7 @@ class ControlService:
         return {
             "engine": active,
             "mlx_name": selected.reference if selected and active == "mlx" else None,
-            "generation": dict(selected.generation) if selected and selected.generation else None,
+            "generation": generation_record(selected) if selected else None,
         }, selected
 
     def exclusive_running(self) -> str | None:
@@ -289,6 +298,7 @@ class ControlService:
         """
         expected = {o.backend: o for o in observations}
         commands: dict[tuple[str, ...], tuple[str, str]] = {}
+        engine_executables: set[str] = set()
         callbacks: dict[Callable[[], None], str] = {}
         for backend in self.backends:
             kind = backend.spec.id
@@ -296,15 +306,25 @@ class ControlService:
                 for preparation in backend.stop_preparation(None, True):
                     if preparation.call is not None:
                         callbacks[preparation.call] = kind
-            references = ([EngineTarget(kind, expected[kind].reference)]
-                          if kind in expected and expected[kind].running else [])
+            references = (
+                [EngineTarget(kind, expected[kind].reference)]
+                if kind in expected and expected[kind].running
+                else []
+            )
             if kind == target.kind:
                 references.append(target)
             for step in backend.stop_steps():
                 if step.argv is not None:
                     commands[tuple(step.argv)] = (kind, "stop")
+                    engine_executables.add(step.argv[0])
             for reference in references:
-                for step in backend.start_steps(reference):
+                try:
+                    activation_steps = backend.start_steps(reference)
+                except ValueError:
+                    # A known disabled owner remains stoppable without its inventory.
+                    # An actual unmatched activation command is refused below.
+                    activation_steps = []
+                for step in activation_steps:
                     if step.argv is not None:
                         commands[tuple(step.argv)] = (kind, "start")
                 if "switch" in backend.spec.operations and reference.name is not None:
@@ -319,9 +339,11 @@ class ControlService:
             for observation in current:
                 previous = expected.get(observation.backend)
                 if observation.running and (
-                    previous is None or not previous.running
-                    or observation.generation != previous.generation
-                    or observation.reference is not None and observation.reference != previous.reference
+                    previous is None
+                    or not previous.running
+                    or generation_record(observation) != generation_record(previous)
+                    or observation.reference is not None
+                    and observation.reference != previous.reference
                 ):
                     raise RuntimeError(f"{observation.backend} generation changed before execution")
             if action != "stop":
@@ -348,16 +370,22 @@ class ControlService:
                 if index == boundary:
                     adjusted = len(result)
                 command = commands.get(tuple(step.argv)) if step.argv is not None else None
+                if step.argv and step.argv[0] in engine_executables and command is None:
+                    raise RuntimeError("engine command has no ownership guard")
                 if command:
                     kind, action = command
-                    result.append(Step("verify engine ownership",
-                                       call=partial(verify, kind, action)))
+                    result.append(
+                        Step("verify engine ownership", call=partial(verify, kind, action))
+                    )
                 if step.call is not None and step.call in callbacks:
-                    step = replace(step, call=partial(guarded_callback, callbacks[step.call], step.call))
+                    step = replace(
+                        step, call=partial(guarded_callback, callbacks[step.call], step.call)
+                    )
                 result.append(step)
                 if command and command[1] != "stop":
-                    result.append(Step("record engine generation",
-                                       call=partial(capture, command[0])))
+                    result.append(
+                        Step("record engine generation", call=partial(capture, command[0]))
+                    )
             if boundary == len(steps):
                 adjusted = len(result)
             return result, adjusted
@@ -394,7 +422,9 @@ class ControlService:
                 intended = (
                     self.backends.get(selected.backend).intent(
                         EngineTarget(selected.backend, selected.reference)
-                    ) if selected else adopted_intent(observed)
+                    )
+                    if selected
+                    else adopted_intent(observed)
                 )
                 self._set_intent(intended, "adopted")
                 log.info("adopted intended engine from %s", observed)
@@ -511,12 +541,18 @@ class ControlService:
             )
             plan = self._guard_transition(
                 Transition([command], [], 0, self.mlx.active_env().get("MLX_ACTIVE_NAME"), name),
-                observations, EngineTarget("mlx", name),
+                observations,
+                EngineTarget("mlx", name),
             )
             job = self._submitted(
                 lambda: self.runner.submit_sequence(
-                    action, name=name, from_name=plan.from_label, to_name=name,
-                    steps=plan.steps, source=source, claim=claim,
+                    action,
+                    name=name,
+                    from_name=plan.from_label,
+                    to_name=name,
+                    steps=plan.steps,
+                    source=source,
+                    claim=claim,
                 )
             )
         finally:
@@ -673,21 +709,28 @@ class ControlService:
     async def engine(
         self, target_raw: str, force: bool = False, *, source: str = "admin"
     ) -> dict[str, Any]:
-        try:
-            target = self.backends.parse(target_raw)
-        except BackendDisabled as exc:
-            raise ControlError(404, str(exc)) from None
-        except ValueError:
-            raise ControlError(
-                400, "target must be off, comfyui, strata, strata:<pack>, or mlx:<name>"
-            ) from None
         claim = self._claim()
         try:
+            try:
+                target = self.backends.parse(target_raw)
+            except BackendDisabled as exc:
+                raise ControlError(404, str(exc)) from None
+            except ValueError:
+                raise ControlError(
+                    400,
+                    "target must be off, comfyui, strata, strata:<pack>, splash:<profile>, or mlx:<name>",
+                ) from None
             observations = await asyncio.to_thread(self.backends.observe, include_disabled=True)
             mlx_running = any(o.backend == "mlx" and o.running for o in observations)
             await asyncio.to_thread(self._preflight, target.kind == "mlx" or mlx_running)
             if target.kind != "off":
                 backend = self.backends.get(target.kind)
+                try:
+                    await asyncio.to_thread(backend.preflight, target)
+                except ValueError:
+                    raise ControlError(
+                        409, "engine target assets or configuration are unavailable"
+                    ) from None
                 if "multi-model" in backend.spec.operations:
                     targets = await asyncio.to_thread(backend.targets)
                     if target not in targets:
@@ -695,8 +738,13 @@ class ControlService:
             observations = await self.backends.observed_details(observations, lifecycle=True)
             queues: dict[str, int | None] = {}
             for observation in observations:
-                if observation.running and "queue" in self.backends.get(observation.backend).spec.operations:
-                    queues[observation.backend] = await self.backends.get(observation.backend).queue_count()
+                if (
+                    observation.running
+                    and "queue" in self.backends.get(observation.backend).spec.operations
+                ):
+                    queues[observation.backend] = await self.backends.get(
+                        observation.backend
+                    ).queue_count()
             running_sidecars = await asyncio.to_thread(self.sidecars.running)
             if len(running_sidecars) > 1:
                 raise self._conflict(running_sidecars)
@@ -706,8 +754,7 @@ class ControlService:
             restore = [
                 s
                 for s in self.sidecars.services()
-                if s.name not in up
-                and sidecars_mod.read_service_intent(self.store, s) == "running"
+                if s.name not in up and sidecars_mod.read_service_intent(self.store, s) == "running"
             ]
             try:
                 plan = plan_transition(

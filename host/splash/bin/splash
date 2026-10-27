@@ -1,0 +1,19 @@
+#!/bin/zsh
+# Splash owns its standalone Python controller and native child; no admin/runtime imports.
+set -euo pipefail
+ROOT="/Volumes/Models/splash"
+PYTHON="$ROOT/runtime/python/bin/python3"
+HELPER="$ROOT/lib/control.py"
+GUARD="/Volumes/Models/bin/engine-guard.sh"
+[[ -d "/Volumes/Models" ]] || { echo "Model volume is missing." >&2; exit 1; }
+[[ -x "$PYTHON" && -r "$HELPER" ]] || { echo "Missing pinned Splash runtime/helper." >&2; exit 1; }
+[[ -r "$GUARD" ]] || { echo "Missing shared engine guard." >&2; exit 1; }
+source "$GUARD"
+splash_call() { "$PYTHON" -I "$HELPER" "$ROOT" "$@"; }
+case "${1:-}" in
+  start) [[ $# == 2 ]] || { echo "Usage: splash start <profile>" >&2; exit 2; }
+         engine_run splash_call start "$2" ;;
+  stop) [[ $# == 1 ]] || exit 2; engine_run splash_call stop ;;
+  status) splash_call "$@" ;;
+  *) echo "Usage: splash start <profile> | stop | status [--json]" >&2; exit 2 ;;
+esac

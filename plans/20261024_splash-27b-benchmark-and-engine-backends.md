@@ -1,4 +1,4 @@
-Overall Progress: 57%
+Overall Progress: 65%
 
 # Splash: prove the 27B speedup, then integrate another engine backend
 
@@ -6,8 +6,9 @@ Date: 2026-10-24
 Status: Phase 0 baseline feasibility accepted by the user on 2026-10-27. Further Phase 0
 experiments are deferred; their measured outcomes remain unchanged. Phase 1 shared backend development is complete under the [focused implementation plan](20261027_splash-phase1-backend-contract.md).
 Production adoption and deployment remain separate decisions; MLX remains the default.
-The 57% figure counts 13 of 23 parent checklist items, including the four implemented
-Phase 1 items; it does not rescore Phase 0 qualification conditions.
+The 65% figure counts 15 of 23 parent checklist items, including two completed Phase 2
+integration items. Browser review and the actual gateway route contract remain open;
+no Phase 0 qualification condition is rescored.
 
 ## Summary
 
@@ -404,23 +405,27 @@ Keep this a local, typed adapter design, not a framework. MLX remains the defaul
 
 The [focused Phase 2 plan](20261027_splash-phase2-adapter-and-host-integration.md)
 starts from Phase 1 commit `d1ab6d6` and defines six test-first implementation packages.
-Phase 2 remains unimplemented; live qualification and rollout stay in Phase 3.
+Phase 2 repository integration is implemented: private contracts, whole-bundle ownership,
+owning wrapper, reciprocal guards, adapter, inference/current-only quality and capability
+presentation. Full regression passes (3,189 passed, one skipped, 98.20%). Browser rendering
+and actual gateway qualification
+remain open; live installation and rollout stay in Phase 3.
 
-- [ ] 🟥 Write host-wrapper tests first for start/stop/status, validated profile/env parsing,
+- [x] 🟩 Write host-wrapper tests first for start/stop/status, validated profile/env parsing,
   lock contention, port conflict, process ownership, missing volume/assets, failed startup,
   SIGTERM timeout and readiness. Then add `host/splash/bin/splash`, env/profile examples,
   README, `ops/host-files.list` entries and pinned runtime inventory.
-- [ ] 🟥 Add a `SplashBackend` using only its host wrapper and HTTP; the admin never imports
+- [x] 🟩 Add a `SplashBackend` using only its host wrapper and HTTP; the admin never imports
   Splash or uses its Python environment. Start one configured profile; track parent and
   native child generation; stop only verified owned processes and await release. Reuse
   shared lifecycle/maintenance locking. Add reciprocal guards to MLX, Strata, ComfyUI
   and GPU service wrappers so direct CLI operations enforce the same exclusion policy.
-- [ ] 🟥 Test and implement the existing serving contract on port 8080. Configure Splash
+- [ ] 🟨 Test and implement the existing serving contract on port 8080. Configure Splash
   aliases for every upstream model string actually used by the existing LiteLLM route;
   exercise that exact request through the gateway before claiming compatibility. Verify
   bind address, Host allowlist, authentication and cancellation without assuming Strata
   accepts-any-model behavior. Secrets remain private configuration. No new gateway proxy.
-- [ ] 🟥 Test and add registry-driven selector/status/badges/logs, inference target resolution,
+- [ ] 🟨 Test and add registry-driven selector/status/badges/logs, inference target resolution,
   reasoning settings, compatibility/eval runs, context reporting and engine/profile history.
   Feature-gate Splash off by default. Show unsupported capabilities and loading/idle states
   accurately, and preserve existing API fields while adding backend descriptions.

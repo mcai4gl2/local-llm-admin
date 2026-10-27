@@ -33,7 +33,7 @@ import psutil
 
 from . import compatibility
 from .alerts import AlertStore
-from .backend_types import InferenceDescriptor
+from .backend_types import EngineTarget, InferenceDescriptor
 from .chat import ACTIVE_MODEL_ID
 from .config import Settings
 from .control import ControlError, ControlService
@@ -421,13 +421,23 @@ class QualityRunner:
                 f"{self.control.backends.get(engine).spec.label} is running; only compatibility checks and evals of the current engine"
                 " run on it",
             )
+        backend = self.control.backends.get(engine)
+        observation = backend.observe()
+        label = (
+            backend.intent(EngineTarget(engine, observation.reference))
+            if "profiles" in backend.spec.operations
+            else engine
+        )
+        original: dict[str, Any] = {"engine": engine, "name": label}
+        if label != engine:
+            original["reference"] = observation.reference
         plan = RunPlan(
             run_id=uuid.uuid4().hex[:12],
             job_id="",
             kind=kind,
-            targets=[engine],
+            targets=[label],
             dirs={},
-            original={"engine": engine, "name": engine},
+            original=original,
             deadline=self._deadline(kind),
         )
         return plan, EXTERNAL_WARNING
@@ -561,8 +571,10 @@ class QualityRunner:
     async def _owned(self, name: str, generation: Any, engine: str = "mlx") -> None:
         obs = await self._observe()
         expected = "mlx" if engine == "none" else engine
-        if obs["engine"] != expected or obs["generation"] != generation or (
-            expected == "mlx" and obs["mlx_name"] != name
+        if (
+            obs["engine"] != expected
+            or obs["generation"] != generation
+            or (expected == "mlx" and obs["mlx_name"] != name)
         ):
             label = self.control.backends.get(expected).spec.label
             raise InterventionRequired(
@@ -589,7 +601,7 @@ class QualityRunner:
         """The running adapter defines its health context field."""
         descriptor = self._inference(plan.original["engine"])
         async with self._open(plan.original["engine"]) as http:
-            return descriptor.context(await self._get(http, "/health"))
+            return descriptor.context(await self._get(http, descriptor.health_path))
 
     # --- the run ---------------------------------------------------------------------
     async def _execute(self, plan: RunPlan) -> None:
@@ -724,9 +736,11 @@ class QualityRunner:
             raise ModelLoadFailed(f"{name} is not the serving model after {act}")
         return load_s, obs["generation"]
 
-    async def _current_ready(self, http: httpx.AsyncClient, engine: str) -> tuple[float | None, Any]:
+    async def _current_ready(
+        self, http: httpx.AsyncClient, engine: str
+    ) -> tuple[float | None, Any]:
         backend = self.control.backends.get(engine)
-        doc = await self._get(http, "/health")
+        doc = await self._get(http, self._inference(engine).health_path)
         if not backend.inference_ready(doc):
             raise ModelLoadFailed(f"{backend.spec.label} is not loaded")
         observed = await self._observe()
@@ -764,6 +778,9 @@ class QualityRunner:
             return
         self._check(plan)
         info = await asyncio.to_thread(model_info, path)
+        descriptor = self._inference(plan.original["engine"])
+        if descriptor.current_only and descriptor.profile_fingerprint is not None:
+            info["fingerprint"] = descriptor.profile_fingerprint
         if plan.kind == "benchmark":
             await self._benchmark(http, plan, name, path, info, load_s, generation, index)
         elif plan.kind == "eval":
@@ -788,10 +805,13 @@ class QualityRunner:
             self.store.fail_case(case_id, "cancelled", "admin shut down")
             raise
 
-    def _profile_fingerprint(self) -> str | None:
+    def _profile_fingerprint(self, engine: str = "mlx") -> str | None:
         """Fingerprint of the launch flags mlx-model started the server with, as it
         recorded them in run/active.env; None for a server started before profiles."""
-        return self.control.mlx.active_env().get("MLX_PROFILE_FINGERPRINT")
+        descriptor = self._inference(engine)
+        return descriptor.profile_fingerprint or self.control.mlx.active_env().get(
+            "MLX_PROFILE_FINGERPRINT"
+        )
 
     async def _benchmark(
         self,
@@ -925,12 +945,12 @@ class QualityRunner:
         generation: Any,
         index: int,
     ) -> None:
-        health = await self._get(http, "/health")
+        health = await self._get(http, self._inference(plan.original["engine"]).health_path)
         backend = self.control.backends.get(
             "mlx" if plan.original["engine"] == "none" else plan.original["engine"]
         )
         probe_info = backend.compatibility_info(health, info)
-        profile = self._profile_fingerprint()
+        profile = self._profile_fingerprint(plan.original["engine"])
         for key in self.compat_cases:
             self._check(plan)
             await self._owned(name, generation, plan.original["engine"])
@@ -984,12 +1004,25 @@ class QualityRunner:
         current_only = descriptor.current_only
         health: Any = None
         if current_only or suite.needle is not None:
-            health = await self._get(http, "/health")
+            health = await self._get(http, descriptor.health_path)
         if current_only:  # no weights path: key it by the served id
             served = descriptor.served_model(health)
             if isinstance(served, str) and served:
                 engine = served
-                fingerprint = plan.original["engine"] + "-" + hashlib.sha256(served.encode()).hexdigest()[:16]
+                fingerprint = (
+                    plan.original["engine"]
+                    + "-"
+                    + hashlib.sha256(
+                        (
+                            served
+                            + (
+                                "\0" + descriptor.profile_fingerprint
+                                if descriptor.profile_fingerprint
+                                else ""
+                            )
+                        ).encode()
+                    ).hexdigest()[:16]
+                )
         thinking_max = self.settings.eval_thinking_max_tokens
         effective = {
             "temperature": 0,
@@ -997,7 +1030,7 @@ class QualityRunner:
             "thinking": plan.thinking,
             "max_tokens_thinking": thinking_max if plan.thinking else None,
         }
-        profile = self._profile_fingerprint()
+        profile = self._profile_fingerprint(plan.original["engine"])
         s_hash = settings_hash(effective, fp, profile)
         suite_hash = suite.content_hash()
         # a needle suite skips lengths that do not fit the loaded context
@@ -1053,6 +1086,7 @@ class QualityRunner:
                         thinking=int(plan.thinking),
                         **fields,
                     )
+                    await self._owned(name, generation, plan.original["engine"])
             except InterventionRequired:
                 # the answers so far stay as rows, but an intervened run never becomes latest
                 self._finalize_eval(plan, name, None, promote=False)
@@ -1162,7 +1196,9 @@ class QualityRunner:
             return
         assert self.evals is not None
         for name, case_id in plan.eval_cases.items():
-            failed = any(r["grade_state"] == "failed" for r in self.evals.results(plan.run_id, name))
+            failed = any(
+                r["grade_state"] == "failed" for r in self.evals.results(plan.run_id, name)
+            )
             self._finalize_eval(plan, name, case_id, promote=not failed)
 
     def _finalize_eval(

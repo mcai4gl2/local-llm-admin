@@ -205,3 +205,7 @@ fieldset.question input:not([type]), fieldset.question textarea { width: 100%; b
 .decision-layout input[type=number] { width: 6em; }
 .prob-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 code.wrap { overflow-wrap: anywhere; }
+
+.badge[data-state^="splash"]::before { background: var(--warning); }
+.badge[data-state="splash"]::before, .badge[data-state="splash-ready"]::before { background: var(--good); }
+.badge[data-state="splash-unknown"]::before { background: var(--critical); }

@@ -1,9 +1,11 @@
-Overall Progress: 0%
+Overall Progress: 96%
 
 # Splash Phase 2 — adapter and host integration
 
 Date: 2026-10-27
-Status: Planned; implementation has not started. Baseline: Phase 1 commit `d1ab6d6`.
+Status: Repository implementation and automated gates complete. Browser rendering
+review remains outstanding. Plan committed as `f4e3e88`.
+Baseline: Phase 1 commit `d1ab6d6`.
 
 ## Summary and settled decisions
 
@@ -75,21 +77,22 @@ strings, defaults, stored identities and public API fields compatible.
 
 ### 1. Freeze the runtime, profile and HTTP contracts
 
-Files: new `host/splash/README.md`, `host/environment/splash.txt`,
+Files: new `src/local_llm_admin/splash_profiles.py`, `host/splash/lib/profiles.py`,
+`host/splash/README.md`, `host/environment/splash.txt`,
 `host/splash/etc/splash.env.example`, `host/splash/etc/profiles.example.json`,
 `tests/fixtures/splash/`, `tests/test_splash.py`, `tests/test_host_splash.py`.
 
-- [ ] 🟥 Add failing profile/parser tests using public-safe fixtures for two explicit IDs
+- [x] 🟩 Add failing profile/parser tests using public-safe fixtures for two explicit IDs
   (`stock-8bit-32k`, `modified-4bit-32k`). Separate target/draft assets and revisions,
   prepared-output identity, profile settings, advertised aliases and runtime pin.
   Reject missing/unknown keys, invalid IDs, path traversal, malformed types, incompatible
   formats and incomplete prepared assets. A bad profile must never fall back to MLX.
-- [ ] 🟥 Document the pinned launch/readiness/status/model-list/authentication contract from
+- [x] 🟩 Document the pinned launch/readiness/status/model-list/authentication contract from
   available audited artifacts. Record exactly which fields prove loaded model/profile and
   effective context. Preserve original provenance when deriving fixtures; do not relabel
   the old 96-token, reasoning-off captures as new reasoning-on or gateway qualification.
   Missing auth/alias/Host details remain explicit verification tasks, not invented flags.
-- [ ] 🟥 Implement a typed admin profile reader and equivalent host validation of the same
+- [x] 🟩 Implement a typed admin profile reader and equivalent host validation of the same
   non-executable data format; neither process imports the other runtime environment.
   Env files are parsed, never sourced; private files require mode 600. Public examples
   contain placeholders only. Reject arbitrary command/flag injection and resolve paths
@@ -109,22 +112,22 @@ Files: `backend_types.py`, `backends.py`, `control.py`, `quality_runner.py`,
 `tests/test_backends.py`, `test_engine_plan.py`, `test_engine_api.py`,
 `test_quality_runner.py`, `test_diagnostics.py` and new Splash tests.
 
-- [ ] 🟥 Add failing tests for a Python parent with a native listener child, restricted
+- [x] 🟩 Add failing tests for a Python parent with a native listener child, restricted
   socket visibility, a dead parent with a surviving child, stale/reused PIDs, an unrelated
   process with a matching argument, another backend sharing the port and a disabled
   Splash owner. Unknown ownership must block activation; a verified child must not be
   misclassified as a foreign listener.
-- [ ] 🟥 Introduce the smallest typed ownership record/helper needed for parent and child
+- [x] 🟩 Introduce the smallest typed ownership record/helper needed for parent and child
   PID + creation-time + executable/root identity. Preserve legacy primary `pid`/`started`
   fields where callers require them. Migrate listener attribution, socket fallback,
   generation comparisons, quality ownership and diagnostic/metric selection together.
   A PID-file timestamp or an HTTP success alone cannot prove the whole bundle is owned.
-- [ ] 🟥 Test and implement execution revalidation before every signal/start/restore and
+- [x] 🟩 Test and implement execution revalidation before every signal/start/restore and
   after activation. A same-parent native-child replacement must be verified and reflected
   in the bundle, never silently authorized by the parent's unchanged PID. Refuse stale
   planned generations and operator profile changes; retain existing failed-rollback
   suspension when a failed launch leaves an unrecorded process.
-- [ ] 🟥 Keep adapter command construction stable for start, profile restart, stop and
+- [x] 🟩 Keep adapter command construction stable for start, profile restart, stop and
   rollback references. Add tests that every mutating command is guarded. Extend Step
   metadata only if concrete argv matching cannot cover the wrapper; retain one executor.
 
@@ -138,33 +141,33 @@ Files: new `host/splash/bin/splash`, profiles/env examples and README; existing
 `host/decision/bin/openjev`, `host/tts/bin/qwen-tts`, `host/embed/bin/qwen-embed`;
 `ops/host-files.list`, host documentation and existing `tests/host_harness.py`.
 
-- [ ] 🟥 Add failing real-zsh harness tests in `tests/test_host_splash.py` for start,
+- [x] 🟩 Add failing real-zsh harness tests in `tests/test_host_splash.py` for start,
   explicit profile restart, idempotent stop and read-only status. Include missing volume,
   runtime/draft/target/prepared assets, bad private file modes, invalid config, occupied
   ports, startup failure, readiness timeout, SIGTERM timeout, child survival and PID reuse.
   Tests use temporary roots and fake processes/HTTP; no Metal runtime or remote host.
-- [ ] 🟥 Implement `splash start <profile>`, `splash stop`, `splash status` and a stable
+- [x] 🟩 Implement `splash start <profile>`, `splash stop`, `splash status` and a stable
   machine-readable status form. Launch only the pinned private runtime/prepared model;
   set writable HOME/HF/XDG/temp locations deliberately and exclude ambient Python path
   contamination. Record profile identity and owned generations atomically in private run
   files. Human and JSON status must redact credentials and avoid configuration mutation.
-- [ ] 🟥 Stop only verified owned generations, rechecking immediately before TERM and
+- [x] 🟩 Stop only verified owned generations, rechecking immediately before TERM and
   bounded KILL escalation. Track children before parent exit; parent death cannot erase
   a surviving native owner. Never use broad process-name matching or kill a port owner
   merely because it listens on 8080. Require owned parent/children and owned listeners
   to exit before reporting resource release; foreign/ambiguous listeners cause refusal.
-- [ ] 🟥 Add failing reciprocal-guard and concurrent-start tests across MLX, Strata,
+- [x] 🟩 Add failing reciprocal-guard and concurrent-start tests across MLX, Strata,
   ComfyUI, decision, TTS and embeddings. Check Splash ownership even while its HTTP port
   is closed, released, recovering or administratively disabled. Cover the reverse start
   direction, stale records, missing helper dependencies and restoration attempts.
-- [ ] 🟥 Implement guards and atomic lifecycle serialization using the existing lock
+- [x] 🟩 Implement guards and atomic lifecycle serialization using the existing lock
   namespace/owner convention. A port check alone cannot serialize two starts. Hold the
   lifecycle reservation across validate/start/stop, use `maintenance.lock` only for its
   short acquisition gate, and never invoke another owning wrapper while holding a lock
   it must acquire. Handle stale/unknown owners conservatively, including legacy `unlock`.
   Factor a small installed helper only where needed; list it in `ops/host-files.list`.
   Keep MLX-compatible sidecar coexistence unchanged.
-- [ ] 🟥 Add wrapper/examples/inventory to deployment documentation and allowlists.
+- [x] 🟩 Add wrapper/examples/inventory to deployment documentation and allowlists.
   Versioned deployment must not overwrite private env/profiles, install runtime/assets,
   start Splash or enable it. Test missing/new helper file handling in the deploy diff.
 
@@ -176,20 +179,20 @@ bounded cleanup and no source restoration while Splash resources remain owned.
 Files: new `src/local_llm_admin/splash.py`, `config.py`, `backends.py`, `app.py`;
 `tests/test_splash.py`, `test_backends.py`, `test_engine_plan.py`, `test_engine_api.py`.
 
-- [ ] 🟥 Add failing client/registry tests for per-instance injection, live enable changes,
+- [x] 🟩 Add failing client/registry tests for per-instance injection, live enable changes,
   invalid/disabled targets, exact `splash:<profile>` intent/history, profile restart and
   rollback to the actually observed source profile. Do not add ambiguous plain `splash`
   activation, a second job slot or implicit MLX fallback.
-- [ ] 🟥 Add settings for disabled enablement, root/wrapper/profile paths, API base/port,
+- [x] 🟩 Add settings for disabled enablement, root/wrapper/profile paths, API base/port,
   SecretStr credentials and bounded readiness/stop/job deadlines. Implement the client
   using existing subprocess/HTTP transport patterns and the wrapper's ownership record.
   Register one adapter over that injected client; admin never imports runtime modules.
-- [ ] 🟥 Test readiness with owned process identity plus `/ready`, `/status` and model
+- [x] 🟩 Test readiness with owned process identity plus `/ready`, `/status` and model
   metadata as supported by the pin. Reject wrong aliases/assets/profile/context, malformed
   bodies, auth errors and another engine's valid HTTP response. Implement absent, starting,
   loaded, released, recovering and unknown mappings without equating alive with loaded.
   Released processes still exclude other engines; ready is not asserted during recovery.
-- [ ] 🟥 Implement exclusive resource policy, no GPU sidecars, no auto-recovery, current-only
+- [x] 🟩 Implement exclusive resource policy, no GPU sidecars, no auto-recovery, current-only
   inference and optional profile restart through existing Step plans. Disablement removes
   selector/status HTTP probes and blocks activation; cheap local lifecycle checks must
   still detect an already-running disabled owner. Add all backend-pair/off and failed
@@ -206,25 +209,25 @@ Files: `app.py`, `chat.py`, `compatibility.py`, `quality_runner.py`, `logs.py`,
 `tests/test_app.py`, `test_chat.py`, `test_compatibility.py`, `test_quality_runner.py`,
 `test_eval_runner.py`, `test_logs.py`, `test_engine_api.py`.
 
-- [ ] 🟥 Add failing API tests for additive backend descriptors: IDs/labels, validated
+- [x] 🟩 Add failing API tests for additive backend descriptors: IDs/labels, validated
   public target IDs, operations, resource policy and normalized state. Keep existing
   MLX/Strata/ComfyUI fields. Never expose keys, private paths or full private profiles.
   No disabled-backend HTTP/PID probes for presentation; retain one per-app registry.
-- [ ] 🟥 Use those descriptors for selector options, confirmation/exclusion messages,
+- [ ] 🟨 Use those descriptors for selector options, confirmation/exclusion messages,
   conflict banners, badges and legacy MLX action disabling. Show profile/checkpoint and
   effective 32K context, distinguish loading/released/recovering, retain user selection
   during polls and never advertise unsupported operations. Hide Splash while disabled.
-- [ ] 🟥 Add failing MockTransport/stream tests for served aliases, authorization,
+- [x] 🟩 Add failing MockTransport/stream tests for served aliases, authorization,
   reasoning-on defaults, supported request translation, cancellation/disconnect cleanup
   and context limits. Preserve direct SSE forwarding and existing public chat settings.
   Report reasoning-off as unreliable from retained evidence; do not silently rewrite an
   explicit off request into on or advertise it as qualified. Unsupported controls need
   an explicit UI/API explanation rather than silently ignored fields.
-- [ ] 🟥 Implement current-engine compatibility/eval through the adapter descriptor and
+- [x] 🟩 Implement current-engine compatibility/eval through the adapter descriptor and
   effective model/context metadata. Retain exact backend/profile identity and fingerprint
   in existing results/history; test generation/profile change abort, deadlines, cancellation
   and no MLX switch/sweep commands. Missing/unsupported checks remain explicit outcomes.
-- [ ] 🟥 Add allowlisted Splash wrapper/native log sources with fixed managed roots,
+- [x] 🟩 Add allowlisted Splash wrapper/native log sources with fixed managed roots,
   source IDs, rotation/truncation tests and no arbitrary path resolution. Display unknown
   throughput/usage as unavailable; do not add Phase 3 counters or attribute Splash
   traffic to MLX. Audit alerts/availability so current defaults cannot report false MLX
@@ -239,17 +242,17 @@ recovering, unknown and conflict states; use existing tooling rather than a new 
 Files: completed Phase 2 plan, parent plan, `docs/DESIGN.md`, host README, env documentation
 and an append-only entry in `devlogs/YYYY-MM-DD.md`.
 
-- [ ] 🟥 Add failing gateway-contract tests with sanitized existing route model strings,
+- [x] 🟩 Add failing gateway-contract tests with sanitized existing route model strings,
   including unknown-model refusal, Host policy, authorization and stream cancellation.
   Implement only the pinned supported alias/auth mechanisms. Treat admin-to-runtime auth
   and gateway-to-runtime auth as distinct paths; never claim one proves the other.
-- [ ] 🟥 Run focused and full quality gates below; document red-to-green evidence and
+- [x] 🟩 Run focused and full quality gates below; document red-to-green evidence and
   100% statement/branch coverage of new ownership, locking, stop and rollback decisions.
   Recheck legacy target/intent/status compatibility and disabled probe counts.
-- [ ] 🟥 Update design and operating docs with exact settings, runtime/profile preparation,
+- [x] 🟩 Update design and operating docs with exact settings, runtime/profile preparation,
   resource policy, limitations and troubleshooting. Preserve historical Phase 0 reports.
   Update parent checkboxes only for work actually completed and append the devlog.
-- [ ] 🟥 Prepare a Phase 3 handoff describing installation/diff review, backups, private
+- [x] 🟩 Prepare a Phase 3 handoff describing installation/diff review, backups, private
   route inputs, exact authenticated gateway request, verification and rollback needs.
   No live action occurs in this phase. Mark authenticated gateway inference unverified
   until a separately approved live test passes; repository fixture tests do not qualify it.
@@ -296,6 +299,64 @@ connection/defaults once per chat stream, reuse clients, and avoid added payload
 Test endpoint call counts/timeouts and stale/unreachable status without timing-flaky limits.
 No new live benchmark is required here. Integrated latency/native-speed comparison remains
 unassessed until Phase 3 uses a separately frozen and approved measurement plan.
+
+## Implementation evidence
+
+The plan was committed separately as `f4e3e88` before implementation. New parser,
+process-bundle, wrapper, client, API and UI behavior followed failing tests. Earlier
+foundation checkpoints are preserved in the append-only devlogs.
+
+Implemented packages:
+
+- Strict private runtime/profile/env/receipt contracts, two separate checkpoint profiles,
+  prepared-selection fingerprints and byte-identical admin/host readers.
+- Complete verified controller/native ownership, restricted socket fallback, shared-port
+  attribution, parent-death/recovery handling and execution-boundary revalidation.
+- Owning zsh wrapper with bounded startup/TERM/KILL/release checks, clean launch environment,
+  read-only redacted status, atomic records and bounded log rotation. Reciprocal guards
+  cover MLX, Strata, ComfyUI, decision, TTS and embeddings. Signal cleanup releases only
+  this wrapper's reservation and re-raises TERM/INT.
+- Per-app Splash client/adapter, disabled defaults, explicit profile intent/history,
+  live feature flags and preflight before source stop. All nine Splash/backend/off/profile
+  transition cases check mandatory exit waits and original-profile rollback.
+- Additive public descriptions, capability-driven presentation and direct authenticated
+  SSE chat. Missing Splash usage stays unknown; explicit reasoning off stays explicit.
+  Current-only compatibility/eval retains context/profile identity; deadlines/cancellation
+  close requests, and external changes require intervention without promoting scores.
+- Allowlisted rotating logs, deployment/private-file preservation checks, settings examples,
+  design docs and the Phase 3 preparation/verification/rollback worksheet in
+  [the host guide](../host/splash/README.md#phase-3-installation-and-verification-handoff).
+
+Critical coverage checkpoint: the standalone host controller, both profile readers and
+the admin Splash client reach **100% statement and branch coverage** in the combined
+focused run. That run passed 370 checks and exposed one harness fault-injection case;
+the corrected case passed separately. Two TERM/INT reservation tests failed before explicit
+signal cleanup and now pass. Ruff, strict mypy and instruction parity pass; the private
+pattern scan reports zero hits.
+
+The first broad run completed with 3,102 passed, one skipped and three failures at 97.84%
+coverage. Two checks asserted UI text moved into the shared capability module; the third
+needed explicit persistent-listener fault injection after correcting stale PID handling.
+Those checks are corrected. Final full regression: **3,189 passed, one skipped,
+98.20% coverage** (511.84 seconds). A subsequent 65-case client/adapter run passes,
+including nine new route-refusal/catalog-race/state/history checks beyond that full run.
+Combined coverage brings the registry/adapters to 100% statement/branch coverage as well
+as the new client/profile/ownership contracts. Standalone host helper coverage is reported
+separately above. Ruff, strict mypy, JS/zsh checks, instruction parity and scanning pass.
+Implementation changes are staged for review and remain uncommitted.
+
+The dependency-free Node harness verifies disabled/loading/ready/released/recovering/
+unknown/conflict presentation decisions, selector entries, current-only quality, reasoning
+defaults and runtime labels. All static JS passes syntax checks. A real browser was not
+available, so DOM rendering/visual review remains open. The presentation implementation is
+complete; its checkbox stays yellow pending that review. Progress counts 25 of 26 tasks.
+
+Gateway evidence covers pinned public interfaces and local fixtures: private auth,
+supported named aliases, HTTP refusal propagation, Host launch arguments and stream
+closure. Absolute MLX route strings are rejected as aliases rather than rewritten.
+No actual gateway route was changed or tested; authenticated gateway inference remains
+unverified. Mac process-query behavior needs approved platform validation. Frozen Phase 0
+reports are unchanged, and no live service was touched.
 
 ## Risks, verification inputs and rollback
 

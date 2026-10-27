@@ -25,16 +25,17 @@ function evalScopeBody() {
 }
 
 function renderEvalForm() {
-  const engine = lastStatus?.engine?.active;
-  const strata = engine === "strata";
+  const backend = EngineUI.active(lastStatus);
+  const currentOnly = backend?.operations.includes("quality") && !backend.operations.includes("multi-model");
   const scope = document.getElementById("eval-scope");
-  if (strata && scope.value !== "current") { scope.value = "current"; }
-  for (const o of scope.options) o.disabled = strata && o.value !== "current";
+  if (currentOnly && scope.value !== "current") scope.value = "current";
+  for (const option of scope.options) option.disabled = currentOnly && option.value !== "current";
   document.getElementById("eval-model-label").hidden = scope.value !== "model";
-  const blocked = engine === "comfyui" || engine === "conflict";
-  document.getElementById("eval-engine-note").textContent = blocked ? "ComfyUI owns the GPU; switch the engine to MLX or off first."
-    : strata ? "Strata: evals run on the current engine only." : "";
-  document.getElementById("eval-start").disabled = blocked || Boolean(lastStatus?.job) || !evalSuites.length;
+  const policy = EngineUI.quality(lastStatus, "eval", scope.value);
+  document.getElementById("eval-engine-note").textContent = policy.handled ? policy.text : "";
+  document.getElementById("eval-start").disabled = (policy.handled && !policy.ok) || Boolean(lastStatus?.job) || !evalSuites.length;
+  const thinking = document.getElementById("eval-thinking");
+  if (!thinking.dataset.userSet) thinking.checked = EngineUI.reasoningDefault(lastStatus) === true;
   const suite = evalSuites.find((s) => s.id === document.getElementById("eval-suite").value);
   document.getElementById("eval-suite-note").textContent = suite
     ? `${suite.title}: ${suite.cases} cases, version ${suite.version}. Prompts and answers are stored with the run.` : "";
@@ -284,3 +285,5 @@ const refreshEvals = () => { loadEvalRuns().catch(() => {}); loadScorecard().cat
 loadEvalSuites().catch(() => {});
 refreshEvals();
 setInterval(refreshEvals, 15000);
+
+document.getElementById("eval-thinking").addEventListener("change", (ev) => { ev.target.dataset.userSet = "true"; });

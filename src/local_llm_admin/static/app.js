@@ -63,7 +63,9 @@ async function refreshStatus() {
   const badge = document.getElementById("state-badge");
   try {
     const st = await api("/api/status");
-    badge.dataset.state = st.state; badge.textContent = STATE_LABEL[st.state] || st.state;
+    badge.dataset.state = st.state;
+    badge.textContent = st.engine?.active && st.engine.active !== "mlx"
+      ? EngineUI.badge(st) : STATE_LABEL[st.state] || st.state;
     const nav = document.getElementById("nav-alerts");
     if (nav && st.alerts) {
       nav.hidden = !st.alerts.unacked;
@@ -223,21 +225,26 @@ async function setEngineWithForce(target, ask) {
   }
 }
 const nativeAsk = async (title, body) => window.confirm(`${title}\n\n${body}`);
+let conflictStatus = null;
 onStatus((st) => {
   const banner = document.getElementById("conflict-banner");
   if (!banner) return;
+  conflictStatus = st;
   banner.hidden = st.engine?.active !== "conflict";
-  banner.dataset.mlx = st.selected || "";
-  const keepStrata = banner.querySelector('[data-keep="strata"]');
-  if (keepStrata) keepStrata.hidden = !st.engine?.strata?.running;
+  const container = document.getElementById("conflict-engine-controls");
+  const running = Object.values(st.engine?.backends || {}).filter(b => b.enabled && b.running);
+  container?.replaceChildren(...running.map(b => {
+    const ref = b.operations.includes("multi-model") ? st.selected : b.reference;
+    const target = b.id + (ref ? ":" + ref : "");
+    return el("button", {"data-keep": target, text: "Keep " + b.label});
+  }));
 });
 document.getElementById("conflict-banner")?.addEventListener("click", async (ev) => {
-  const keep = ev.target?.dataset?.keep;
-  if (!keep) return;
-  const target = keep === "mlx" ? `mlx:${ev.currentTarget.dataset.mlx}` : keep;
-  const what = { mlx: "Keep MLX and stop the other engines?", comfyui: "Keep ComfyUI and stop the other engines?",
-    strata: "Keep Strata and stop the other engines?", off: "Stop every engine?" }[keep];
-  if (!window.confirm(what)) return;
+  const target = ev.target?.dataset?.keep;
+  if (!target) return;
+  const prompt = target === "off" ? "Stop every engine?"
+    : "Keep " + (conflictStatus?.engine?.backends?.[target.split(":")[0]]?.label || target) + " and stop the other engines?";
+  if (!window.confirm(prompt)) return;
   try { await setEngineWithForce(target, nativeAsk); refreshStatus(); } catch (e) { alert(e.message); }
 });
 

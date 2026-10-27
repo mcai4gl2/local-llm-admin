@@ -56,6 +56,7 @@ def source_ids(settings: Settings) -> list[str]:
     ``logs/download-*.log`` present now."""
     extra = ["decision"] if settings.decision_enabled else []
     extra += ["strata", *strata_engine_log_ids(settings)] if settings.strata_enabled else []
+    extra += ["splash"] if settings.splash_enabled else []
     return [*FIXED_SOURCE_IDS, *extra, *download_log_ids(settings)]
 
 
@@ -71,6 +72,8 @@ def resolve_source(settings: Settings, source_id: str) -> Path:
         return settings.comfyui_root / "logs" / "comfyui.log"
     if source_id == "decision" and settings.decision_enabled:
         return settings.decision_root / "logs" / "openjev.log"
+    if source_id == "splash" and settings.splash_enabled:
+        return settings.splash_root / "logs/splash.log"
     if source_id == "strata" and settings.strata_enabled:
         return settings.strata_root / "logs" / "strata.log"
     if source_id in strata_engine_log_ids(settings):

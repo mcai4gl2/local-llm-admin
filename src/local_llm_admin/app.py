@@ -112,6 +112,7 @@ from .sidecars import (
     read_service_intent,
     service_unavailable_reason,
 )
+from .splash import SplashClient
 from .strata_usage import StrataUsage
 from .tts import TtsClient, TtsError, text_weight, validate_speech
 from .tts_store import TtsStore
@@ -273,12 +274,14 @@ def create_app(
     tts_transport: httpx.MockTransport | None = None,
     embed_transport: httpx.MockTransport | None = None,
     strata_transport: httpx.MockTransport | None = None,
+    splash_transport: httpx.MockTransport | None = None,
     judge_transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     mlx = MlxClient(settings)
     comfy = ComfyClient(settings, transport=comfy_transport)
     strata = StrataClient(settings, transport=strata_transport)
+    splash = SplashClient(settings, transport=splash_transport)
     store = JobStore(settings.admin_data_dir / "admin.sqlite")
     runner = JobRunner(
         settings, store, current_name=lambda: mlx.active_env().get("MLX_ACTIVE_NAME")
@@ -301,7 +304,9 @@ def create_app(
         decision=decision,
         sidecars=sidecar_registry,
         strata=strata,
+        splash=splash,
     )
+
     # The process tile follows the same unambiguous generation as lifecycle control.
     def engine_pid() -> int | None:
         generation = control.observe()["generation"]
@@ -356,6 +361,7 @@ def create_app(
         return service_unavailable_reason(
             sidecar_registry, store, "qwen-embed", control.exclusive_running
         )
+
     supervisor.add_listener(
         SidecarMonitor(
             settings,
@@ -584,6 +590,13 @@ def create_app(
             "comfyui": comfy_st,
             "strata": strata_st,
             "strata_enabled": settings.strata_enabled,
+            "splash_enabled": settings.splash_enabled,
+            "splash": {k: v for k, v in details["splash"].items() if k not in {"target_options"}}
+            if "splash" in details
+            else None,
+            "backends": await asyncio.to_thread(
+                control.backends.descriptions, details, observations
+            ),
         }
         st["job"] = job
         st["intent"] = await asyncio.to_thread(control.intent)
@@ -926,7 +939,9 @@ def create_app(
         intent = await asyncio.to_thread(read_intent, store)
         return {
             "sidecars": views,
-            "intent": {"name": intent.get("name"), "value": intent.get("value")} if intent else None,
+            "intent": {"name": intent.get("name"), "value": intent.get("value")}
+            if intent
+            else None,
             "conflict": sum(v["running"] for v in views) > 1,
         }
 
@@ -1509,9 +1524,7 @@ def create_app(
     ) -> dict[str, Any]:
         raw = await file.read(settings.eval_import_max_bytes + 1)
         if len(raw) > settings.eval_import_max_bytes:
-            raise HTTPException(
-                400, f"file is larger than {settings.eval_import_max_bytes} bytes"
-            )
+            raise HTTPException(400, f"file is larger than {settings.eval_import_max_bytes} bytes")
         try:
             text = raw.decode()
             if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,63}", id):
@@ -1681,12 +1694,16 @@ def create_app(
                 raise HTTPException(409, f"not comparable: {what} differs")
         # same suite version on both sides (checked above), so one lookup names its judge cases
         stored = await asyncio.to_thread(evals.suite_by_hash, suite, rows_a[0]["suite_hash"])
-        judged_ids = {c.id for c in stored.cases if isinstance(c.grader, Judge)} if stored else set()
+        judged_ids = (
+            {c.id for c in stored.cases if isinstance(c.grader, Judge)} if stored else set()
+        )
         extra: dict[str, Any] = {}
         if judged_ids:
 
             def judged(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-                return [r for r in rows if r["case_id"] in judged_ids and r["grade_state"] == "graded"]
+                return [
+                    r for r in rows if r["case_id"] in judged_ids and r["grade_state"] == "graded"
+                ]
 
             ja, jb = judged(rows_a), judged(rows_b)
             if {r["judge"] for r in ja} != {r["judge"] for r in jb}:
@@ -1700,13 +1717,17 @@ def create_app(
             result = paired(a, b)
         except ValueError:
             raise HTTPException(409, "not comparable: no shared cases") from None
-        return dataclasses.asdict(result) | extra | {
-            "disagreements": [
-                {"case_id": k, "a_score": a[k], "b_score": b[k]}
-                for k in sorted(a.keys() & b.keys())
-                if a[k] != b[k]
-            ]
-        }
+        return (
+            dataclasses.asdict(result)
+            | extra
+            | {
+                "disagreements": [
+                    {"case_id": k, "a_score": a[k], "b_score": b[k]}
+                    for k in sorted(a.keys() & b.keys())
+                    if a[k] != b[k]
+                ]
+            }
+        )
 
     # --- chat --------------------------------------------------------------
     @app.post("/api/chat")
@@ -1718,8 +1739,14 @@ def create_app(
         except BackendUnavailable as exc:
             raise HTTPException(409, str(exc)) from None
         return StreamingResponse(
-            stream_chat(settings, req, transport=chat_transport,
-                        defaults=dict(descriptor.defaults), target=descriptor.target),
+            stream_chat(
+                settings,
+                req,
+                transport=chat_transport,
+                defaults=dict(descriptor.defaults),
+                target=descriptor.target,
+                estimate_usage=descriptor.estimate_usage,
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

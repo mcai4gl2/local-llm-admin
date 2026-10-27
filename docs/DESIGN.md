@@ -477,29 +477,49 @@ availability denominators, source attribution and historical rollups are preserv
 Chat resolves connection/defaults metadata once before streaming; the descriptor stays
 internal and its repr excludes the credential-bearing ChatTarget.
 
-### Phase 2 handoff
+### Phase 2 integration
 
-The [focused Phase 2 plan](../plans/20261027_splash-phase2-adapter-and-host-integration.md)
-tracks the owning wrapper, process-bundle contract extension and disabled integration.
+Splash is a statically registered fourth backend, disabled by default. The admin client
+imports neither MLX nor Splash runtime modules. Its private catalog reader has a byte-identical
+stdlib-only deployed copy. Profiles bind stock 8-bit and modified 4-bit assets, revisions,
+digests and resolved prepared selections; fixed initial settings are 32K, reasoning on,
+BF16 KV, FP32 recurrent state, zero disk cache and idle release off. Preparation/audit
+receipts are checked without hashing model weights on status polls.
 
-Implement a disabled-by-default Splash adapter and its owning host wrapper against these
-contracts. The adapter must supply validated private profile targets, live capabilities,
-ports/deadlines/resource policy, cheap ownership observations, bounded details and readiness,
-lifecycle steps, inference/context/model metadata, compatibility settings and intent
-serialization. The wrapper must supply generation-safe parent/native-child ownership and
-start/stop behavior. Include every owned generation in the observation's generation record
-before relying on it to authorize a stop; extend the typed contract if the wrapper requires
-a richer record. Keep command construction stable so execution guards can identify the
-adapter's start/switch/stop steps.
+Typed `OwnedProcess` members extend observations to controller/native bundles.
+`generation_record()` preserves legacy primary `pid`/`started` fields while including
+every verified member in execution and quality guards. Listener attribution recognizes
+verified native children and removes only port-only placeholders explained by another
+registered owner. Foreign listeners, reused PIDs, changed executable/launch identity,
+unrecorded orphans and unavailable inspection remain unknown and block activation.
 
-Before enabling Splash, add wrapper tests, pinned runtime inventory, reciprocal exclusion
-guards in all owning wrappers, selector/log-source presentation and current-engine quality
-tests. Initially use a 32K reasoning-on profile with GPU sidecars excluded. Verify aliases
-and an authenticated gateway inference request before live use. Usage/log ingestion and a
-reviewable deploy/rollback/verification sequence remain Phase 3 work. No Phase 0 measurement
-has been rescored, and no installation, deployment or default-engine change occurs here.
+The owning host wrapper validates private data and runtime receipts, launches with a
+deliberate environment, records ownership atomically, waits for loaded readiness and stops
+only revalidated members. Recorded children survive parent death in the ownership model;
+verified replacement children change the generation bundle. TERM/KILL and resource-release
+waits are bounded. Host status is read-only. All owning wrappers share owner-bearing
+`mlx.lock` lifecycle serialization with a short `maintenance.lock` acquisition gate;
+reciprocal Splash exclusions apply even with a closed HTTP port. No admin watchdog is added.
 
-Phase 1 validation: 2,882 passed, one skipped; 98.15% coverage. Neutral contracts, registry/
-adapters and new ownership/planning decisions have 100% statement/branch coverage. Ruff,
-strict mypy, instruction-file comparison and private-pattern scanning pass. See the
-[implementation devlog](../devlogs/2026-10-27.md) for the completed handoff.
+Activation requires `splash:<profile>`; profile changes restart through existing Step
+plans, job claims, history, intent and rollback. Asset preflight occurs before stopping a
+source. Failed target exit remains mandatory before restoration, and every lifecycle
+command is matched to an ownership guard. Disabling Splash hides its targets and avoids
+presentation HTTP/PID probes, while cheap lifecycle observations still detect an owner.
+
+Additive public backend descriptions drive selectors, badges, exclusions, chat/quality
+availability and 32K profile labels. Existing status fields remain compatible. Direct
+authenticated SSE chat keeps explicit user reasoning settings. Current-only compatibility
+and evals retain served-model/profile fingerprints and context; cancellation/deadlines
+close requests and external changes prevent score promotion. No sweeps or local MLX judges
+run against Splash. Allowlisted wrapper/native output uses the existing rotating log viewer.
+MLX throughput is not displayed as Splash throughput; no new usage source or availability
+denominator is introduced here.
+
+See the [Phase 2 plan](../plans/20261027_splash-phase2-adapter-and-host-integration.md)
+for validation status and the [host guide](../host/splash/README.md) for settings,
+private preparation, failure handling and the Phase 3 installation/rollback worksheet.
+Pinned Splash aliases cannot be absolute MLX paths; an existing gateway route using one
+requires an explicitly reviewed alias change. Authenticated gateway inference remains
+unverified. Live deployment, telemetry, production qualification and rollout belong to
+Phase 3. Earlier Phase 0 failed/inconclusive/unassessed results remain unchanged.

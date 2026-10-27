@@ -4,6 +4,7 @@
 <p class="warn-note">Test chats go straight to the model on :8080. They use the single decode slot (LiteLLM clients wait meanwhile), bypass LiteLLM, and do not appear in usage numbers.</p>
 <div class="chat-layout">
   <section class="card chat-main">
+<p class="muted" id="chat-engine-note" hidden></p>
     <div id="chat-disabled" class="error" hidden></div>
     <div id="messages" aria-live="polite"></div>
     <form id="chat-form">

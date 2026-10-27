@@ -32,15 +32,8 @@ function effectText(kind = document.getElementById("q-kind").value, scope = docu
   const engine = st.engine?.active;
   const cur = currentName(st) || "the selected model";
   const parts = [];
-  if (engine === "comfyui" || engine === "conflict") {
-    return { text: "ComfyUI owns the GPU. Switch the engine to MLX or off first.", ok: false };
-  }
-  if (engine === "strata") {
-    const ok = (kind === "compatibility" || kind === "eval") && scope === "current";
-    return ok
-      ? { text: `Runs the ${kind === "eval" ? "eval" : "compatibility checks"} on Strata; nothing is switched.`, ok: true, off: false }
-      : { text: "Strata is running: compatibility checks and evals also run on Strata, for the current engine only (a local mlx: judge is not allowed there).", ok: false };
-  }
+  const policy = EngineUI.quality(st, kind, scope);
+  if (policy.handled) return policy;
   const n = scope === "all" ? roster.length : 1;
   const target = scope === "model" ? chosen : scope === "all" ? null : cur;
   if (engine === "mlx") {
@@ -60,8 +53,7 @@ function renderEffect() {
   document.getElementById("q-effect").textContent = e.text;
   document.getElementById("quality-start").disabled = !e.ok || Boolean(lastStatus?.job);
   const st = lastStatus || {};
-  document.getElementById("engine-now").textContent = st.engine?.active === "mlx" ? `MLX · ${st.selected}`
-    : st.engine?.active === "none" ? "Engine off" : st.engine?.active === "strata" ? "Strata" : st.engine?.active || "";
+  document.getElementById("engine-now").textContent = EngineUI.label(st);
 }
 
 async function start() {
@@ -176,9 +168,9 @@ function showRun(run) {
   const facts = [
     ["Kind", run.kind], ["Models", runModels(run)], ["Started", fmt.time(run.started)], ["Finished", fmt.time(run.finished)],
     ["Started from", run.original ? (run.original.engine === "mlx" ? `MLX · ${run.original.name}`
-      : run.original.engine === "strata" ? "Strata" : `off (${run.original.name} selected)`) : "—"],
+      : run.original.engine !== "none" ? run.original.name || run.original.engine : `off (${run.original.name} selected)`) : "—"],
     ["Restoration", `${RESTORE_TEXT[rest.outcome] || "—"}${rest.detail ? ` — ${rest.detail}` : ""}`],
-    ["Runtime", run.runtime_version ? `mlx-vlm ${run.runtime_version}` : "unavailable"],
+    ["Runtime", EngineUI.runtimeLabel(run)],
     ["Settings fingerprint", run.runtime_fingerprint ? run.runtime_fingerprint.slice(0, 12) : "unavailable"],
     ["Case version", run.case_version || "—"],
   ];

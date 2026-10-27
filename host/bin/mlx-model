@@ -1,6 +1,15 @@
 #!/bin/zsh
 # Start, stop, and switch local MLX models. Only one server is allowed.
 set -euo pipefail
+
+ENGINE_GUARD="/Volumes/Models/bin/engine-guard.sh"
+if [[ -r "$ENGINE_GUARD" ]]; then
+  source "$ENGINE_GUARD"
+else
+  engine_splash_guard() { echo "Missing shared engine guard." >&2; return 1; }
+  engine_run() { echo "Missing shared engine guard." >&2; return 1; }
+fi
+
 source /Volumes/Models/bin/mlx-env.sh
 
 RUN_DIR="$MODELS_ROOT/run"
@@ -161,6 +170,7 @@ mlx_pids() {
 }
 
 stop_server() {
+  engine_splash_guard
   local pids pid i
   pids="$(mlx_pids | awk 'NF && !seen[$0]++')"
   if [[ -z "$pids" ]]; then
@@ -242,6 +252,7 @@ profile_args() {  # name; sets PROFILE_FP and PROFILE_ARGS
 
 # The Strata engine holds most of memory and MLX's port: never start beside it.
 strata_guard() {
+  engine_splash_guard
   if strata_pid >/dev/null; then
     echo "The Strata engine is running. Stop it first: /Volumes/Models/strata/bin/strata stop" >&2
     exit 1
