@@ -479,6 +479,9 @@ internal and its repr excludes the credential-bearing ChatTarget.
 
 ### Phase 2 handoff
 
+The [focused Phase 2 plan](../plans/20261027_splash-phase2-adapter-and-host-integration.md)
+tracks the owning wrapper, process-bundle contract extension and disabled integration.
+
 Implement a disabled-by-default Splash adapter and its owning host wrapper against these
 contracts. The adapter must supply validated private profile targets, live capabilities,
 ports/deadlines/resource policy, cheap ownership observations, bounded details and readiness,

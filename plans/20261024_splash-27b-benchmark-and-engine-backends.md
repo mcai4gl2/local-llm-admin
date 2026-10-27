@@ -402,6 +402,10 @@ Keep this a local, typed adapter design, not a framework. MLX remains the defaul
 
 ## Phase 2 — Splash adapter and host integration, only after Phase 1
 
+The [focused Phase 2 plan](20261027_splash-phase2-adapter-and-host-integration.md)
+starts from Phase 1 commit `d1ab6d6` and defines six test-first implementation packages.
+Phase 2 remains unimplemented; live qualification and rollout stay in Phase 3.
+
 - [ ] 🟥 Write host-wrapper tests first for start/stop/status, validated profile/env parsing,
   lock contention, port conflict, process ownership, missing volume/assets, failed startup,
   SIGTERM timeout and readiness. Then add `host/splash/bin/splash`, env/profile examples,
