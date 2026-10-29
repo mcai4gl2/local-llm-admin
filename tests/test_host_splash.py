@@ -939,8 +939,19 @@ def test_host_loaded_readiness_rejects_changed_or_malformed_metadata(
     assert host_control.details(tmp_path)["state"] != "ready"
 
 
-@pytest.mark.parametrize("outcome", ["success", "profile-change", "cancel", "deadline"])
-async def test_splash_current_eval_is_bound_to_owned_profile(splash_app: Any, outcome: str) -> None:
+@pytest.mark.parametrize(
+    "outcome,planning_delay",
+    [
+        ("success", 0.0),
+        ("profile-change", 0.0),
+        ("cancel", 0.0),
+        ("deadline", 0.0),
+        ("deadline", 0.6),
+    ],
+)
+async def test_splash_current_eval_is_bound_to_owned_profile(
+    splash_app: Any, outcome: str, planning_delay: float, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import asyncio
 
     import httpx
@@ -965,6 +976,14 @@ async def test_splash_current_eval_is_bound_to_owned_profile(splash_app: Any, ou
         ],
     }
     app.state.evals.add_custom(parse_suite(suite))
+    original_get = qr._get
+
+    async def delayed_get(http: Any, path: str) -> Any:
+        if path == "/openapi.json" and planning_delay:
+            await asyncio.sleep(planning_delay)
+        return await original_get(http, path)
+
+    monkeypatch.setattr(qr, "_get", delayed_get)
     original = qr.transport
     entered = asyncio.Event()
     closed = asyncio.Event()
@@ -972,6 +991,9 @@ async def test_splash_current_eval_is_bound_to_owned_profile(splash_app: Any, ou
     async def transport(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v1/chat/completions":
             entered.set()
+            if outcome == "deadline":
+                assert qr._plan is not None
+                qr._plan.deadline = 0.0  # expire only once a request actually owns the slot
             if outcome == "profile-change":
                 h.doc["profiles"]["stock-8bit-32k"]["label"] = "Changed externally"
                 write(h.path, h.doc)
@@ -984,7 +1006,8 @@ async def test_splash_current_eval_is_bound_to_owned_profile(splash_app: Any, ou
 
     qr.transport = httpx.MockTransport(transport)
     if outcome == "deadline":
-        qr.settings.eval_run_deadline_s = 0.5
+        # Give planning its normal budget; exercise the real request timeout after admission.
+        monkeypatch.setattr(qr, "_eval_deadline", lambda plan, max_tokens: 0.05)
     before = h.record.read_bytes()
     response = await client.post(
         "/api/quality/runs",
@@ -1015,7 +1038,9 @@ async def test_splash_current_eval_is_bound_to_owned_profile(splash_app: Any, ou
     else:
         assert app.state.evals.scorecard() == []
     if outcome in ("cancel", "deadline"):
-        assert closed.is_set()
+        assert entered.is_set() and closed.is_set()
+    if outcome == "deadline":
+        assert run["error"] == "run deadline reached"
 
 
 @pytest.mark.parametrize(
