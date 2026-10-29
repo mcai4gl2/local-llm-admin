@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import sysconfig
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -122,6 +123,10 @@ class SplashHost:
             path = self.root / "runtime" / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(sys.executable, path)
+            # Standalone/uv Python discovers its stdlib relative to the copied executable.
+            library = path.parent.parent / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}"
+            library.parent.mkdir(parents=True, exist_ok=True)
+            library.symlink_to(Path(sysconfig.get_path("stdlib")), target_is_directory=True)
         server = self.root / "runtime/server"
         server.mkdir()
         (server / "__init__.py").write_text("")
@@ -1136,3 +1141,27 @@ def test_128k_host_contract_and_owning_lifecycle(
     assert observed["fingerprint"] == profile.fingerprint
     assert h.run("stop").returncode == 0
     assert json.loads(h.run("status", "--json").stdout)["state"] == "absent"
+
+
+@pytest.mark.parametrize("relative", ["python/bin/python3", "engine/splash"])
+def test_fake_runtime_python_has_an_explicit_standard_library(
+    splash_host: SplashHost, relative: str
+) -> None:
+    binary = splash_host.root / "runtime" / relative
+    # Force a bundled prefix on system Python, then exercise the actual isolated flag.
+    for flags in ([], ["-I"]):
+        result = subprocess.run(
+            [
+                str(binary),
+                *flags,
+                "-S",
+                "-c",
+                "import encodings,http.server,json; print(json.dumps({'ready': True}))",
+            ],
+            env={"PATH": "/usr/bin:/bin", "PYTHONHOME": str(binary.parent.parent)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == {"ready": True}
