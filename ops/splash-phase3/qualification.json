@@ -1,0 +1,74 @@
+{
+  "contract": "splash-phase3-functional-1",
+  "status": "prepared; not executed; live approval required",
+  "profiles": [
+    "stock-8bit-32k",
+    "modified-4bit-32k"
+  ],
+  "window_s": 2700,
+  "restoration_reserve_s": 600,
+  "request_cap": 40,
+  "request_deadline_s": 120,
+  "completion_cap": 2048,
+  "context_smoke": {
+    "prompt_token_band": [
+      31744,
+      32000
+    ],
+    "completion_cap": 512,
+    "context_tokens": 32768,
+    "reasoning": true,
+    "position": 50,
+    "seed": 0
+  },
+  "concurrency": 1,
+  "per_profile": [
+    "direct-stream",
+    "gateway-stream",
+    "direct-context",
+    "gateway-context",
+    "direct-invalid-auth",
+    "direct-unknown-model",
+    "direct-invalid-host",
+    "gateway-invalid-auth",
+    "gateway-unknown-model",
+    "direct-cancel",
+    "direct-followup",
+    "gateway-cancel",
+    "gateway-followup"
+  ],
+  "additional_requests": [
+    "original-before",
+    "restart-direct-followup",
+    "original-after"
+  ],
+  "scheduled_requests": 29,
+  "reserved_requests": 11,
+  "restore": {
+    "splash": "owned stop and verified process/listener absence",
+    "engine": "original explicit MLX selection; a new process generation is expected",
+    "services": "original service running states and semantic intents",
+    "admin": "original schema16 disabled environment and LaunchAgent",
+    "gateway": "remove only owned temporary routes/key; original route/config preserved",
+    "database": "preserve schema16 observations; no schema rollback for a qualification window"
+  },
+  "abort": [
+    "unknown or changed ownership",
+    "missing auth or Host refusal",
+    "misattributed telemetry",
+    "less than 6 GiB available memory",
+    "critical memory pressure",
+    "sustained swap growth over 16 MiB",
+    "time or request reserve reached",
+    "failed owned cleanup"
+  ],
+  "unassessed": [
+    "forced native child failure/recovery",
+    "PID reuse or denied process access fault injection",
+    "admin current-only compatibility/eval acceptance",
+    "statistical performance or quality adoption",
+    "isolated ingestion overhead",
+    "stock physical memory reclamation"
+  ],
+  "frozen_measurement": "measurement.json is unchanged and requires a separate approved comparison window"
+}

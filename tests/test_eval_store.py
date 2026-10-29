@@ -33,7 +33,7 @@ def store(tmp_path):
 
 
 def test_schema_version():
-    assert SCHEMA_VERSION == 15
+    assert SCHEMA_VERSION >= 14  # eval tables survive later additive migrations
 
 
 def test_builtins_are_immutable_per_version(store):

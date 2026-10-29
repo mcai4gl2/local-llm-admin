@@ -86,6 +86,18 @@ def process(pid: int) -> dict[str, Any] | None:
         raise HostError("Unreadable process identity.")
     if fields[5].startswith("Z"):
         return None
+    if sys.platform == "darwin" and "E" in fields[5]:
+        # macOS tears down executable/argv mappings while P_WEXIT is still visible.
+        # Wait for independent absence; an exiting or reused live PID never authorizes signals.
+        for _ in range(60):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return None
+            except PermissionError:
+                raise HostError("Process inspection is unavailable.") from None
+            time.sleep(0.05)
+        raise HostError("Exiting process is still present.")
     try:
         started = time.mktime(time.strptime(" ".join(fields[:5]), "%a %b %d %H:%M:%S %Y"))
         executable = str(Path(f"/proc/{pid}/exe").resolve(strict=True))
@@ -118,9 +130,13 @@ def _member(root: Path, pid: int, role: str, prepared: str) -> dict[str, Any] | 
         return None
     rel = "python/bin/python3" if role == "controller" else "engine/splash"
     expected = (root / "runtime" / rel).resolve()
-    if not expected.is_relative_to((root / "runtime").resolve()) or not _exe_matches(
-        proc, expected
-    ):
+    if not expected.is_relative_to((root / "runtime").resolve()):
+        raise HostError("Process executable identity is unknown.")
+    if not _exe_matches(proc, expected):
+        # A macOS member can exit between ps and lsof while its owner stops it.
+        # Only proven absence permits ignoring the mismatch; live/reused PIDs refuse.
+        if process(pid) is None:
+            return None
         raise HostError("Process executable identity is unknown.")
     args = proc["args"]
     marker = any(args[i : i + 2] == ["-m", "server.server"] for i in range(len(args) - 1))
@@ -202,7 +218,7 @@ def observe(root: Path) -> dict[str, Any]:
                 raise HostError("Unrecorded Splash process.")
             return {"state": "absent", "processes": [], "profile": None}
         found = members(root, record)
-        owners = listeners(PORT)
+        owners = listeners(record.get("port", PORT))
         if owners - {p["pid"] for p in found}:
             raise HostError("An unrelated listener owns the serving port.")
         return {
@@ -219,8 +235,10 @@ def observe(root: Path) -> dict[str, Any]:
 def _get(root: Path, path: str) -> Any:
     try:
         env = profiles.read_env(root / "etc/splash.env")
+        record = _record(root)
+        port = record.get("port", PORT) if record is not None else PORT
         req = urllib.request.Request(
-            f"http://127.0.0.1:{PORT}{path}",
+            f"http://127.0.0.1:{port}{path}",
             headers={"Authorization": "Bearer " + env.api_key},
         )
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
@@ -263,7 +281,7 @@ def details(root: Path) -> dict[str, Any]:
         row["id"]: row for row in rows if isinstance(row, dict) and isinstance(row.get("id"), str)
     }
     expected = {profile.model, *profile.aliases} if profile is not None else set()
-    kv, weights = status.get("kv"), status.get("weights", {})
+    weights = status.get("weights", {})
     if (
         profile is None
         or profile.fingerprint != record["fingerprint"]
@@ -276,9 +294,9 @@ def details(root: Path) -> dict[str, Any]:
             or by_id[name]["max_model_len"] != profile.max_context
             for name in expected
         )
-        or not isinstance(kv, dict)
-        or kv.get("format") != profile.kv_format
-        or status.get("state_format") != profile.state_format
+        or not profiles.runtime_precision_matches(
+            status, kv_format=profile.kv_format, state_format=profile.state_format
+        )
         or not isinstance(weights, dict)
     ):
         result["state"] = "unknown"
@@ -331,7 +349,7 @@ def stop(root: Path) -> None:
         _signal(root, record, item, signal.SIGKILL)
     deadline = time.monotonic() + 3
     while time.monotonic() < deadline:
-        if not members(root, record) and not listeners(PORT):
+        if not members(root, record) and not listeners(record.get("port", PORT)):
             (root / "run/splash.json").unlink(missing_ok=True)
             return
         time.sleep(0.05)
@@ -369,7 +387,7 @@ def start(root: Path, name: str) -> None:
             or not path.resolve().is_relative_to((root / "runtime").resolve())
         ):
             raise HostError("Missing or untrusted runtime executable.")
-    for port in (PORT, 7860, 8188, 8081, 8083, 8084):
+    for port in (PORT, env.port, 7860, 8188, 8081, 8083, 8084):
         if listeners(port):
             raise HostError("An engine or GPU service still owns resources.")
     for path in [
@@ -416,9 +434,9 @@ def start(root: Path, name: str) -> None:
         "--host",
         env.host,
         "--port",
-        str(PORT),
+        str(env.port),
         "--max-context",
-        "32768",
+        str(profile.max_context),
         "--max-memory",
         str(profile.memory_gib) + "G",
         "--kv-format",
@@ -454,6 +472,7 @@ def start(root: Path, name: str) -> None:
         "fingerprint": profile.fingerprint,
         "model": profile.model,
         "prepared": str(profile.prepared),
+        "port": env.port,
         "controller": None,
         "native": [],
     }

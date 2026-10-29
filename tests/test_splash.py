@@ -18,6 +18,14 @@ from local_llm_admin.splash_profiles import (
 )
 
 
+def captured_status(pid: int, model: str) -> dict[str, Any]:
+    """Pinned live status projection with explicitly synthetic instance identity."""
+    path = Path(__file__).parent / "fixtures/splash/readiness-capture.json"
+    status: dict[str, Any] = json.loads(path.read_text())["status_projection"]
+    status["instance"] = {"pid": pid, "model": model}
+    return status
+
+
 def catalog(root: Path) -> tuple[Path, dict]:
     assets = root / "assets"
     profiles = {}
@@ -93,11 +101,31 @@ def test_profiles_keep_asset_cohorts_separate_and_stable_fingerprint(tmp_path: P
         profiles["bad"] = a
 
 
+@pytest.mark.parametrize("cohort", ["stock-8bit", "modified-4bit"])
+def test_128k_profile_is_explicit_and_changes_fingerprint(tmp_path: Path, cohort: str) -> None:
+    path, doc = catalog(tmp_path)
+    name = cohort + "-32k"
+    before = load_profiles(path, tmp_path)[name]
+    doc["profiles"][name]["max_context"] = 131072
+    doc["profiles"][name]["label"] = cohort + " · 128K"
+    write(path, doc)
+    after = load_profiles(path, tmp_path)[name]
+    assert after.max_context == 131072
+    assert after.public()["max_context"] == 131072
+    assert after.fingerprint != before.fingerprint
+    assert after.target == before.target and after.draft == before.draft
+    assert after.prepared == before.prepared and after.aliases == before.aliases
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
         ("max_context", True),
         ("max_context", 65536),
+        ("max_context", 131072.0),
+        ("max_context", "131072"),
+        ("max_context", 131073),
+        ("max_context", 262144),
         ("memory_gib", 0),
         ("memory_gib", 257),
         ("memory_gib", "40"),
@@ -416,3 +444,58 @@ def test_shared_record_reader_refuses_untrusted_records(tmp_path: Path, mutation
         write(record, doc)
     with pytest.raises(ProfileError):
         read_ownership(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "document", [None, [], {}, {"identity": []}, {"identity": {}, "memory_plan": []}]
+)
+def test_runtime_precision_requires_structured_identity_and_plan(document: object) -> None:
+    from local_llm_admin.splash_profiles import runtime_precision_matches
+
+    assert not runtime_precision_matches(document, kv_format="bf16", state_format="fp32")
+
+
+@pytest.mark.parametrize("port", [None, "1", "8085", "65535"])
+def test_private_serving_port_is_explicit_and_backwards_compatible(
+    tmp_path: Path, port: str | None
+) -> None:
+    path = tmp_path / "splash.env"
+    path.write_text("SPLASH_API_KEY=" + "k" * 40 + "\n" + (f"SPLASH_PORT={port}\n" if port else ""))
+    path.chmod(0o600)
+    assert read_env(path).port == (int(port) if port else 8080)
+
+
+@pytest.mark.parametrize("port", ["", "0", "65536", "-1", "8.5", "true", " 8085", "08085"])
+def test_private_serving_port_refuses_ambiguous_values(tmp_path: Path, port: str) -> None:
+    path = tmp_path / "splash.env"
+    path.write_text("SPLASH_API_KEY=" + "k" * 40 + f"\nSPLASH_PORT={port}\n")
+    path.chmod(0o600)
+    with pytest.raises(ProfileError):
+        read_env(path)
+
+
+@pytest.mark.parametrize("port", [None, 8085, 1, 65535, True, 0, 65536, "8085", 8.5])
+def test_private_ownership_port_binds_the_recorded_endpoint(tmp_path: Path, port: object) -> None:
+    doc = {
+        "version": 1,
+        "profile": "stock-8bit-32k",
+        "fingerprint": "f" * 20,
+        "model": "example/model",
+        "prepared": str(tmp_path / "prepared/model"),
+        "controller": {
+            "pid": 100,
+            "started": 1.0,
+            "executable": "/runtime/python",
+            "role": "controller",
+        },
+        "native": [],
+    }
+    if port is not None:
+        doc["port"] = port
+    (tmp_path / "run").mkdir()
+    write(tmp_path / "run/splash.json", doc)
+    if port is None or type(port) is int and 1 <= port <= 65535:
+        assert read_ownership(tmp_path).get("port", 8080) == (8080 if port is None else port)
+    else:
+        with pytest.raises(ProfileError):
+            read_ownership(tmp_path)

@@ -1,6 +1,8 @@
 import asyncio
 import os
 import subprocess
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -151,3 +153,39 @@ def test_recorded_ioreg_output():
 
     text = (Path(__file__).parent / "fixtures/mac/ioreg-accelerator.txt").read_text()
     assert metrics.parse_ioreg_gpu(text) == 0.0
+
+
+def test_legacy_primary_metric_survives_bundle_support_without_pid_reuse(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    from local_llm_admin.backend_types import EngineObservation
+    from local_llm_admin.config import Settings
+    from local_llm_admin.metrics import Sampler
+
+    obs = EngineObservation("mlx", generation={"pid": 100, "started": 1.0}, ownership="verified")
+    generation = [1.0]
+
+    class Proc:
+        pid = 100
+
+        def create_time(self) -> float:
+            return generation[0]
+
+        def cpu_percent(self, _: object) -> float:
+            return 5.0
+
+        def memory_info(self) -> object:
+            return SimpleNamespace(rss=1234)
+
+        def oneshot(self) -> Any:
+            from contextlib import nullcontext
+
+            return nullcontext()
+
+    monkeypatch.setattr("local_llm_admin.metrics.psutil.Process", lambda pid: Proc())
+    sampler = Sampler(Settings(mlx_root=tmp_path), lambda: 100, engine_observation=lambda: obs)
+    assert sampler.sample()["mlx"]["rss"] == 1234
+    generation[0] = 2.0
+    assert sampler.sample()["mlx"] is None

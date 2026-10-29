@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from .host_harness import HOST, Host, make_host, redirect
-from .test_splash import catalog, write
+from .test_splash import captured_status, catalog, write
 
 
 @pytest.fixture
@@ -60,6 +60,7 @@ p.add_argument('--binary')
 p.add_argument('--model')
 p.add_argument('--host')
 p.add_argument('--port', type=int)
+p.add_argument('--max-context', type=int, default=32768)
 p.add_argument('--served-model-name', action='append', default=[])
 args, _ = p.parse_known_args()
 root = Path(__file__).resolve().parents[2]
@@ -71,7 +72,7 @@ if (run / 'fail_start').exists():
 native_code = "import os,signal,time; from pathlib import Path; r=Path(os.readlink('/proc/self/exe')).parents[2]/'run'; signal.signal(signal.SIGTERM, signal.SIG_IGN if (r/'ignore_term').exists() else signal.SIG_DFL); time.sleep(300)"
 child = subprocess.Popen([args.binary, '-c', native_code, 'serve-native', args.prepared])
 (run / 'native-pid').write_text(str(child.pid))
-(root.parent.parent / 'state/listen_8080').write_text(str(os.getpid()))
+(root.parent.parent / ('state/listen_' + str(args.port))).write_text(str(os.getpid()))
 
 def terminate(*unused: object) -> None:
     if not (run / 'ignore_term').exists():
@@ -89,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         ready = not (run / 'loading').exists()
-        docs = {'/health': {'status': 'ok'}, '/ready': {'status': 'ready' if ready else 'unavailable'}, '/status': {'ready': ready, 'maximum_context_tokens': 32768, 'instance': {'pid': os.getpid(), 'model': args.model}, 'kv': {'format': 'bf16'}, 'state_format': 'fp32', 'weights': {'released': False, 'restoring': False}}, '/v1/models': {'data': [{'id': name, 'max_model_len': 32768} for name in [args.model, *args.served_model_name]]}}
+        docs = {'/health': {'status': 'ok'}, '/ready': {'status': 'ready' if ready else 'unavailable'}, '/status': {'ready': ready, 'maximum_context_tokens': args.max_context, 'instance': {'pid': os.getpid(), 'model': args.model}, 'kv': {}, 'state': {}, 'identity': {'kv': {'format': 'bf16'}}, 'memory_plan': {'valid': True, 'maximum_context_tokens': 32768, 'model': {'kv_format': 'bf16', 'state_format': 'fp32'}}, 'weights': {'released': False, 'restoring': False}}, '/v1/models': {'data': [{'id': name, 'max_model_len': args.max_context} for name in [args.model, *args.served_model_name]]}}
         self.send_response(503 if self.path == '/ready' and (not ready) else 200)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
@@ -381,18 +382,27 @@ def test_shared_reservation_covers_work_without_holding_maintenance(
 ) -> None:
     h = splash_host
     script = h.host.root / "bin/hold-engine-lock"
+    entered = h.root / "run/guarded-work-entered"
+    release = h.root / "run/guarded-work-release"
     script.write_text(
-        'source "' + str(h.host.root / "bin/engine-guard.sh") + '"\nengine_run sleep 2\n'
+        'source "' + str(h.host.root / "bin/engine-guard.sh") + '"\n'
+        'guarded_work() {\n'
+        f'  touch "{entered}"\n'
+        f'  while [[ ! -f "{release}" ]]; do sleep 0.02; done\n'
+        '}\nengine_run guarded_work\n'
     )
     held = h.host.spawn(cli=script)
-    h.host.wait_for(h.host.lock / "owner")
-    owner = h.host.owner(h.host.lock)
-    assert int(owner["pid"]) == held.pid
-    assert not h.host.gate.exists()
-    result = h.run("start", "stock-8bit-32k")
-    assert result.returncode != 0 and "mlx.lock" in result.stderr
-    assert not h.record.exists()
-    held.wait(timeout=5)
+    try:
+        h.host.wait_for(entered)
+        owner = h.host.owner(h.host.lock)
+        assert int(owner["pid"]) == held.pid
+        assert not h.host.gate.exists()
+        result = h.run("start", "stock-8bit-32k")
+        assert result.returncode != 0 and "mlx.lock" in result.stderr
+        assert not h.record.exists()
+    finally:
+        release.touch()
+        held.wait(timeout=5)
     assert not h.host.lock.exists() and not h.host.gate.exists()
 
 
@@ -591,14 +601,7 @@ async def splash_app(splash_host: SplashHost, monkeypatch: pytest.MonkeyPatch) -
             )
         docs = {
             "/ready": {"status": "ready"},
-            "/status": {
-                "ready": True,
-                "maximum_context_tokens": 32768,
-                "instance": {"pid": record["controller"]["pid"], "model": model},
-                "kv": {"format": "bf16"},
-                "state_format": "fp32",
-                "weights": {},
-            },
+            "/status": captured_status(record["controller"]["pid"], model),
             "/v1/models": {
                 "data": [
                     {"id": model, "max_model_len": 32768},
@@ -833,6 +836,15 @@ async def test_disabled_splash_owner_can_be_stopped_without_profile_inventory(
         "recovering",
         "loading",
         "instance",
+        "identity-type",
+        "identity-format",
+        "plan-type",
+        "plan-valid",
+        "plan-valid-int",
+        "plan-model-missing",
+        "plan-model-type",
+        "plan-kv",
+        "legacy",
     ],
 )
 def test_host_loaded_readiness_rejects_changed_or_malformed_metadata(
@@ -862,14 +874,7 @@ def test_host_loaded_readiness_rejects_changed_or_malformed_metadata(
         kv_format="bf16",
         state_format="fp32",
     )
-    health = {
-        "instance": {"pid": 100, "model": record["model"]},
-        "maximum_context_tokens": 32768,
-        "ready": True,
-        "kv": {"format": "bf16"},
-        "state_format": "fp32",
-        "weights": {},
-    }
+    health = captured_status(100, record["model"])
     models = {
         "data": [{"id": name, "max_model_len": 32768} for name in (profile.model, *profile.aliases)]
     }
@@ -882,9 +887,27 @@ def test_host_loaded_readiness_rejects_changed_or_malformed_metadata(
     monkeypatch.setattr(host_control, "_get", lambda root, path: docs[path])
     assert host_control.details(tmp_path)["state"] == "ready"
     if mutation == "kv":
-        health["kv"] = None
+        health["identity"]["kv"] = None
     elif mutation == "state":
-        health["state_format"] = "fp16"
+        health["memory_plan"]["model"]["state_format"] = "fp16"
+    elif mutation == "identity-type":
+        health["identity"] = []
+    elif mutation == "identity-format":
+        health["identity"]["kv"]["format"] = "fp8"
+    elif mutation == "plan-type":
+        health["memory_plan"] = None
+    elif mutation in ("plan-valid", "plan-valid-int"):
+        health["memory_plan"]["valid"] = False if mutation == "plan-valid" else 1
+    elif mutation == "plan-model-missing":
+        health["memory_plan"]["model"] = {}
+    elif mutation == "plan-model-type":
+        health["memory_plan"]["model"] = []
+    elif mutation == "plan-kv":
+        health["memory_plan"]["model"]["kv_format"] = "fp8"
+    elif mutation == "legacy":
+        health.pop("identity")
+        health.pop("memory_plan")
+        health.update(kv={"format": "bf16"}, state_format="fp32")
     elif mutation == "model-list":
         models["data"] = [{"id": {}}]
     elif mutation == "model-context":
@@ -1026,3 +1049,90 @@ def test_shared_reservation_releases_on_signal(splash_host: SplashHost, sig: int
     process.wait(timeout=5)
     assert process.returncode == -sig
     assert not h.lock.exists() and not h.gate.exists()
+
+
+@pytest.mark.parametrize("sig", [signal.SIGTERM, signal.SIGINT])
+@pytest.mark.parametrize("point", ["before-unlink", "after-unlink"])
+@pytest.mark.parametrize("target", ["gate", "lifecycle"])
+def test_shared_reservation_signal_during_gate_release(
+    splash_host: SplashHost, sig: int, point: str, target: str
+) -> None:
+    """Deliver the signal in the owner-unlink/rmdir gap rather than racing a sleep."""
+    import shlex
+
+    h = splash_host.host
+    fake_bin = h.root / "signal-bin"
+    fake_bin.mkdir()
+    real_rm = shutil.which("rm")
+    assert real_rm
+    owner = shlex.quote(str((h.gate if target == "gate" else h.lock) / "owner"))
+    marker = shlex.quote(str(h.state / "gate-signal-fired"))
+    remove = shlex.quote(real_rm) + ' "$@"\n'
+    trigger = f'printf fired > {marker}\nkill -{int(sig)} "$PPID"\nsleep 0.05\n'
+    fake_rm = fake_bin / "rm"
+    critical = remove + trigger if point == "after-unlink" else trigger + remove
+    fake_rm.write_text(
+        "#!/bin/bash\n"
+        + f'if [[ "$2" == {owner} && ! -e {marker} ]]; then\n'
+        + critical
+        + "\nelse\n"
+        + remove
+        + "fi\n"
+    )
+    fake_rm.chmod(0o755)
+    h.env["PATH"] = str(fake_bin) + os.pathsep + h.env["PATH"]
+    script = h.root / "bin/signalled-gate-release"
+    script.write_text('source "' + str(h.root / "bin/engine-guard.sh") + '"\nengine_run true\n')
+    result = h.run(cli=script, timeout=5)
+    assert result.returncode == -sig
+    assert not h.lock.exists() and not h.gate.exists()
+
+
+def test_custom_port_keeps_owned_lifecycle_and_reciprocal_mlx_exclusion(
+    splash_host: SplashHost,
+) -> None:
+    import socket
+
+    h = splash_host
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+    env = h.root / "etc/splash.env"
+    original = env.read_text()
+    env.write_text(original + f"SPLASH_PORT={port}\n")
+    result = h.run("start", "stock-8bit-32k")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(h.record.read_text())["port"] == port
+    argv = json.loads((h.root / "run/launch.json").read_text())["argv"]
+    assert argv[argv.index("--port") + 1] == str(port)
+    assert json.loads(h.run("status", "--json").stdout)["state"] == "ready"
+    # A changed configuration cannot redirect an existing owner's probes or cleanup.
+    env.write_text(original + "SPLASH_PORT=8086\n")
+    assert json.loads(h.run("status", "--json").stdout)["state"] == "ready"
+    blocked = h.host.run("start", "a")
+    assert blocked.returncode != 0
+    assert "Splash owns resources" in blocked.stdout + blocked.stderr
+    stopped = h.run("stop")
+    assert stopped.returncode == 0, stopped.stdout + stopped.stderr
+    assert not h.record.exists()
+
+
+@pytest.mark.parametrize("cohort", ["stock-8bit", "modified-4bit"])
+def test_128k_host_contract_and_owning_lifecycle(
+    splash_host: SplashHost, host_profiles: ModuleType, cohort: str
+) -> None:
+    h = splash_host
+    name = cohort + "-32k"
+    h.doc["profiles"][name]["max_context"] = 131072
+    write(h.path, h.doc)
+    profile = host_profiles.load_profiles(h.path, h.root)[name]
+    assert profile.max_context == 131072
+    result = h.run("start", name)
+    assert result.returncode == 0, result.stdout + result.stderr
+    launch = json.loads((h.root / "run/launch.json").read_text())["argv"]
+    assert launch[launch.index("--max-context") + 1] == "131072"
+    observed = json.loads(h.run("status", "--json").stdout)
+    assert observed["state"] == "ready" and observed["max_context"] == 131072
+    assert observed["fingerprint"] == profile.fingerprint
+    assert h.run("stop").returncode == 0
+    assert json.loads(h.run("status", "--json").stdout)["state"] == "absent"

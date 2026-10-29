@@ -59,7 +59,11 @@ async function refreshMetrics() {
   }
   tiles.push(tile("Disk I/O", fmt.rate(m.disk_read_bps), `write ${fmt.rate(m.disk_write_bps)}`));
   tiles.push(tile("Network", fmt.rate(m.net_rx_bps), `send ${fmt.rate(m.net_tx_bps)}`));
-  tiles.push(tile("Engine process", m.mlx ? fmt.bytes(m.mlx.rss) : "not running", m.mlx ? `CPU ${fmt.pct(m.mlx.cpu_percent)}` : ""));
+  const bundle = m.engine_bundle;
+  if (bundle && bundle.source) tiles.push(tile("Engine bundle · " + bundle.source,
+    bundle.rss === null ? bundle.state : fmt.bytes(bundle.rss),
+    `Sum of process RSS · ${bundle.members.length} members · CPU ${fmt.pct(bundle.cpu_percent)}; shared pages may be counted twice`));
+  tiles.push(tile("Engine process", m.mlx ? fmt.bytes(m.mlx.rss) : bundle && bundle.state !== "absent" ? "unavailable" : "not running", m.mlx ? `CPU ${fmt.pct(m.mlx.cpu_percent)}` : ""));
   document.getElementById("metric-tiles").replaceChildren(...tiles);
 }
 

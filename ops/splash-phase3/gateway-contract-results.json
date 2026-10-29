@@ -1,0 +1,160 @@
+{
+  "status": "http_pass_lifecycle_failed_restoration_verified",
+  "http_attempts": 29,
+  "http_checks_passed_with_runtime_cancel_evidence": 29,
+  "normal_client_cancellation_records": "four inconclusive raw records preserved; separate runtime evidence passes",
+  "native_epoch_count": 3,
+  "new_native_readings": 18,
+  "new_availability_observations": 12,
+  "database_totals": {
+    "engine_readings": 21,
+    "backend_availability": 22
+  },
+  "elapsed_s": 797.95,
+  "profiles": {
+    "stock-8bit-32k": {
+      "scheduled_cases": 13,
+      "passed_with_runtime_evidence": 13,
+      "context_checks": [
+        {
+          "case": "direct-context",
+          "prompt_tokens": 31873,
+          "completion_tokens": 132,
+          "finish_reason": "stop",
+          "retrieval": "pass"
+        },
+        {
+          "case": "gateway-context",
+          "prompt_tokens": 31873,
+          "completion_tokens": 132,
+          "finish_reason": "stop",
+          "retrieval": "pass"
+        }
+      ],
+      "refusals": [
+        {
+          "case": "direct-invalid-auth",
+          "http_status": 401
+        },
+        {
+          "case": "direct-unknown-model",
+          "http_status": 404
+        },
+        {
+          "case": "direct-invalid-host",
+          "http_status": 403
+        },
+        {
+          "case": "gateway-invalid-auth",
+          "http_status": 401
+        },
+        {
+          "case": "gateway-unknown-model",
+          "http_status": 403
+        }
+      ],
+      "cancellations": [
+        {
+          "case": "direct-cancel",
+          "cancelled_counter_increment": 1,
+          "observed_within_s": 0.8,
+          "same_complete_generation": true,
+          "runtime_idle": true
+        },
+        {
+          "case": "gateway-cancel",
+          "cancelled_counter_increment": 1,
+          "observed_within_s": 0.862,
+          "same_complete_generation": true,
+          "runtime_idle": true
+        }
+      ]
+    },
+    "modified-4bit-32k": {
+      "scheduled_cases": 13,
+      "passed_with_runtime_evidence": 13,
+      "context_checks": [
+        {
+          "case": "direct-context",
+          "prompt_tokens": 31873,
+          "completion_tokens": 117,
+          "finish_reason": "stop",
+          "retrieval": "pass"
+        },
+        {
+          "case": "gateway-context",
+          "prompt_tokens": 31873,
+          "completion_tokens": 120,
+          "finish_reason": "stop",
+          "retrieval": "pass"
+        }
+      ],
+      "refusals": [
+        {
+          "case": "direct-invalid-auth",
+          "http_status": 401
+        },
+        {
+          "case": "direct-unknown-model",
+          "http_status": 404
+        },
+        {
+          "case": "direct-invalid-host",
+          "http_status": 403
+        },
+        {
+          "case": "gateway-invalid-auth",
+          "http_status": 401
+        },
+        {
+          "case": "gateway-unknown-model",
+          "http_status": 403
+        }
+      ],
+      "cancellations": [
+        {
+          "case": "direct-cancel",
+          "cancelled_counter_increment": 1,
+          "observed_within_s": 0.84,
+          "same_complete_generation": true,
+          "runtime_idle": true
+        },
+        {
+          "case": "gateway-cancel",
+          "cancelled_counter_increment": 1,
+          "observed_within_s": 0.917,
+          "same_complete_generation": true,
+          "runtime_idle": true
+        }
+      ]
+    }
+  },
+  "restoration": {
+    "original_mlx_services_intents": "verified",
+    "splash_enabled": false,
+    "splash_members_listener": "absent",
+    "original_gateway_inference": "pass",
+    "gateway_test_routes_key": "removed",
+    "dead_receipt": "preserved; verified same-volume archive; no signal",
+    "database_restore": false,
+    "source_change_during_window": false
+  },
+  "limits": {
+    "window_s": 2700,
+    "request_cap": 40,
+    "scheduled_requests": 29,
+    "request_deadline_s": 120,
+    "concurrency": 1,
+    "output_caps": {
+      "original": 32,
+      "functional": 2048,
+      "context": 512
+    }
+  },
+  "failures_preserved": [
+    "temporary enable helper referenced unused deployment backup; approved opt-in completed after qualification backup integrity/env verification",
+    "final stop failed and retained dead receipt",
+    "stale receipt made restored MLX listener unknown and blocked service start",
+    "cross-device receipt rename refused; verified copy and same-volume archive used"
+  ]
+}

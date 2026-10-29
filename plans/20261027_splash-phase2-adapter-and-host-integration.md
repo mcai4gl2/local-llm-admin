@@ -1,10 +1,10 @@
-Overall Progress: 96%
+Overall Progress: 100%
 
 # Splash Phase 2 — adapter and host integration
 
 Date: 2026-10-27
-Status: Repository implementation and automated gates complete. Browser rendering
-review remains outstanding. Plan committed as `f4e3e88`.
+Status: Repository implementation, automated gates and browser rendering review complete.
+Plan committed as `f4e3e88`.
 Baseline: Phase 1 commit `d1ab6d6`.
 
 ## Summary and settled decisions
@@ -213,7 +213,7 @@ Files: `app.py`, `chat.py`, `compatibility.py`, `quality_runner.py`, `logs.py`,
   public target IDs, operations, resource policy and normalized state. Keep existing
   MLX/Strata/ComfyUI fields. Never expose keys, private paths or full private profiles.
   No disabled-backend HTTP/PID probes for presentation; retain one per-app registry.
-- [ ] 🟨 Use those descriptors for selector options, confirmation/exclusion messages,
+- [x] 🟩 Use those descriptors for selector options, confirmation/exclusion messages,
   conflict banners, badges and legacy MLX action disabling. Show profile/checkpoint and
   effective 32K context, distinguish loading/released/recovering, retain user selection
   during polls and never advertise unsupported operations. Hide Splash while disabled.
@@ -343,13 +343,20 @@ including nine new route-refusal/catalog-race/state/history checks beyond that f
 Combined coverage brings the registry/adapters to 100% statement/branch coverage as well
 as the new client/profile/ownership contracts. Standalone host helper coverage is reported
 separately above. Ruff, strict mypy, JS/zsh checks, instruction parity and scanning pass.
-Implementation changes are staged for review and remain uncommitted.
+Implementation committed as `c25078c` on 2026-10-28; browser review closed during
+Phase 3 implementation below.
+The next implementation sequence is in the
+[Phase 3 plan](20261028_splash-phase3-telemetry-qualification-and-rollout.md).
 
 The dependency-free Node harness verifies disabled/loading/ready/released/recovering/
 unknown/conflict presentation decisions, selector entries, current-only quality, reasoning
-defaults and runtime labels. All static JS passes syntax checks. A real browser was not
-available, so DOM rendering/visual review remains open. The presentation implementation is
-complete; its checkbox stays yellow pending that review. Progress counts 25 of 26 tasks.
+defaults and runtime labels. All static JS passes syntax checks. The later Phase 3
+closeout ran 32 real Chromium 156.0.8078.4 DOM checks at 390/1440px,
+including chat/quality/eval/log controls and Performance coverage. Narrow released and
+wide conflict screenshots were visually reviewed. A released-state header overflow
+regression failed before the CSS fix and now passes. See the
+[browser evidence and repeatable command](../docs/splash-telemetry.md#browser-closeout).
+All 26 repository tasks are complete; actual Mac/gateway qualification remains Phase 3.
 
 Gateway evidence covers pinned public interfaces and local fixtures: private auth,
 supported named aliases, HTTP refusal propagation, Host launch arguments and stream
@@ -380,3 +387,15 @@ and children to exit, then restore the previous engine and sidecar intent and pr
 inference. Turning the flag off is insufficient to stop an already-running bundle. Refuse
 to restore over an external operator change. Present exact target-derived deploy/rollback
 commands for approval in Phase 3; this plan authorizes no live service mutation.
+
+
+## Live support closeout — 2026-10-29
+
+The Phase3continuation now deploys and qualifies both profiles, all engine pairs, native
+recovery/admin workflows and actual authenticated gateway context/stream/cancellation.
+The compatibility8080 default is retained, with a dedicated configured endpoint for
+persistent profile routes so inactive aliases cannot reach MLX's model loader. Source
+ownership binds the port and admin mismatch refuses readiness. Original routing/model
+identity/scopes and MLX default are preserved. See the
+[functional rollout](../ops/splash-phase3/rollout-report.md); historical Phase0quality and
+partial performance/adoption outcomes remain unchanged.

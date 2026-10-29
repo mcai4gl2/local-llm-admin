@@ -30,7 +30,7 @@ from .engines import STRATA_PACKS, ComfyClient, StrataClient, TransitionRefused
 from .jobs import Step
 from .mlx import MlxClient, build_command, is_serving, validate_name
 from .splash import SplashClient
-from .splash_profiles import profile_name
+from .splash_profiles import profile_name, runtime_precision_matches
 
 
 def process_generation(pid: int | None) -> dict[str, Any] | None:
@@ -535,8 +535,8 @@ class SplashBackend:
         return {
             **status,
             "target_options": targets,
-            "note": "32K context; reasoning on by default. Reasoning off is unreliable. "
-            "Gateway compatibility is unverified; usage is unavailable.",
+            "note": "Context limit comes from the selected profile. Reasoning is on by default; "
+            "reasoning off is unreliable. Usage depends on runtime reports.",
         }
 
     def start_steps(self, target: EngineTarget) -> list[Step]:
@@ -603,7 +603,6 @@ class SplashBackend:
         instance = health.get("instance")
         controller = next((p for p in observed.processes if p.role == "controller"), None)
         weights = health.get("weights", {})
-        kv = health.get("kv")
         return bool(
             profile
             and controller
@@ -613,9 +612,9 @@ class SplashBackend:
             and instance.get("model") == profile.model
             and type(health.get("maximum_context_tokens")) is int
             and health.get("maximum_context_tokens") == profile.max_context
-            and isinstance(kv, dict)
-            and kv.get("format") == profile.kv_format
-            and health.get("state_format") == profile.state_format
+            and runtime_precision_matches(
+                health, kv_format=profile.kv_format, state_format=profile.state_format
+            )
             and isinstance(weights, dict)
             and health.get("ready") is True
             and not (weights.get("released") or weights.get("restoring"))

@@ -41,7 +41,7 @@ code { font-size: 12px; }
 .top nav { display: flex; gap: 4px; flex-wrap: wrap; }
 .top nav a { color: var(--ink-2); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
 .top nav a[aria-current="page"] { color: var(--ink); background: var(--log-bg); font-weight: 600; }
-.top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 100%; }
 .top-right form { margin: 0; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
   display: grid; gap: 12px; min-width: 0; }

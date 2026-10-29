@@ -131,6 +131,7 @@ class Supervisor:
         *,
         clock: Callable[[], float] = time.time,
         mono: Callable[[], float] = time.monotonic,
+        backend_health: Callable[[dict[str, Any] | None], dict[str, dict[str, Any]]] | None = None,
         connect: Callable[..., Any] = socket.create_connection,
     ) -> None:
         self.settings = settings
@@ -145,6 +146,7 @@ class Supervisor:
         self.clock = clock
         self.mono = mono
         self.connect = connect
+        self.backend_health = backend_health or (lambda observed: {})
         self.evaluator = Evaluator(alerts, events)
         self._startup_until = mono() + settings.watchdog_grace_s
         self._outage_since: float | None = None
@@ -207,6 +209,7 @@ class Supervisor:
             pressure=self.sampler.current().get("pressure"),
             litellm_ok=await self._litellm(mono),
             suspended=self.control.recovery_blocked(),
+            backends=self.backend_health(observed),
         )
         self._finish_pending(snap)
         await self._watch(snap, observed, polled, lock)

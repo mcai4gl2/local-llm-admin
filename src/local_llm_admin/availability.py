@@ -83,8 +83,8 @@ def _intervals(
     return out
 
 
-def _empty() -> dict[str, Any]:
-    return {"seconds": dict.fromkeys(STATES, 0.0), "intended_s": 0.0, "serving_s": 0.0}
+def _empty(states: tuple[str, ...] = STATES) -> dict[str, Any]:
+    return {"seconds": dict.fromkeys(states, 0.0), "intended_s": 0.0, "serving_s": 0.0}
 
 
 def _finish(acc: dict[str, Any], span: float) -> dict[str, Any]:
@@ -108,18 +108,20 @@ def summarize(
     interval_s: float,
     tz_offset_min: int,
     now: float,
+    states: tuple[str, ...] = STATES,
+    intended_key: str = "mlx_intended",
 ) -> dict[str, Any]:
     """Per ops day and total: seconds by state, availability, coverage, and a strip."""
     end = min(to, now)  # the future is neither observed nor unknown
     days = _day_edges(frm, end, tz_offset_min) if end > frm else []
-    accs = [_empty() for _ in days]
-    total = _empty()
+    accs = [_empty(states) for _ in days]
+    total = _empty(states)
     segments: list[dict[str, Any]] = []
     for a, b, s in _intervals(samples, interval_s, now):
         a, b = max(a, frm), min(b, end)
         if b <= a:
             continue
-        state = s["state"] if s["state"] in STATES else "unknown"
+        state = s["state"] if s["state"] in states else "unknown"
         if segments and segments[-1]["state"] == state and segments[-1]["end"] == a:
             segments[-1]["end"] = b
         else:
@@ -129,7 +131,7 @@ def summarize(
             if overlap <= 0:
                 continue
             acc["seconds"][state] += overlap
-            if state != "unknown" and s["mlx_intended"] == 1:
+            if state != "unknown" and s[intended_key] == 1:
                 acc["intended_s"] += overlap
                 if state == "serving":
                     acc["serving_s"] += overlap

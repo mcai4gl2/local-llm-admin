@@ -1,7 +1,7 @@
 # Splash host integration
 
 Splash is opt-in and is not installed or started by this repository. MLX remains the
-default. Initial profiles use 32K context, reasoning on, BF16 KV / FP32 recurrent state,
+default. Current example profiles use 128K context (131072 total tokens), reasoning on, BF16 KV / FP32 recurrent state,
 no disk cache and idle release off. GPU sidecars and other engines must be stopped.
 
 Use the original pinned 1.4.0 standalone runtime; see
@@ -19,6 +19,15 @@ and set mode 600. Target and draft directories must have config and safetensors 
 Set explicit allowed asset roots; resolved symlinks must stay within them. The stock-8bit
 and modified-4bit profiles have separate prepared outputs. No network/download or runtime
 module import occurs when reading profiles.
+
+`max_context` accepts 32768 (legacy) or 131072 (128K); both native status and every
+served model entry must report the configured value before loaded readiness succeeds.
+The existing profile IDs, prepared paths and client aliases retain their historical
+`32k` names for compatibility; labels and `max_context` advertise the current limit.
+Changing context changes the profile fingerprint and requires a normal owned restart.
+Prepared asset receipts bind weights/tokenizers/runtime, independently of the serving limit.
+Keep the reviewed memory budget; a larger configured window still needs a valid native
+memory plan and actual long-context inference verification on the target host.
 
 Prepare each model separately with the pinned runtime's public `install.local.prepare_local_model`
 interface as described in the [Phase 0 notes](../../ops/splash-phase0/README.md). Keep source
@@ -92,8 +101,8 @@ window. See the parent plan's Phase 3 for telemetry and production adoption.
 waits for owned loaded readiness. `splash stop` revalidates every controller/native generation
 before TERM and bounded KILL escalation, and waits for owned processes/listeners to exit.
 `splash status [--json]` is read-only and redacts credentials and executable paths.
-Reasoning defaults to high; individual off requests remain unqualified. Profiles start with
-32K, no disk cache and idle release off.
+Reasoning defaults to high; individual off requests remain unqualified. Profiles use an explicit validated limit of 32768 or 131072 total tokens, no disk cache
+and idle release off. The owning launcher forwards the selected profile limit.
 
 The shared `bin/engine-guard.sh` serializes mutating owning-wrapper commands with the
 existing owner-bearing `run/mlx.lock`. `maintenance.lock` covers only acquisition; it is
@@ -124,6 +133,7 @@ The admin's private environment uses these settings (the host env is a separate 
 | `SPLASH_PORT` | `8080`; keep aligned with the fixed host-wrapper serving port |
 | `SPLASH_API_KEY` | secret; must match the host's private key |
 | `SPLASH_READY_TIMEOUT_S` | `300`, bounded at 900 seconds |
+| `SPLASH_POLL_INTERVAL_S` | `15`; bounded 5–300 seconds; independent readiness/native snapshot monitor |
 | `SPLASH_STOP_TIMEOUT_S` | `45`, bounded at 120 seconds |
 
 The existing `ADMIN_JOB_TIMEOUT_S` bounds wrapper jobs. Disabled Splash adds no HTTP
@@ -146,8 +156,8 @@ deadlines close requests; external profile/generation changes prevent score prom
 The allowlisted `splash` log source reads `logs/splash.log`, which collects controller
 and inherited native output. Startup rotates files over 50 MiB and retains eight archives.
 Read-only log following handles rotation/truncation without inserting usage records.
-Throughput, request usage, availability qualification and gateway compatibility remain
-unavailable or unverified until Phase 3; MLX measurements must not stand in for them.
+Request usage, availability qualification and gateway compatibility remain
+unavailable or unverified; native cumulative snapshots are now available on Performance; MLX measurements must not stand in for them.
 
 ## Phase 3 installation and verification handoff
 
@@ -185,5 +195,36 @@ must include actual backup paths and exact approved commands before execution.
 
 The existing process metrics tile follows the verified primary controller PID. Its RSS is
 a process measurement, not the sum of controller/native memory or a host-reclamation claim.
-Full bundle ownership still governs every lifecycle and quality-generation check. Broader
-native memory/usage telemetry and platform qualification remain Phase 3 work.
+Full bundle ownership still governs every lifecycle and quality-generation check.
+The dashboard now also offers a verified bundle RSS/CPU sum with partial/unknown
+states; summed RSS is not unique physical memory. Platform qualification remains open.
+
+## Phase 3 telemetry contract
+
+The [versioned telemetry audit](../../docs/splash-telemetry.md) distinguishes native
+aggregate counters from response usage and console diagnostics. The Performance API
+reports disabled/not-collected/aggregate-snapshot coverage, with separate last-success,
+last-new-data and stale/error/gaps. Existing MLX/Strata request totals exclude Splash
+execution counters. The independent bounded monitor stores profile/epoch-bound native
+snapshots in schema 16, with separately scoped availability. No request ledger or final
+stop guarantee is invented. See the [operating/rollback runbook](../../ops/splash-phase3/README.md);
+the old app needs its matching pre-migration database backup. Native reset/population
+qualification and actual Mac/gateway validation remain open.
+
+## Dedicated gateway endpoint
+
+Private `etc/splash.env` accepts `SPLASH_PORT` (1–65535); omission retains 8080.
+Configure the admin's `SPLASH_PORT` and `SPLASH_API_BASE` to match. New ownership
+records bind their serving port, while old receipts retain 8080 semantics. Probes
+and cleanup follow the recorded endpoint even if private configuration changes.
+The admin refuses a mismatched configured/recorded port. Stop the owner before editing
+configuration. A custom port continues to exclude MLX on 8080 and all GPU services;
+a closed shared port never proves Splash absent.
+
+Persistent profile-specific gateway routes should use a dedicated, verified unused
+Splash port. On the shared endpoint, the pinned MLX runtime can unload its selected
+model before attempting to load a requested Splash alias. Separate ports make an
+inactive Splash route fail without reaching MLX. Keep the original model route and
+credential scopes, and verify both active streams and inactive refusal with the
+original MLX generation/inference intact. Dedicated routing does not permit simultaneous
+full engines or infer model identity from a listening port.

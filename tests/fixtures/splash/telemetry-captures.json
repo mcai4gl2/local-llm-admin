@@ -1,0 +1,54 @@
+{
+  "runtime": "1.4.0",
+  "provenance": "Allowlisted numeric projections of retained Phase 0 session-3 stock and modified captures; not a new measurement. These are initial idle zero-counter snapshots, not reset or workload evidence.",
+  "captures": [
+    {
+      "cohort": "stock-8bit",
+      "status_byte_sha256": "5a4604c95af205f3de831bb8670dd4b7a6f551eb0bf3b03e53c612e654bccec0",
+      "status_projection": {
+        "requests": {
+          "submitted": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "failed": 0
+        },
+        "metrics": {
+          "prefill_input_tokens": 0,
+          "decode_output_tokens": 0
+        },
+        "transport": {
+          "restarts": 0,
+          "status_stale": false,
+          "status_age_ms": 0.0
+        },
+        "cache": {
+          "reused_tokens": 0
+        }
+      }
+    },
+    {
+      "cohort": "modified-4bit",
+      "status_byte_sha256": "d4b6fa36ce3bf872ab9965750c6886c2aa8cea97a18f831c433b7b1a81772e1a",
+      "status_projection": {
+        "requests": {
+          "submitted": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "failed": 0
+        },
+        "metrics": {
+          "prefill_input_tokens": 0,
+          "decode_output_tokens": 0
+        },
+        "transport": {
+          "restarts": 0,
+          "status_stale": false,
+          "status_age_ms": 0.0
+        },
+        "cache": {
+          "reused_tokens": 0
+        }
+      }
+    }
+  ]
+}

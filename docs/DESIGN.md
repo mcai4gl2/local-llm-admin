@@ -482,7 +482,8 @@ internal and its repr excludes the credential-bearing ChatTarget.
 Splash is a statically registered fourth backend, disabled by default. The admin client
 imports neither MLX nor Splash runtime modules. Its private catalog reader has a byte-identical
 stdlib-only deployed copy. Profiles bind stock 8-bit and modified 4-bit assets, revisions,
-digests and resolved prepared selections; fixed initial settings are 32K, reasoning on,
+digests and resolved prepared selections; serving limits explicitly support legacy 32K
+and 128K (131072 total tokens), with reasoning on,
 BF16 KV, FP32 recurrent state, zero disk cache and idle release off. Preparation/audit
 receipts are checked without hashing model weights on status polls.
 
@@ -508,7 +509,7 @@ command is matched to an ownership guard. Disabling Splash hides its targets and
 presentation HTTP/PID probes, while cheap lifecycle observations still detect an owner.
 
 Additive public backend descriptions drive selectors, badges, exclusions, chat/quality
-availability and 32K profile labels. Existing status fields remain compatible. Direct
+availability and configured profile labels. Existing status fields remain compatible. Direct
 authenticated SSE chat keeps explicit user reasoning settings. Current-only compatibility
 and evals retain served-model/profile fingerprints and context; cancellation/deadlines
 close requests and external changes prevent score promotion. No sweeps or local MLX judges
@@ -519,7 +520,46 @@ denominator is introduced here.
 See the [Phase 2 plan](../plans/20261027_splash-phase2-adapter-and-host-integration.md)
 for validation status and the [host guide](../host/splash/README.md) for settings,
 private preparation, failure handling and the Phase 3 installation/rollback worksheet.
-Pinned Splash aliases cannot be absolute MLX paths; an existing gateway route using one
-requires an explicitly reviewed alias change. Authenticated gateway inference remains
-unverified. Live deployment, telemetry, production qualification and rollout belong to
-Phase 3. Earlier Phase 0 failed/inconclusive/unassessed results remain unchanged.
+Pinned Splash aliases cannot be absolute MLX paths. The deployed support preserves the
+original MLX route/model identity and exposes two accurately named authenticated Splash
+profile routes on a dedicated endpoint. The legacy8080 default remains compatible, while
+private `SPLASH_PORT`/`SPLASH_API_BASE` configuration isolates persistent routes from MLX's
+model-loading API. Ownership records bind their port; old records retain8080 semantics.
+Probes/cleanup follow recorded ownership and admin mismatch refuses readiness. All GPU
+engine exclusions remain mandatory. See the [verified rollout](../ops/splash-phase3/rollout-report.md).
+Earlier Phase0failed/inconclusive/unassessed results remain unchanged.
+
+### Splash Phase 3 telemetry boundary
+
+The [Phase 3 plan](../plans/20261028_splash-phase3-telemetry-qualification-and-rollout.md)
+starts with the [pinned telemetry contract](splash-telemetry.md). Response usage and
+request wall intervals normalize separately from native aggregate execution counters.
+Missing values stay null; partial/error/cancelled outcomes are never promoted by the
+presence of usage. No inference rows or token-path work are added. An independent bounded monitor
+collects attributed native execution snapshots, separately from billed request totals.
+Performance summary/token APIs add `coverage.splash` while preserving existing fields
+and totals. Enabled Splash starts at `not_collected`; only fresh attributed commits establish
+`aggregate_snapshots` coverage. All-client request history remains unsupported.
+Schema 16 adds independent snapshot and backend availability tables, preserving
+MLX/Strata rows/folding and the historical MLX denominator. Epochs bind local
+controller/native generations, instance/model/profile/fingerprint and restart count.
+Cached serving readiness is generation-checked and distinct from telemetry errors.
+Registry-driven monitoring never adds automatic Splash recovery. Bundle metrics
+revalidate every PID/create time/executable and report partial observations, while
+legacy primary metrics remain. Controlled native reset/epoch attribution, current bundle
+sampling, idle deduplication, normal cleanup, all twelve engine pairs, admin workflows and
+actual gateway streaming/context/cancellation now pass for both profiles. Schema16
+integrity is `ok`;85native readings/109availability rows remain separate from billed data.
+All-client population/billing reconciliation, final-counter capture and physical reclamation
+remain unqualified. The frozen integrated comparison is partial/inconclusive; its stock
+short TTFT finding is70ms/+10.4% with overlapping ranges and asymmetric guard calls, so no
+causal ingestion-only bound or new performance-adoption pass is claimed. MLX stays default
+with Splash explicitly selectable. See the [operating and rollback guide](../ops/splash-phase3/README.md)
+and [partial measurement evidence](../ops/splash-phase3/integrated-comparison-report.md).
+
+
+The [128K context update](../ops/splash-phase3/context-128k-report.md) raises both deployed
+profile limits to 131072 while retaining profile/model/route identities and asset receipts.
+The owning launcher forwards the validated profile value. Loaded native status and served
+model lists must match it exactly; a context change produces a new profile fingerprint.
+The completed direct/gateway near-limit checks preserve MLX as the selected default.

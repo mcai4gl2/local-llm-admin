@@ -1,0 +1,52 @@
+{
+  "status": "lifecycle_failed_restoration_verified",
+  "host_correction_deployed": true,
+  "admin_code_changed": false,
+  "inference_attempts": 5,
+  "http_passes": 5,
+  "cycles": {
+    "stock-1": {
+      "start": "pass",
+      "stream": "pass",
+      "telemetry": "pass",
+      "off": "pass",
+      "receipt_cleanup": "pass"
+    },
+    "stock-2": {
+      "start": "pass",
+      "stream": "pass",
+      "telemetry": "pass",
+      "off": "fail",
+      "receipt_cleanup": "fail"
+    },
+    "modified-1": {
+      "status": "not_attempted"
+    },
+    "modified-2": {
+      "status": "not_attempted"
+    }
+  },
+  "native_epoch_count": 2,
+  "new_native_readings": 4,
+  "database_observed": {
+    "schema": 16,
+    "integrity": "ok",
+    "engine_readings": 25,
+    "backend_availability": 41
+  },
+  "emergency_archive": "refused_parent_timestamp_check",
+  "archive_signals_sent": 0,
+  "restoration": "verified_under_separate_approval",
+  "original_gateway_route": "unchanged; before, postdeploy and final restored inference passed",
+  "production_adoption": false,
+  "local_restoration_tests": {
+    "red": "1 failed, 9 passed",
+    "green": "10 passed"
+  },
+  "new_availability_observations": 19,
+  "restoration_archive": "preserved_same_volume_atomic_archive_after_repeated_identity_and_absence_proof",
+  "splash_enabled": false,
+  "actual_services_match": true,
+  "pending_jobs": 0,
+  "qualification_resumed": false
+}

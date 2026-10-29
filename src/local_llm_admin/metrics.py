@@ -16,6 +16,7 @@ from typing import Any
 
 import psutil
 
+from .backend_types import EngineObservation
 from .config import Settings
 
 log = logging.getLogger(__name__)
@@ -61,6 +62,71 @@ class RingBuffer:
         return self._items[-1] if self._items else None
 
 
+class BundleSampler:
+    """PID/create-time/executable verified RSS sums, never unique physical memory."""
+
+    def __init__(self, *, process: Callable[[int], Any] = psutil.Process) -> None:
+        self.process = process
+        self._previous: dict[tuple[int, float], Any] = {}
+
+    def sample(self, observation: EngineObservation | None) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "source": observation.backend if observation else None,
+            "scope": "sum_process_rss",
+            "state": "absent" if observation is None else "unknown",
+            "rss": None,
+            "observed_rss": None,
+            "cpu_percent": None,
+            "members": [],
+        }
+        if observation is None or observation.ownership != "verified" or not observation.processes:
+            self._previous = {}
+            return result
+        cache: dict[tuple[int, float], Any] = {}
+        seen: set[int] = set()
+        members = []
+        for member in observation.processes:
+            row: dict[str, Any] = {
+                "pid": member.pid,
+                "started": member.started,
+                "role": member.role,
+                "rss": None,
+                "cpu_percent": None,
+            }
+            try:
+                if member.pid in seen:
+                    raise ValueError("duplicate bundle PID")
+                seen.add(member.pid)
+                proc = self.process(member.pid)
+                if proc.create_time() != member.started or proc.exe() != member.executable:
+                    raise ValueError("generation changed")
+                key = (member.pid, member.started)
+                previous = self._previous.get(key)
+                cpu_proc = previous or proc
+                cpu = cpu_proc.cpu_percent(None)
+                rss = proc.memory_info().rss
+                fresh = self.process(member.pid)
+                if fresh.create_time() != member.started or fresh.exe() != member.executable:
+                    raise ValueError("generation changed while reading")
+                row.update(rss=rss, cpu_percent=cpu if previous else None)
+                cache[key] = cpu_proc
+            except (psutil.Error, OSError, ValueError):
+                row["error"] = "unverified_or_unreadable"
+            members.append(row)
+        self._previous = cache
+        complete = all(m["rss"] is not None for m in members)
+        result.update(
+            state="measured" if complete else "partial",
+            members=members,
+            observed_rss=sum(m["rss"] for m in members if m["rss"] is not None),
+            rss=sum(m["rss"] for m in members) if complete else None,
+            cpu_percent=sum(m["cpu_percent"] for m in members)
+            if all(m["cpu_percent"] is not None for m in members)
+            else None,
+        )
+        return result
+
+
 class Sampler:
     def __init__(
         self,
@@ -69,10 +135,13 @@ class Sampler:
         run: Runner = subprocess.run,
         platform: str = sys.platform,
         clock: Callable[[], float] = time.time,
+        engine_observation: Callable[[], EngineObservation | None] | None = None,
     ) -> None:
         self.settings = settings
         self.buffer = RingBuffer(settings.metrics_history_points)
         self._mlx_pid = mlx_pid
+        self._engine_observation = engine_observation
+        self._bundle = BundleSampler()
         self._run = run
         self._mac = platform == "darwin"
         self._clock = clock
@@ -102,12 +171,15 @@ class Sampler:
             out.append(entry)
         return out
 
-    def _mlx_proc(self) -> dict[str, Any] | None:
-        pid = self._mlx_pid()
+    def _mlx_proc(self, generation: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        pid = int(generation["pid"]) if generation else self._mlx_pid()
         if pid is None:
             self._proc = None
             return None
         try:
+            if generation and psutil.Process(pid).create_time() != generation["started"]:
+                self._proc = None
+                return None
             if self._proc is None or self._proc.pid != pid:
                 self._proc = psutil.Process(pid)
                 self._proc.cpu_percent(None)
@@ -146,6 +218,30 @@ class Sampler:
             pressure = parse_pressure(raw) if raw else None
             io = self._cmd(["ioreg", "-r", "-d", "1", "-c", "IOAccelerator"])
             gpu = parse_ioreg_gpu(io) if io else None
+        bundle = None
+        primary = self._mlx_proc() if self._engine_observation is None else None
+        if self._engine_observation is not None:
+            observation = self._engine_observation()
+            bundle = self._bundle.sample(observation)
+            if (
+                observation is not None
+                and observation.ownership == "verified"
+                and observation.generation
+                and not observation.processes
+            ):
+                primary = self._mlx_proc(dict(observation.generation))
+                bundle = None
+            pid = (observation.generation or {}).get("pid") if observation else None
+            member = next(
+                (
+                    m
+                    for m in (bundle["members"] if bundle else [])
+                    if m["pid"] == pid and m["rss"] is not None
+                ),
+                None,
+            )
+            if member is not None:
+                primary = {k: member[k] for k in ("pid", "rss", "cpu_percent")}
         return {
             "ts": ts,
             "cpu_percent": psutil.cpu_percent(None),
@@ -162,7 +258,8 @@ class Sampler:
             "gpu_util": gpu,
             "disks": self._disks(),
             **rates,
-            "mlx": self._mlx_proc(),
+            "mlx": primary,
+            "engine_bundle": bundle,
         }
 
     def current(self) -> dict[str, Any]:

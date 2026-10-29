@@ -1,0 +1,40 @@
+{
+  "status": "prepared_not_executed",
+  "source_delta": [
+    "host/splash/lib/control.py"
+  ],
+  "admin_code_deployment": false,
+  "host_deploy_command": "ops/deploy-host.sh --apply",
+  "schema": 16,
+  "database_restore": false,
+  "runtime_or_asset_installation": false,
+  "gateway_mutation": false,
+  "window_seconds": 2700,
+  "restoration_reserve_seconds": 600,
+  "request_cap": 12,
+  "scheduled_requests": 7,
+  "concurrency": 1,
+  "request_deadline_seconds": 120,
+  "output_caps": {
+    "original": 32,
+    "direct_profile": 2048
+  },
+  "cycles": {
+    "stock": 2,
+    "modified": 2
+  },
+  "mandatory_stop_result": "successful owning job plus complete member/listener absence and released locks",
+  "failure_rule": "stop qualification, retain failure, verify original restoration",
+  "dead_receipt_archive": "only repeated proof of all recorded PIDs absent, no Splash candidates, no active job, exact receipt digest and known-only listener; private copy plus same-volume atomic archive; no signal",
+  "production_default": "MLX; Splash disabled after window",
+  "exclusions": [
+    "admin code deploy",
+    "schema migration",
+    "runtime or weights rebuild",
+    "gateway routes or keys",
+    "forced recovery injection",
+    "admin live acceptance",
+    "frozen performance comparison",
+    "production adoption"
+  ]
+}

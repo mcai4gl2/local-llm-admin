@@ -30,14 +30,36 @@ engine_owns_lock() {
      && "$(sed -n 's/^start=//p' "$1/owner")" == "$ENGINE_OWNER_START" ]]
 }
 
+engine_signal() {
+  if [[ "${ENGINE_RELEASING:-0}" == 1 ]]; then
+    typeset -g ENGINE_PENDING_SIGNAL="$1"
+    return 0
+  fi
+  engine_release
+  trap - "$1"
+  kill "-$1" $$
+}
+
+engine_release_one() {
+  engine_owns_lock "$1" || return 0
+  # Keep TERM/INT from re-entering after owner unlink but before directory removal.
+  typeset -g ENGINE_RELEASING=1
+  rm -f "$1/owner" || true
+  rmdir "$1" 2>/dev/null || true
+  typeset -g ENGINE_RELEASING=0
+  if [[ -n "${ENGINE_PENDING_SIGNAL:-}" ]]; then
+    local pending="$ENGINE_PENDING_SIGNAL"
+    typeset -g ENGINE_PENDING_SIGNAL=""
+    engine_signal "$pending"
+  fi
+}
+
 engine_release() {
   [[ -n "${ENGINE_OWNER_PID:-}" && -n "${ENGINE_OWNER_START:-}" ]] || return 0
+  [[ "${ENGINE_RELEASING:-0}" == 0 ]] || return 0
   local dir
   for dir in "/Volumes/Models/run/mlx.lock" "/Volumes/Models/run/maintenance.lock"; do
-    if engine_owns_lock "$dir"; then
-      rm -f "$dir/owner"
-      rmdir "$dir" 2>/dev/null || true
-    fi
+    engine_release_one "$dir"
   done
 }
 
@@ -64,8 +86,7 @@ engine_run() {
     return 1
   fi
   engine_write_owner "$lock" "$1"
-  rm -f "$gate/owner"
-  rmdir "$gate"
+  engine_release_one "$gate"
   "$@"
   local rc=$?
   engine_release
@@ -77,5 +98,5 @@ trap '(( ZSH_SUBSHELL )) || engine_release' EXIT
 trap '(( ZSH_SUBSHELL )) || engine_release' ZERR
 
 # Re-raise termination after releasing only this process's reservation.
-TRAPTERM() { engine_release; trap - TERM; kill -TERM $$; }
-TRAPINT() { engine_release; trap - INT; kill -INT $$; }
+TRAPTERM() { engine_signal TERM; }
+TRAPINT() { engine_signal INT; }

@@ -62,11 +62,31 @@ class SplashProfile:
         }
 
 
+def runtime_precision_matches(document: object, *, kv_format: str, state_format: str) -> bool:
+    """Check pinned runtime config; top-level kv/state objects hold allocation counters."""
+    if not isinstance(document, dict):
+        return False
+    identity, plan = document.get("identity"), document.get("memory_plan")
+    if not isinstance(identity, dict) or not isinstance(plan, dict):
+        return False
+    kv, model = identity.get("kv"), plan.get("model")
+    # The planner's context capacity differs from the configured serving limit.
+    return bool(
+        isinstance(kv, dict)
+        and kv.get("format") == kv_format
+        and plan.get("valid") is True
+        and isinstance(model, dict)
+        and model.get("kv_format") == kv_format
+        and model.get("state_format") == state_format
+    )
+
+
 @dataclass(frozen=True)
 class SplashEnv:
     api_key: str = field(repr=False)
     host: str = "127.0.0.1"
     allowed_hosts: tuple[str, ...] = ()
+    port: int = 8080
 
 
 def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -220,7 +240,7 @@ def load_profiles(
                 raise ProfileError("duplicate Splash alias")
             if (
                 type(raw["max_context"]) is not int
-                or raw["max_context"] != 32768
+                or raw["max_context"] not in (32768, 131072)
                 or type(raw["memory_gib"]) is not int
                 or not 1 <= raw["memory_gib"] <= 256
                 or raw["kv_format"] != "bf16"
@@ -277,7 +297,7 @@ def read_env(path: Path) -> SplashEnv:
         key, sep, value = line.partition("=")
         if (
             not sep
-            or key not in {"SPLASH_API_KEY", "SPLASH_HOST", "SPLASH_ALLOWED_HOSTS"}
+            or key not in {"SPLASH_API_KEY", "SPLASH_HOST", "SPLASH_ALLOWED_HOSTS", "SPLASH_PORT"}
             or key in values
         ):
             raise ProfileError("invalid Splash env fields")
@@ -295,7 +315,10 @@ def read_env(path: Path) -> SplashEnv:
         allowed = ()
     if any(not _HOST.fullmatch(h) for h in allowed):
         raise ProfileError("invalid Splash allowed host")
-    return SplashEnv(key, host, allowed)
+    port = values.get("SPLASH_PORT", "8080")
+    if not re.fullmatch(r"[1-9][0-9]{0,4}", port) or int(port) > 65535:
+        raise ProfileError("invalid Splash serving port")
+    return SplashEnv(key, host, allowed, int(port))
 
 
 def read_ownership(root: Path) -> dict[str, Any] | None:
@@ -308,8 +331,10 @@ def read_ownership(root: Path) -> dict[str, Any] | None:
         value = json.loads(private_text(path))
         if (
             not isinstance(value, dict)
-            or set(value)
+            or set(value) - {"port"}
             != {"version", "profile", "fingerprint", "model", "prepared", "controller", "native"}
+            or type(value.get("port", 8080)) is not int
+            or not 1 <= value.get("port", 8080) <= 65535
             or value["version"] != 1
             or not isinstance(value["native"], list)
             or (root / "prepared").resolve() not in Path(value["prepared"]).resolve().parents

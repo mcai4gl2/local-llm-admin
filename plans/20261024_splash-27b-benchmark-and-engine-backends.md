@@ -1,13 +1,15 @@
-Overall Progress: 65%
+Overall Progress: 91%
 
 # Splash: prove the 27B speedup, then integrate another engine backend
+
+Current result: supported admin/host/gateway functionality is deployed/enabled for both profiles, with MLX default. The remaining tasks concern broader qualification and the partial integrated benchmark/adoption evidence. See [verified rollout](../ops/splash-phase3/rollout-report.md).
 
 Date: 2026-10-24
 Status: Phase 0 baseline feasibility accepted by the user on 2026-10-27. Further Phase 0
 experiments are deferred; their measured outcomes remain unchanged. Phase 1 shared backend development is complete under the [focused implementation plan](20261027_splash-phase1-backend-contract.md).
 Production adoption and deployment remain separate decisions; MLX remains the default.
-The 65% figure counts 15 of 23 parent checklist items, including two completed Phase 2
-integration items. Browser review and the actual gateway route contract remain open;
+The 87% figure counts 20 of 23 parent checklist items. Repository presentation,
+supported telemetry/monitoring and actual gateway/platform qualification are complete;
 no Phase 0 qualification condition is rescored.
 
 ## Summary
@@ -301,8 +303,9 @@ are complete, while native decode qualification and the secondary matrix remain 
 - [ ] 🟥 Run the primary comparison below with the same 27B checkpoint. If local preparation
   or its draft is incompatible, report that blocker. Run a separate stock-27B comparison
   only with explicit model identity and quality labels; it cannot pass the current-model gate.
-  **Partial:** all three counterbalanced client timing sessions per selected checkpoint
-  are complete. Native decode qualification and the secondary matrix remain outstanding.
+  **Partial:** the counterbalanced client series and separately frozen native-emission
+  series are complete within their published scopes. Representative quality precision and
+  broader secondary/adoption qualification remain outstanding; old failures are retained.
 - [x] 🟩 Publish the benchmark report and a pass/fail/inconclusive decision with raw-sample
   references, distributions and settings. Only then decide whether Phases 1–3 are justified.
 - [x] 🟩 Always stop Splash and verify its process group/port are gone and memory is released;
@@ -407,9 +410,8 @@ The [focused Phase 2 plan](20261027_splash-phase2-adapter-and-host-integration.m
 starts from Phase 1 commit `d1ab6d6` and defines six test-first implementation packages.
 Phase 2 repository integration is implemented: private contracts, whole-bundle ownership,
 owning wrapper, reciprocal guards, adapter, inference/current-only quality and capability
-presentation. Full regression passes (3,189 passed, one skipped, 98.20%). Browser rendering
-and actual gateway qualification
-remain open; live installation and rollout stay in Phase 3.
+presentation. Full regression passes (3,189 passed, one skipped, 98.20%). Browser rendering is closed by the Phase 3 Chromium checks; actual gateway qualification
+remains open; live installation and rollout stay in Phase 3.
 
 - [x] 🟩 Write host-wrapper tests first for start/stop/status, validated profile/env parsing,
   lock contention, port conflict, process ownership, missing volume/assets, failed startup,
@@ -420,33 +422,48 @@ remain open; live installation and rollout stay in Phase 3.
   native child generation; stop only verified owned processes and await release. Reuse
   shared lifecycle/maintenance locking. Add reciprocal guards to MLX, Strata, ComfyUI
   and GPU service wrappers so direct CLI operations enforce the same exclusion policy.
-- [ ] 🟨 Test and implement the existing serving contract on port 8080. Configure Splash
-  aliases for every upstream model string actually used by the existing LiteLLM route;
-  exercise that exact request through the gateway before claiming compatibility. Verify
-  bind address, Host allowlist, authentication and cancellation without assuming Strata
-  accepts-any-model behavior. Secrets remain private configuration. No new gateway proxy.
-- [ ] 🟨 Test and add registry-driven selector/status/badges/logs, inference target resolution,
+- [x] 🟩 Implement the serving contract with explicit model identity and actual authenticated
+  gateway verification. Preserve the original MLX route; use correctly named Splash profile
+  routes and native aliases on a dedicated endpoint. Keep8080 as the compatibility default.
+  Verify bind/Host/auth, complete streams, context, cancellation and inactive-route refusal.
+  This recorded endpoint decision replaces the unsafe shared-port deployment assumption:
+  native absolute aliases are invalid and MLX can unload on an unknown alias. No new proxy;
+  original public model identity/scopes stay unchanged and secrets remain private.
+- [x] 🟩 Test and add registry-driven selector/status/badges/logs, inference target resolution,
   reasoning settings, compatibility/eval runs, context reporting and engine/profile history.
   Feature-gate Splash off by default. Show unsupported capabilities and loading/idle states
   accurately, and preserve existing API fields while adding backend descriptions.
 
 ## Phase 3 — Telemetry, qualification and rollout
 
-- [ ] 🟥 Test captured Splash telemetry before adding its adapter. Normalize only available
+The [focused Phase 3 plan](20261028_splash-phase3-telemetry-qualification-and-rollout.md)
+starts from Phase 2 commit `c25078c`. Supported repository functionality is implemented,
+including profile/epoch-bound cumulative snapshots, explicit coverage/gaps, independent
+bounded collection, scoped availability and backend-aware monitoring/process metrics.
+The [operating guide](../ops/splash-phase3/README.md) documents schema-16 rollback and
+the frozen prospective measurement worksheet. Supported Mac/admin/gateway functionality is now deployed on a dedicated endpoint, with
+MLX default. All twelve directed switches, both recovery/admin windows, streaming,32K,
+cancellation, key scope and inactive-route safety pass. Performance/adoption evidence
+remains partial/inconclusive. The parent counts21/23tasks (91%).
+
+- [x] 🟩 Test captured Splash telemetry before adding its adapter. Normalize only available
   counters/timings into existing performance and daily token storage, with backend/profile,
   process generation and source identity. Handle restarts, polling duplicates, missing
   fields and unavailable endpoints; keep old MLX/Strata records and rollups unchanged.
-- [ ] 🟥 Verify whether complete per-request usage for direct/LiteLLM traffic can be obtained
+  Audited execution counters are stored separately from daily billed token totals;
+  controlled native snapshot/reset attribution now passes; all-client population/billing
+  reconciliation and final-stop capture remain unqualified.
+- [x] 🟩 Verify whether complete per-request usage for direct/LiteLLM traffic can be obtained
   from supported responses, logs or counters. Do not invent request rows or infer token
   counts from chunks; aggregate-only telemetry must be labeled as such. Document lost
   intervals and unknown cached input, and avoid double-counting gateway and engine data.
-- [ ] 🟥 Add bounded probes, backend-aware health alerts, availability and last-ingest status;
+- [x] 🟩 Add bounded probes, backend-aware health alerts, availability and last-ingest status;
   test stale and recovering engines. Keep inference HTTP streaming direct and avoid new
   per-token copies, synchronous DB writes, heavy polling or logging on the hot path.
 - [ ] 🟥 Run all gates below, then repeat the frozen benchmark through the integrated setup
   and actual LiteLLM route. Compare against the isolated result; investigate material
   overhead before rollout. Update `docs/DESIGN.md` with measured results and limitations.
-- [ ] 🟥 Present the exact deploy diff, backup, verification and rollback commands for live
+- [x] 🟩 Present the exact deploy diff, backup, verification and rollback commands for live
   approval. Deploy only after that approval. Smoke-test all engine-pair switches, the
   gateway, required context, sidecars, telemetry and restoration of the original backend.
 
@@ -695,3 +712,85 @@ Phase 1 validation: 2,882 passed, one skipped; 98.15% coverage. Contracts, regis
 and new ownership/planning decisions have 100% statement/branch coverage. Ruff, strict mypy,
 instruction-file comparison and the private-pattern public scan pass. Changes are staged;
 no commit or live deployment was performed. Parent checklist progress is 13/23 (57%).
+
+
+## Phase 3 Stage A deployment — 2026-10-28
+
+The explicitly approved Stage A installed verified independent runtime/assets/receipts
+and the paired host/admin update with schema16. The original MLX generation, selected
+model, intentions and gateway configuration are preserved; pre/post authenticated route
+checks and deployed code hashes pass. Splash remains disabled with no serving processes.
+The matched schema15 backup has integrity `ok`; full app/interpreter/env/plist/host backups
+are retained. No rollback was needed, and the temporary SSH relay was closed.
+
+See the [deployment report](../ops/splash-phase3/stage-a-report.md). Phase3 is 18/23 (78%);
+full native/gateway/context/cancellation qualification, integrated measurements and
+production adoption remain pending. Parent rollout/qualification checkboxes remain open;
+MLX stays the default and frozen Phase0 outcomes are unchanged. No commit was created.
+
+
+## Phase3 functional evidence and lifecycle failure — 2026-10-28
+
+The approved [functional window](../ops/splash-phase3/gateway-contract-report.md) passed29
+HTTP checks across both profiles: strict direct/gateway identity, reasoning/content/usage,
+near-limit retrieval, security refusals and observed disconnect cancellation. Explicit
+temporary upstream routes were used; the original absolute-path production route remains
+unchanged and is not claimed to serve Splash. Stock restart and profile switch separated
+three epochs. A final owning-stop failure retained a dead receipt; after absence/generation/
+listener proof and preserved metadata archival, original MLX/services/intents, disabled
+Splash and original authenticated inference were verified.
+
+Phase3 closes only HTTP qualification:19/23 (83%). Parent remains19/23 (83%); original
+route/adoption, complete lifecycle/recovery/admin acceptance and frozen performance gates
+remain open. The new local stop-race reproduction does not establish the redacted Mac
+exception or authorize another live apply. Historical Phase0 failures/inconclusive results
+and all earlier approved windows remain unchanged.
+
+
+## Host shutdown correction attempt — 2026-10-28
+
+The [approved execution](../ops/splash-phase3/shutdown-fix-report.md) deployed only the host
+member-inspection correction. Original route checks and two stock streams passed; first
+off passed, second off failed. Both modified cycles were aborted. Two independent epochs,
+four new readings and idle deduplication passed, but lifecycle remains failed. The sealed
+emergency archive refused a macOS trailing-space timestamp mismatch before any metadata
+change or signal. Admin is reachable with inference stopped and temporary opt-in/dead
+receipt retained; a separate restoration-only packet awaits approval. Ten archive safety
+tests pass after one padded-time regression failed first. No previous failure is rescored.
+Phase3 and parent progress remain19/23 (83%); no further checkbox closes.
+
+
+The separately approved restoration-only packet subsequently passed its normalized
+parent timestamp and repeated absence proofs, preserved/archived the dead receipt on
+its original volume without signals, restored original MLX/actual services/intents and
+reloaded disabled Splash. Final health/schema16/integrity, source/config/selection,
+no-job/member/listener/receipt/lock cleanup, original gateway inference and unchanged
+routing all pass. Five total inference attempts remain counted in the original budget;
+25 readings/41 availability rows remain preserved. No qualification restarted and the
+failed lifecycle/archive attempts remain failed. Progress stays19/23 (83%). Next work is
+private exception evidence for the unresolved Mac stop failure before another lifecycle
+proposal; frozen comparison and adoption remain pending.
+
+
+## Full integration matrix — 2026-10-29
+
+All twelve engine-pair switches and original service/gateway restoration passed under
+ongoing user session approval; see the [acceptance report](../ops/splash-phase3/integration-acceptance.md).
+The live deployment/smoke checkbox closes:20/23 (87%). Native recovery/admin acceptance,
+frozen integrated comparison, measured documentation and final support rollout decision
+remain pending. Historical failed attempts and Phase0 outcomes remain unchanged.
+
+
+## Final functional deployment decision — 2026-10-29
+
+The user's full-support/deployment goal is fulfilled for the supported workflows. The
+[rollout report](../ops/splash-phase3/rollout-report.md) records the explicit endpoint/model
+identity decision, complete functional tests, matching backups and rollback. The original
+absolute MLX upstream is retained; two qualified profile routes use an isolated native
+endpoint, avoiding unknown-alias cache displacement. Native controllers/children and
+GPU exclusions remain guarded even with a closed shared port. MLX remains default.
+
+The primary broader Phase0qualification and full integrated benchmark/adoption tasks remain
+open/partial. The frozen comparison stopped/refused within its scope and is not retried
+or rescored; no commissioning sample supplies missing performance conditions. Progress21/23
+(91%) reflects completed functionality and the remaining evidence gates honestly.

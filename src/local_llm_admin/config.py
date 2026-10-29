@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     splash_port: Annotated[int, Field(ge=1, le=65535)] = 8080
     splash_api_key: SecretStr = SecretStr("")
     splash_ready_timeout_s: Annotated[float, Field(gt=0, le=900)] = 300.0
+    splash_poll_interval_s: Annotated[float, Field(ge=5, le=300)] = 15.0
     splash_stop_timeout_s: Annotated[float, Field(gt=0, le=120)] = 45.0
 
     # Admin

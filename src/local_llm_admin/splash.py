@@ -16,7 +16,14 @@ import psutil
 
 from .backend_types import EngineObservation, OwnedProcess, generation_record
 from .config import Settings
-from .splash_profiles import ProfileError, SplashProfile, load_profiles, read_ownership
+from .splash_profiles import (
+    ProfileError,
+    SplashProfile,
+    load_profiles,
+    read_ownership,
+    runtime_precision_matches,
+)
+from .splash_telemetry import bind_reading
 
 MAX_STATUS_BYTES = 1_048_576
 
@@ -120,6 +127,8 @@ class SplashClient:
                 if self._possible():
                     raise ProfileError("unrecorded Splash process")
                 return EngineObservation("splash", state="absent")
+            if record.get("port", 8080) != self.settings.splash_port:
+                raise ProfileError("Splash serving port differs from the configured backend")
             controller = self._member(record["controller"], record["prepared"])
             owned = {
                 p.pid: p
@@ -211,7 +220,6 @@ class SplashClient:
             if isinstance(row, dict) and isinstance(row.get("id"), str)
         }
         expected = {profile.model, *profile.aliases}
-        kv = health.get("kv")
         weights = health.get("weights", {})
         if (
             type(health.get("maximum_context_tokens")) is not int
@@ -222,10 +230,18 @@ class SplashClient:
                 or by_id[name]["max_model_len"] != profile.max_context
                 for name in expected
             )
-            or not isinstance(kv, dict)
-            or kv.get("format") != profile.kv_format
-            or health.get("state_format") != profile.state_format
+            or not runtime_precision_matches(
+                health, kv_format=profile.kv_format, state_format=profile.state_format
+            )
             or not isinstance(weights, dict)
+        ):
+            result["state"] = "unknown"
+            return result
+        transport = health.get("transport")
+        if transport is not None and (
+            not isinstance(transport, dict)
+            or transport.get("status_stale") is not False
+            or transport.get("ready") is False
         ):
             result["state"] = "unknown"
             return result
@@ -243,6 +259,9 @@ class SplashClient:
             result["state"] = "released"
         elif ready == {"status": "ready"} and health.get("ready") is True:
             result.update(state="ready", ready=True)
+        reading = bind_reading(observed, observed, health, model=profile.model)
+        if reading is not None:
+            result["telemetry"] = reading
         return result
 
     def _needs_http(self, observed: EngineObservation) -> bool:

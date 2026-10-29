@@ -1,0 +1,79 @@
+{
+  "status": "normal_lifecycle_pass_restoration_verified",
+  "host_changed_files": [
+    "splash/lib/control.py"
+  ],
+  "http_attempts": 7,
+  "http_passes": 7,
+  "native_epoch_count": 4,
+  "new_native_readings": 6,
+  "new_availability_observations": 8,
+  "database_totals": {
+    "engine_readings": 32,
+    "backend_availability": 51
+  },
+  "schema": 16,
+  "integrity": "ok",
+  "elapsed_s": 489.46,
+  "cycles": {
+    "stock-1": {
+      "profile": "stock-8bit-32k",
+      "start_stream_off": "pass",
+      "native_readings": 2,
+      "attribution_deduplication": "pass",
+      "configured_context_tokens": 32768,
+      "kv": "bf16",
+      "state": "fp32",
+      "receipt_member_listener_lock_cleanup": "pass"
+    },
+    "stock-2": {
+      "profile": "stock-8bit-32k",
+      "start_stream_off": "pass",
+      "native_readings": 1,
+      "attribution_deduplication": "pass",
+      "configured_context_tokens": 32768,
+      "kv": "bf16",
+      "state": "fp32",
+      "receipt_member_listener_lock_cleanup": "pass"
+    },
+    "modified-1": {
+      "profile": "modified-4bit-32k",
+      "start_stream_off": "pass",
+      "native_readings": 2,
+      "attribution_deduplication": "pass",
+      "configured_context_tokens": 32768,
+      "kv": "bf16",
+      "state": "fp32",
+      "receipt_member_listener_lock_cleanup": "pass"
+    },
+    "modified-2": {
+      "profile": "modified-4bit-32k",
+      "start_stream_off": "pass",
+      "native_readings": 1,
+      "attribution_deduplication": "pass",
+      "configured_context_tokens": 32768,
+      "kv": "bf16",
+      "state": "fp32",
+      "receipt_member_listener_lock_cleanup": "pass"
+    }
+  },
+  "original_gateway_route": "unchanged",
+  "original_gateway_inference": "pass",
+  "splash_enabled": false,
+  "actual_original_services_restored": true,
+  "all_eight_recorded_pids_absent": true,
+  "active_receipt_absent": true,
+  "pending_jobs": 0,
+  "source_full_validation": {
+    "passed": 3358,
+    "skipped": 2,
+    "coverage_percent": 98.14,
+    "new_exit_wait_statement_branch_percent": 100,
+    "operator_tests": 45
+  },
+  "remaining_gates": [
+    "native recovery/admin acceptance",
+    "frozen integrated comparison",
+    "complete evidence publication and support rollout decision"
+  ]
+}

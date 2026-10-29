@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -12,6 +14,7 @@ import pytest
 from local_llm_admin import auth
 from local_llm_admin.app import create_app
 from local_llm_admin.availability import AvailabilityStore
+from local_llm_admin.config import Settings
 from local_llm_admin.performance_store import PERF_SOURCE, PerformanceStore
 
 FIX = Path(__file__).parent / "fixtures"
@@ -42,6 +45,16 @@ async def client(app):
     ) as c:
         assert (await c.post("/login", data={"password": "pw"})).status_code == 303
         yield c
+
+
+def _recent_fixture_log() -> str:
+    # Keep ingestion/context tests inside the API's default window as the fixture ages.
+    day = (datetime.now(UTC) - timedelta(days=2)).date()
+    return re.sub(
+        r"2026-09-(28|29)",
+        lambda match: (day + timedelta(days=int(match[1]) - 28)).isoformat(),
+        (FIX / "mac/mlx-server.log").read_text(),
+    )
 
 
 def _db(settings):
@@ -89,6 +102,7 @@ def _row(i, started, **kw):
         "/api/performance/requests",
         "/api/performance/requests/1/context",
         "/api/performance/tokens",
+        "/api/performance/engines",
         "/api/availability",
         "/api/maintenance/log-rotation",
     ],
@@ -168,7 +182,7 @@ async def test_request_context_is_bounded_redacted_and_only_from_the_same_file(
     app, client, settings
 ):
     log = settings.mlx_log_dir / "mlx-server.log"
-    text = (FIX / "mac/mlx-server.log").read_text()
+    text = _recent_fixture_log()
     text = text.replace(
         "Decode started: request=735875ffb0",
         "Decode started: request=735875ffb0 api_key=sk-abcdef123456",
@@ -194,7 +208,7 @@ async def test_request_context_is_bounded_redacted_and_only_from_the_same_file(
 
 async def test_request_context_reads_a_rotated_archive(app, client, settings):
     log = settings.mlx_log_dir / "mlx-server.log"
-    log.write_text((FIX / "mac/mlx-server.log").read_text())
+    log.write_text(_recent_fixture_log())
     await app.state.supervisor.tick()
     log.rename(log.with_name("mlx-server.log.20261001-040000"))
     log.write_text("")
@@ -229,14 +243,14 @@ async def test_performance_page_renders_with_nav(client):
 
 
 async def test_a_monitor_tick_ingests_requests_and_samples_availability(app, client, settings):
-    (settings.mlx_log_dir / "mlx-server.log").write_text((FIX / "mac/mlx-server.log").read_text())
+    (settings.mlx_log_dir / "mlx-server.log").write_text(_recent_fixture_log())
     await app.state.supervisor.tick()
     rows = (await client.get("/api/performance/requests")).json()["requests"]
     assert len(rows) == 3
     samples = AvailabilityStore(_db(settings)).samples(0, 2e9)
     assert len(samples) == 1
     body = (await client.get("/api/performance/summary")).json()
-    # the recorded log is from 2026-09-28; the default range ends today
+    # The fixture dates stay recent; the default range ends today.
     assert body["source"]["last_ingest"] is not None
 
 
@@ -354,3 +368,39 @@ async def test_the_strata_usage_poller_is_a_monitor_listener(app):
     usage = app.state.strata_usage
     assert isinstance(usage, StrataUsage)
     await usage.on_tick(None, {"engine": "mlx"})  # not the engine: no call, no error
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_splash_coverage_is_explicit_without_changing_historical_totals(
+    client: httpx.AsyncClient, settings: Settings, enabled: bool
+) -> None:
+    settings.splash_enabled = enabled
+    PerformanceStore(_db(settings)).insert_rows(PERF_SOURCE, [_row(1, time.time() - 10)])
+    for endpoint in ("summary", "tokens"):
+        body = (await client.get(f"/api/performance/{endpoint}")).json()
+        splash = body["coverage"]["splash"]
+        assert splash["source"] == "splash"
+        assert splash["coverage"] == ("not_collected" if enabled else "disabled")
+        assert splash["last_poll"] is splash["last_ingest"] is None
+        assert splash["per_request_history"] == "unsupported"
+        assert body["totals"]["requests"] == 1
+
+
+async def test_native_snapshots_and_scoped_availability_are_separate_apis(
+    app: Any, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    from .test_splash_ingestion import reading
+
+    now = time.time()
+    monitor = app.state.splash_monitor
+    monitor.store.record(reading(), now=now - 2)
+    settings.splash_enabled = True
+    result = (await client.get("/api/performance/engines")).json()
+    assert result["coverage"]["coverage"] == "aggregate_snapshots"
+    assert len(result["readings"]) == 1 and result["readings"][0]["profile"] == "stock"
+    assert (await client.get("/api/performance/engines?profile=other")).json()["readings"] == []
+    assert (await client.get("/api/performance/engines?limit=501")).status_code == 422
+    assert (await client.get("/api/availability?source=unregistered")).status_code == 422
+    report = (await client.get("/api/availability?source=splash")).json()
+    assert report["source"] == "splash" and report["totals"]["availability"] is None
+    assert (await client.get("/api/performance/tokens")).json()["totals"]["requests"] == 0

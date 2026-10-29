@@ -35,7 +35,8 @@ from . import quality as quality_mod
 from .alerts import AlertStore, Snapshot
 from .auth import COOKIE_NAME, LoginLimiter, SessionManager, csrf_ok, verify_password
 from .availability import AvailabilityRecorder, AvailabilityStore, summarize
-from .backend_types import resolve_observations
+from .backend_availability import BackendAvailabilityStore, backend_state
+from .backend_types import EngineObservation, resolve_observations
 from .backends import BackendUnavailable
 from .chat import ChatRequest, stream_chat
 from .comfy_outputs import (
@@ -60,6 +61,7 @@ from .download_store import DownloadStore
 from .downloads import DownloadError, DownloadService
 from .embed import QUERY_INSTRUCTION, EmbedClient, EmbedError, validate_embed, validate_rerank
 from .embed_store import EmbedStore
+from .engine_telemetry import EngineTelemetryStore
 from .engines import ComfyClient, StrataClient, observation_badge
 from .eval_graders import grade_response
 from .eval_judge import judge_target
@@ -113,6 +115,7 @@ from .sidecars import (
     service_unavailable_reason,
 )
 from .splash import SplashClient
+from .splash_monitor import SplashMonitor
 from .strata_usage import StrataUsage
 from .tts import TtsClient, TtsError, text_weight, validate_speech
 from .tts_store import TtsStore
@@ -312,7 +315,13 @@ def create_app(
         generation = control.observe()["generation"]
         return int(generation["pid"]) if generation else None
 
-    sampler = Sampler(settings, mlx_pid=engine_pid)
+    def metric_observation() -> EngineObservation | None:
+        observed, selected = control._snapshot()
+        if selected is not None or observed["engine"] == "none":
+            return selected
+        return EngineObservation(observed["engine"])
+
+    sampler = Sampler(settings, mlx_pid=engine_pid, engine_observation=metric_observation)
     usage = LiteLLMUsage(settings)
     db_path = settings.admin_data_dir / "admin.sqlite"
     events = IngestStore(db_path)
@@ -320,8 +329,44 @@ def create_app(
     probes = ProbeRunner()
     perf = PerformanceStore(db_path)
     perf_logs = PerfLogs(settings, events, perf)
+    native_telemetry = EngineTelemetryStore(db_path)
+    splash_monitor = SplashMonitor(settings, splash, native_telemetry)
+    backend_availability = BackendAvailabilityStore(db_path)
+
+    def backend_health(observed: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+        descriptions = {
+            b.spec.id: {
+                "label": b.spec.label,
+                "enabled": b.spec.enabled,
+                "auto_recover": b.spec.auto_recover,
+            }
+            for b in control.backends
+        }
+        cached = splash_monitor.snapshot()
+        if cached.get("ready") is True:
+            generation = (observed or {}).get("generation") or {}
+            members = [
+                {k: p[k] for k in ("pid", "started", "role")}
+                for p in generation.get("processes", [])
+            ]
+            expected = cached.get("identity", {}).get("processes")
+            if (observed or {}).get("engine") != "splash" or not members or members != expected:
+                cached.update(
+                    state="unknown", ready=None, profile=None, fingerprint=None, epoch=None
+                )
+        descriptions["splash"].update(cached)
+        return descriptions
+
     supervisor = Supervisor(
-        settings, control, alerts, events, HostLogs(settings, events), probes, sampler, mlx
+        settings,
+        control,
+        alerts,
+        events,
+        HostLogs(settings, events),
+        probes,
+        sampler,
+        mlx,
+        backend_health=backend_health,
     )
 
     async def ingest_requests(snap: Snapshot, observed: dict[str, Any] | None) -> None:
@@ -335,6 +380,39 @@ def create_app(
         if res.state == "error":
             log.warning("request ingestion failed: %s", res.error)
 
+    last_backend_sample: float | None = None
+
+    async def record_backend_availability(snap: Snapshot, observed: dict[str, Any] | None) -> None:
+        nonlocal last_backend_sample
+        if (
+            last_backend_sample is not None
+            and 0 <= snap.wall - last_backend_sample < settings.availability_interval_s
+        ):
+            return
+        last_backend_sample = snap.wall
+        if settings.splash_enabled or (snap.intent or "").startswith("splash:"):
+            sample = backend_state(snap, "splash")
+            # The monitor's cached bundle must match this tick's local generation.
+            identity = snap.backends.get("splash", {}).get("identity", {})
+            generation = (observed or {}).get("generation") or {}
+            observed_members = [
+                {k: p[k] for k in ("pid", "started", "role")}
+                for p in generation.get("processes", [])
+            ]
+            if sample["state"] == "serving" and (
+                not observed_members or observed_members != identity.get("processes")
+            ):
+                sample["state"] = "unknown"
+
+            def persist() -> None:
+                backend_availability.add("splash", snap.wall, sample)
+                backend_availability.prune(
+                    snap.wall - settings.observability_retention_days * 86400
+                )
+
+            await probes.run("backend-availability", persist, settings.probe_timeout_s)
+
+    supervisor.add_listener(record_backend_availability)
     supervisor.add_listener(ingest_requests)
     strata_usage = StrataUsage(settings, strata, perf)
     supervisor.add_listener(strata_usage.on_tick)
@@ -394,7 +472,14 @@ def create_app(
         ttl_s=settings.comfyui_output_cache_s,
     )
     diagnostics = Diagnostics(
-        settings, mlx, control, sampler, events, probes, watchdog_state=supervisor.state
+        settings,
+        mlx,
+        control,
+        sampler,
+        events,
+        probes,
+        watchdog_state=supervisor.state,
+        backend_health=lambda: backend_health(control.observe()),
     )
     sessions = SessionManager(
         settings.admin_session_secret.get_secret_value(), settings.admin_session_max_age_s
@@ -425,9 +510,11 @@ def create_app(
         app.state.startup_task = startup_task
         if start_background:
             sampler.start()
+            splash_monitor.start()
             supervisor.start()
         yield
         await quality.shutdown()  # before anything it depends on stops
+        await splash_monitor.stop()
         await supervisor.stop()
         await sampler.stop()
         probes.shutdown()  # never waits for a hung probe thread
@@ -462,6 +549,8 @@ def create_app(
     app.state.maintenance = maintenance
     app.state.perf_logs = perf_logs
     app.state.strata_usage = strata_usage
+    app.state.splash_monitor = splash_monitor
+    app.state.backend_availability = backend_availability
     app.state.inventory_timeout_s = settings.inventory_timeout_s
     app.state.inventory_cache = None  # (monotonic time, result)
     app.state.downloaded_at = downloads_svc.downloaded_at  # published path -> time
@@ -1941,6 +2030,14 @@ def create_app(
                 "parser": PARSER,
                 "last_ingest": await asyncio.to_thread(perf.last_ingest, PERF_SOURCE),
             },
+            "coverage": {
+                "splash": await asyncio.to_thread(
+                    native_telemetry.coverage,
+                    settings.splash_enabled,
+                    now=time.time(),
+                    stale_s=settings.splash_poll_interval_s * 3,
+                )
+            },
             **out,
         }
 
@@ -1966,6 +2063,44 @@ def create_app(
             "days": days["rows"],
             "models": models["rows"],
             "totals": days["totals"],
+            "coverage": {
+                "splash": await asyncio.to_thread(
+                    native_telemetry.coverage,
+                    settings.splash_enabled,
+                    now=time.time(),
+                    stale_s=settings.splash_poll_interval_s * 3,
+                )
+            },
+        }
+
+    @app.get("/api/performance/engines")
+    async def performance_engines(
+        frm: str | None = Query(None, alias="from"),
+        to: str | None = None,
+        profile: str | None = Query(None, max_length=128),
+        fingerprint: str | None = Query(None, max_length=128),
+        limit: int = Query(200, ge=1, le=500),
+    ) -> dict[str, Any]:
+        start, end, lo, hi = _epoch_range(frm, to)
+        return {
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "source": "splash",
+            "readings": await asyncio.to_thread(
+                native_telemetry.readings,
+                lo,
+                hi,
+                profile=profile,
+                fingerprint=fingerprint,
+                limit=limit,
+            ),
+            "coverage": await asyncio.to_thread(
+                native_telemetry.coverage,
+                settings.splash_enabled,
+                now=time.time(),
+                stale_s=settings.splash_poll_interval_s * 3,
+            ),
+            "semantics": "Cumulative native execution snapshots; never sum polls or add to request/gateway totals.",
         }
 
     @app.get("/api/performance/requests")
@@ -2010,10 +2145,25 @@ def create_app(
 
     @app.get("/api/availability")
     async def availability_view(
-        frm: str | None = Query(None, alias="from"), to: str | None = None
+        frm: str | None = Query(None, alias="from"),
+        to: str | None = None,
+        source: Literal["mlx", "splash"] = "mlx",
+        profile: str | None = Query(None, max_length=128),
     ) -> dict[str, Any]:
         start, end, lo, hi = _epoch_range(frm, to)
         interval = settings.availability_interval_s
+        if source == "splash":
+            out = await asyncio.to_thread(
+                backend_availability.query,
+                source,
+                lo,
+                hi,
+                interval_s=interval,
+                tz_offset_min=settings.litellm_timezone_offset_min,
+                now=time.time(),
+                profile=profile,
+            )
+            return {"from": start.isoformat(), "to": end.isoformat(), **out}
         samples = await asyncio.to_thread(availability.samples, lo, hi, 2 * interval)
         out = summarize(
             samples,

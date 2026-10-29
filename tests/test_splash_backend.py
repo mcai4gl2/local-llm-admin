@@ -15,7 +15,7 @@ from local_llm_admin.backends import BackendRegistry, SplashBackend
 from local_llm_admin.config import Settings
 from local_llm_admin.splash import SplashClient
 
-from .test_splash import catalog, write
+from .test_splash import captured_status, catalog, write
 
 
 class Processes:
@@ -110,14 +110,7 @@ def splash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     calls = []
     bodies = {
         "/ready": {"status": "ready"},
-        "/status": {
-            "ready": True,
-            "maximum_context_tokens": 32768,
-            "instance": {"pid": 100, "model": profile["model"]},
-            "kv": {"format": "bf16"},
-            "state_format": "fp32",
-            "weights": {},
-        },
+        "/status": captured_status(100, profile["model"]),
         "/v1/models": {
             "data": [
                 {"id": name, "max_model_len": 32768}
@@ -327,7 +320,7 @@ async def test_malformed_status_is_not_loaded(splash: Any, bad: str) -> None:
     if bad == "pid-float":
         splash.bodies["/status"]["instance"]["pid"] = 100.0
     if bad == "kv-null":
-        splash.bodies["/status"]["kv"] = None
+        splash.bodies["/status"]["identity"]["kv"] = None
     if bad == "model-id-object":
         splash.bodies["/v1/models"]["data"][0]["id"] = {}
     if bad == "model-context":
@@ -361,9 +354,9 @@ async def test_failed_http_probe_does_not_claim_readiness(
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("kv", None),
-        ("kv", {"format": "fp8"}),
-        ("state_format", "fp16"),
+        ("identity", None),
+        ("identity", {"kv": {"format": "fp8"}}),
+        ("memory_plan", {"valid": True, "model": {"state_format": "fp16"}}),
         ("weights", []),
         ("maximum_context_tokens", True),
     ],
@@ -714,3 +707,120 @@ def test_invalid_profile_history_never_becomes_mlx_intent(splash: Any, target: s
 
     job = {"action": "engine", "name": "profile", "to_name": target}
     assert intent_after(job, BackendRegistry((splash.backend,))) == UNKNOWN
+
+
+async def test_native_stale_snapshot_is_not_serving_even_with_ready_endpoint(splash: Any) -> None:
+    splash.bodies["/status"]["transport"] = {
+        "status_stale": True,
+        "restarts": 0,
+        "status_age_ms": 100,
+    }
+    status = await splash.client.status()
+    assert status["ready"] is False and status["state"] == "unknown"
+
+
+async def test_monitor_collects_real_client_snapshot_with_verified_full_bundle(
+    splash: Any, tmp_path: Path
+) -> None:
+    from local_llm_admin.engine_telemetry import EngineTelemetryStore
+    from local_llm_admin.splash_monitor import SplashMonitor
+
+    status = splash.bodies["/status"]
+    status["instance"]["id"] = "synthetic-controller-instance"
+    status["transport"] = {"status_stale": False, "status_age_ms": 0, "restarts": 0, "ready": True}
+    status["requests"] = {"submitted": 4, "completed": 3, "failed": 1, "cancelled": 0}
+    status["metrics"] = {"prefill_input_tokens": 100, "decode_output_tokens": 50}
+    monitor = SplashMonitor(
+        splash.settings,
+        splash.client,
+        EngineTelemetryStore(tmp_path / "a.sqlite"),
+        clock=lambda: 100,
+    )
+    await monitor.poll()
+    assert monitor.snapshot()["ready"] is True
+    rows = monitor.store.readings(0, 200)
+    assert len(rows) == 1 and rows[0]["counters"]["completed"] == 3
+    assert rows[0]["profile"] == "stock-8bit-32k"
+    assert rows[0]["fingerprint"] == splash.client.observe().generation["profile_fingerprint"]
+    assert splash.calls == ["/ready", "/status", "/v1/models"]
+    await monitor.stop()
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("identity",), []),
+        (("identity", "kv"), None),
+        (("identity", "kv", "format"), "fp8"),
+        (("memory_plan",), None),
+        (("memory_plan", "valid"), False),
+        (("memory_plan", "valid"), 1),
+        (("memory_plan", "model"), {}),
+        (("memory_plan", "model"), []),
+        (("memory_plan", "model", "kv_format"), "fp8"),
+        (("memory_plan", "model", "state_format"), "fp16"),
+    ],
+)
+async def test_captured_readiness_requires_consistent_runtime_identity_and_memory_plan(
+    splash: Any, path: tuple[str, ...], value: Any
+) -> None:
+    assert (await splash.client.status())["ready"]
+    document = splash.bodies["/status"]
+    for key in path[:-1]:
+        document = document[key]
+    document[path[-1]] = value
+    assert (await splash.client.status())["state"] == "unknown"
+
+
+async def test_legacy_precision_locations_cannot_substitute_runtime_configuration(
+    splash: Any,
+) -> None:
+    status = splash.bodies["/status"]
+    status.pop("identity")
+    status.pop("memory_plan")
+    status.update(kv={"format": "bf16"}, state_format="fp32")
+    assert not (await splash.client.status())["ready"]
+
+
+@pytest.mark.parametrize("recorded", [None, 8085])
+def test_admin_refuses_endpoint_mismatch_before_http(splash: Any, recorded: int | None) -> None:
+    if recorded is not None:
+        splash.record["port"] = recorded
+        write(splash.root / "run/splash.json", splash.record)
+    splash.settings.splash_port = 8085 if recorded is None else 8080
+    assert splash.client.observe().state == "unknown"
+    assert splash.calls == []
+
+
+def test_admin_accepts_matching_custom_owned_endpoint(splash: Any) -> None:
+    splash.record["port"] = 8085
+    write(splash.root / "run/splash.json", splash.record)
+    splash.settings.splash_port = 8085
+    assert splash.client.observe().ownership == "verified"
+
+
+@pytest.mark.asyncio
+async def test_128k_loaded_readiness_requires_exact_native_and_model_context(splash: Any) -> None:
+    from local_llm_admin.splash_profiles import load_profiles
+
+    path = splash.root / "etc/profiles.json"
+    doc = splash.doc
+    name = "stock-8bit-32k"
+    doc["profiles"][name]["max_context"] = 131072
+    write(path, doc)
+    profile = load_profiles(path, splash.root)[name]
+    splash.record["fingerprint"] = profile.fingerprint
+    write(splash.root / "run/splash.json", splash.record)
+    assert (await splash.client.status())["state"] != "ready"
+    splash.bodies["/status"]["maximum_context_tokens"] = 131072
+    assert (await splash.client.status())["state"] != "ready"
+    for model in splash.bodies["/v1/models"]["data"]:
+        model["max_model_len"] = 131072
+    status = await splash.client.status()
+    assert status["state"] == "ready" and status["max_context"] == 131072
+    details = await splash.backend.details()
+    assert details["max_context"] == 131072
+    assert details["target_options"][0]["max_context"] == 131072
+    assert "32K" not in details["note"]
+    # Planner capacity is independent of the explicit serving limit.
+    assert splash.bodies["/status"]["memory_plan"]["maximum_context_tokens"] != 131072
