@@ -106,6 +106,10 @@ bounded functional checks across MLX, Strata and both Splash profiles. Use the c
 and migration instructions above for current operations; the dated report is evidence for
 its pinned revision, not a substitute for a later deployment preflight.
 
+The [latest-code maintenance record](reports/latest-code-deployment-20261030.md) documents
+the subsequent vision-error correction deployment, payload verification and current MLX
+smoke tests. Its installed-module check does not establish live Strata image support.
+
 
 ## Strata request troubleshooting
 

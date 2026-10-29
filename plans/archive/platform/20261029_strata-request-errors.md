@@ -1,8 +1,8 @@
-Overall Progress: 75%
+Overall Progress: 75% (historical investigation; remaining client scope deferred)
 
 # Explain Strata request refusals without exposing upstream details
 
-## Evidence and hypotheses
+## Evidence and hypotheses — 2026-10-29
 
 After the successful shared-listener deployment, the user's Strata switch completed and
 both the actual LiteLLM proxy and native health endpoint confirmed a loaded engine. A
@@ -25,10 +25,12 @@ These are distinct request-level failures, not evidence that the engine failed t
 - [x] 🟩 Translate the recognized refusal to a fixed public-safe explanation, retaining
   HTTP status and existing error code, bounded reads and upstream cleanup.
 - [x] 🟩 Run focused and required quality gates and record request-level evidence.
-- [ ] 🟥 Apply the verified correction with a file backup in an idle window and confirm
-  live rejection through the shared endpoint. The first attempt deferred without changes.
-- [ ] 🟥 Resolve the client's exact failure and image requirements, then close/archive
-  the investigation with any remaining scope explicit.
+- [x] 🟩 Apply the verified correction with backups in an idle window. The first attempt
+  deferred without changes; the later maintenance deployment succeeded.
+- [ ] 🟥 Confirm the live Strata image rejection through the shared endpoint; deferred
+  while preserving the user's current MLX selection.
+- [ ] 🟥 Resolve the client's exact failure and image requirements; deferred to the
+  explicit backlog follow-up rather than labeling the client incident resolved.
 
 ## Safety and outstanding questions
 
@@ -48,7 +50,7 @@ The full coverage gate passed. The patch application waits for an idle Strata sl
 and zero queued requests; it must defer rather than interrupt active generation.
 
 
-## Latest outcome
+## Outcome before the latest-code deployment
 
 The full gate passed: 3532 tests, two skips and 98.18% coverage. The final focused suite
 includes one additional malformed-error variant added after full-suite collection;
@@ -58,3 +60,22 @@ still showed the model loaded, images unsupported, active reasoning and one queu
 No live service, installed application file, reasoning policy or vision assets changed
 in this follow-up. The existing selected Strata engine remains running. The client and
 image-requirement questions are pending; do not label this client incident resolved.
+
+
+## Delivery outcome — 2026-10-30
+
+The user authorized building and deploying the latest code. Revision `93e1051` matched
+remote main and passed the full gate: 3,533 tests, two skips, 98.18% coverage, Ruff,
+strict mypy, instruction parity and package builds. Standard host/admin deployment
+completed in an idle window with previous-source and consistent database backups.
+All 127 installed payload hashes match; host code drift is clear. Admin health,
+streaming/non-streaming shared inference, authentication and model refusal checks pass.
+The installed module's recognized vision-error translation and generic sanitization pass.
+The original MLX process, weights selection, service intents and private configuration
+were preserved.
+
+The correction is deployed. No live Strata image probe was performed because the user
+currently has MLX selected. The client-specific incident remains unresolved; archive this
+partial investigation with its earlier deferred/failed outcomes intact. The remaining
+decision and live check are tracked in the [backlog](../../backlog/platform/strata-request-followup.md).
+See the [maintenance report](../../../docs/reports/latest-code-deployment-20261030.md).
