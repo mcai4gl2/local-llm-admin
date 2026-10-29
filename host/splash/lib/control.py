@@ -195,6 +195,9 @@ def _same(root: Path, record: dict[str, Any], old: dict[str, Any]) -> dict[str, 
 
 
 def members(root: Path, record: dict[str, Any]) -> list[dict[str, Any]]:
+    # Snapshot candidates before child discovery so a newly born child waits for the
+    # next observation instead of becoming an apparently unrecorded orphan.
+    candidates = possible_pids(root)
     controller = _same(root, record, record["controller"])
     native = {p["pid"]: p for p in record["native"] if _same(root, record, p) is not None}
     if controller is not None:
@@ -205,7 +208,9 @@ def members(root: Path, record: dict[str, Any]) -> list[dict[str, Any]]:
                 if item:
                     native[item["pid"]] = item
     found = ([controller] if controller else []) + list(native.values())
-    if possible_pids(root) - {p["pid"] for p in found}:
+    # Each recorded generation was revalidated above, including proven exits.
+    recorded = {p["pid"] for p in [record["controller"], *record["native"]]}
+    if candidates - {p["pid"] for p in found} - recorded:
         raise HostError("An unrecorded Splash process owns resources.")
     return found
 
@@ -487,7 +492,11 @@ def start(root: Path, name: str) -> None:
             found = members(root, record)
             record["native"] = [p for p in found if p["role"] == "native"]
             _write(root, record)
-            if details(root)["state"] == "ready":
+            ready = details(root)
+            if ready["state"] == "ready":
+                # Readiness can discover a child born after the preceding member scan.
+                record["native"] = [p for p in ready["processes"] if p["role"] == "native"]
+                _write(root, record)
                 return
             if child.poll() is not None:
                 raise HostError("Splash exited during startup.")

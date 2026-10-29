@@ -261,6 +261,7 @@ def test_missing_profile_helper_refuses_import(
         "crash",
         "timeout",
         "ready",
+        "late-native",
     ],
 )
 def test_start_validates_before_fork_and_bounds_owned_cleanup(
@@ -323,12 +324,19 @@ def test_start_validates_before_fork_and_bounds_owned_cleanup(
     monkeypatch.setattr(
         host_control, "_member", lambda *args: None if mode.startswith("capture-") else member
     )
+    native = {**member, "pid": 101, "role": "native", "executable": str(root / "runtime/engine/splash")}
     monkeypatch.setattr(host_control, "members", lambda *args: [member])
-    monkeypatch.setattr(host_control, "_write", lambda *args: None)
+    persisted_native = []
+    monkeypatch.setattr(
+        host_control, "_write", lambda root, record: persisted_native.append(list(record["native"]))
+    )
     monkeypatch.setattr(
         host_control,
         "details",
-        lambda root: {"state": "starting" if mode in ("crash", "timeout") else "ready"},
+        lambda root: {
+            "state": "starting" if mode in ("crash", "timeout") else "ready",
+            "processes": [member, native] if mode == "late-native" else [member],
+        },
     )
     cleanups = []
     monkeypatch.setattr(host_control, "stop", lambda root: cleanups.append(root))
@@ -336,11 +344,12 @@ def test_start_validates_before_fork_and_bounds_owned_cleanup(
     monkeypatch.setattr(host_control.time, "monotonic", lambda: next(clock))
     monkeypatch.setattr(host_control.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(host_control, "READY_TIMEOUT", 2)
-    if mode in ("ready", "stale-pid", "custom-port"):
+    if mode in ("ready", "stale-pid", "custom-port", "late-native"):
         host_control.start(root, "stock-8bit-32k")
         argv = launches[0][0][0]
         assert argv[argv.index("--allowed-host") + 1] == "mac-mini.local"
         assert cleanups == []
+        assert persisted_native[-1] == ([native] if mode == "late-native" else [])
         assert argv[argv.index("--port") + 1] == ("8085" if mode == "custom-port" else "8080")
     else:
         with pytest.raises(host_control.HostError):
@@ -671,3 +680,45 @@ def test_stop_cleans_recorded_port_without_claiming_the_mlx_listener(
     host_control.stop(tmp_path)
     assert ports == [8085]
     assert not record_path.exists()
+
+
+def test_child_born_between_process_scans_is_verified_on_the_next_observation(
+    host_control: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    parent = {"pid": 100, "role": "controller"}
+    native = {"pid": 101, "role": "native"}
+    record = {"controller": parent, "native": [], "prepared": "prepared"}
+    child_exists = False
+    verified = []
+
+    def children(argv: list[str]) -> str:
+        nonlocal child_exists
+        snapshot = "101 100" if child_exists else ""
+        child_exists = True
+        return snapshot
+
+    def member(*args: Any) -> dict[str, Any]:
+        verified.append(args[1])
+        return native
+
+    monkeypatch.setattr(host_control, "_same", lambda *args: parent)
+    monkeypatch.setattr(host_control, "_run", children)
+    monkeypatch.setattr(host_control, "_member", member)
+    monkeypatch.setattr(
+        host_control, "possible_pids", lambda root: {100, 101} if child_exists else {100}
+    )
+    assert host_control.members(tmp_path, record) == [parent]
+    assert host_control.members(tmp_path, record) == [parent, native]
+    assert verified == [101]
+
+
+def test_recorded_child_exiting_after_candidate_scan_is_absent(
+    host_control: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    parent = {"pid": 100, "role": "controller"}
+    native = {"pid": 101, "role": "native"}
+    record = {"controller": parent, "native": [native], "prepared": "prepared"}
+    monkeypatch.setattr(host_control, "possible_pids", lambda root: {100, 101})
+    monkeypatch.setattr(host_control, "_same", lambda root, record, p: parent if p == parent else None)
+    monkeypatch.setattr(host_control, "_run", lambda argv: "")
+    assert host_control.members(tmp_path, record) == [parent]
