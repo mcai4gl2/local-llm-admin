@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -87,6 +88,7 @@ class LogMaintenance:
         self.control = control
         self.alerts = alerts
         self.clock = clock
+        self._state_lock = threading.Lock()
         control.runner.add_hook(self.on_job_complete)
 
     def _get(self) -> dict[str, Any]:
@@ -133,24 +135,37 @@ class LogMaintenance:
             job = await self.control.rotate_logs(argv)
         except ControlError as exc:
             # busy or locked: try again on a later tick; the day is not used up
-            self.control.store.set_kv(
-                ROTATION_KEY,
-                {**st, "day": st.get("day"), "skipped": exc.message, "skipped_at": now},
-            )
+            with self._state_lock:
+                latest = self._get()
+                self.control.store.set_kv(
+                    ROTATION_KEY,
+                    {**latest, "day": latest.get("day"), "skipped": exc.message, "skipped_at": now},
+                )
             return
         local = datetime.fromtimestamp(now, ops_tz(self.settings.litellm_timezone_offset_min))
-        self.control.store.set_kv(
-            ROTATION_KEY,
-            {
-                **st,
-                "day": local.date().isoformat(),
-                "attempted_at": now,
-                "reason": reason,
-                "job_id": job["id"],
-                "outcome": "running",
-                "skipped": None,
-            },
-        )
+        with self._state_lock:
+            latest = self._get()
+            # A fast worker can complete before submission returns. Keep its final
+            # fields while adding this attempt's scheduling metadata. The same
+            # lock prevents a completion's earlier read from erasing this write.
+            completed = (
+                {k: latest[k] for k in ("outcome", "finished", "result") if k in latest}
+                if latest.get("job_id") == job["id"]
+                else {}
+            )
+            self.control.store.set_kv(
+                ROTATION_KEY,
+                {
+                    **st,
+                    "day": local.date().isoformat(),
+                    "attempted_at": now,
+                    "reason": reason,
+                    "job_id": job["id"],
+                    "outcome": "running",
+                    "skipped": None,
+                    **completed,
+                },
+            )
 
     def on_job_complete(self, job: dict[str, Any]) -> None:
         if job["action"] != "rotate-logs":
@@ -159,11 +174,12 @@ class LogMaintenance:
         view = self.control.runner.get(job["id"]) or {}
         result = parse_rotate_output(view.get("output", ""))
         status = job["status"]
-        st = self._get()
-        self.control.store.set_kv(
-            ROTATION_KEY,
-            {**st, "job_id": job["id"], "outcome": status, "finished": now, "result": result},
-        )
+        with self._state_lock:
+            st = self._get()
+            self.control.store.set_kv(
+                ROTATION_KEY,
+                {**st, "job_id": job["id"], "outcome": status, "finished": now, "result": result},
+            )
         if result["deferred"]:
             detail = "; ".join(
                 f"{d['name']} ({d['bytes'] / MIB:.1f} MiB): "

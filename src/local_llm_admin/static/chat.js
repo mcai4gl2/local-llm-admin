@@ -4,14 +4,13 @@ let controller = null;
 const $ = (id) => document.getElementById(id);
 
 onStatus((st) => {
-  const serving = st.state === "serving" || st.state === "strata";
+  const state = EngineUI.chat(st);
   const box = $("chat-disabled");
-  box.hidden = serving;
-  box.textContent = st.engine?.active === "comfyui"
-    ? "The LLM is stopped because ComfyUI owns the GPU. Switch engines on the Models page."
-    : st.state === "strata-starting" ? "Strata is loading the model. Chat opens when it is ready."
-      : "The model is not serving. Chat is disabled.";
-  $("btn-send").disabled = !serving || controller !== null;
+  box.hidden = state.ok;
+  box.textContent = state.text;
+  const note = $("chat-engine-note");
+  if (note) { note.hidden = !state.ok || !state.text; note.textContent = state.text; }
+  $("btn-send").disabled = !state.ok || controller !== null;
 });
 
 function addMessage(role, text = "") {

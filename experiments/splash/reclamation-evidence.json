@@ -1,0 +1,2126 @@
+{
+  "contract": "splash-stock-reclamation-1",
+  "campaign_sha256": "33710b033b628f456b67a1bbcd372c662d82e73f2cddacde6ddbb6333b246399",
+  "reclamation_followup_gate": "inconclusive",
+  "adoption_decision": "inconclusive",
+  "windows": [
+    {
+      "window": "reclaim-stock-w1",
+      "order": [
+        "default",
+        "gpu-only"
+      ],
+      "status": "complete",
+      "restoration_verified": true,
+      "phases": [
+        {
+          "variant": "default",
+          "status": "complete",
+          "attempted": 2,
+          "captured": 2,
+          "review": {
+            "gate": "inconclusive",
+            "recovered_90_s": false,
+            "baseline_drift_bytes": 90341376,
+            "threshold_bytes": 56083120128.0,
+            "baseline_available_bytes": 62314577920,
+            "primary_observed_s": 88.30248069763184,
+            "available_gap_bytes": 11777327104,
+            "primary_available_bytes": 50537250816,
+            "latest_above_threshold": false,
+            "latest_available_bytes": 50400247808,
+            "vm_delta_bytes": {
+              "free_bytes": 2324774912,
+              "active_bytes": 11764711424,
+              "inactive_bytes": -15621308416,
+              "speculative_bytes": 1524318208,
+              "wired_bytes": 12959744,
+              "file_backed_bytes": -2274902016,
+              "anonymous_bytes": -57376768,
+              "compressor_stored_bytes": -18612224,
+              "compressor_occupied_bytes": -5455872
+            },
+            "other_rss_delta_bytes": null,
+            "other_uss_delta_bytes": null,
+            "other_uss_missing_before": 687,
+            "other_uss_missing_after": 675
+          },
+          "baseline": [
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 62404919296,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 33933377536,
+                "active_bytes": 2483404800,
+                "inactive_bytes": 28454699008,
+                "speculative_bytes": 15237120,
+                "wired_bytes": 2129510400,
+                "file_backed_bytes": 29194371072,
+                "anonymous_bytes": 1758969856,
+                "compressor_stored_bytes": 2729410560,
+                "compressor_occupied_bytes": 1101692928
+              },
+              "span_s": 0.037554208654910326,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 269,
+              "other_uss_missing": 687,
+              "other_process_count": 687,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            },
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 62364172288,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 33896873984,
+                "active_bytes": 2525757440,
+                "inactive_bytes": 28450144256,
+                "speculative_bytes": 15532032,
+                "wired_bytes": 2129559552,
+                "file_backed_bytes": 29195026432,
+                "anonymous_bytes": 1796407296,
+                "compressor_stored_bytes": 2723807232,
+                "compressor_occupied_bytes": 1100054528
+              },
+              "span_s": 0.04187954170629382,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 269,
+              "other_uss_missing": 687,
+              "other_process_count": 687,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            },
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 62314577920,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 33879244800,
+                "active_bytes": 2577088512,
+                "inactive_bytes": 28417933312,
+                "speculative_bytes": 15761408,
+                "wired_bytes": 2127970304,
+                "file_backed_bytes": 29195927552,
+                "anonymous_bytes": 1814855680,
+                "compressor_stored_bytes": 2723430400,
+                "compressor_occupied_bytes": 1099923456
+              },
+              "span_s": 0.03652704227715731,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 269,
+              "other_uss_missing": 687,
+              "other_process_count": 687,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            }
+          ],
+          "stops": [
+            {
+              "target_s": 2,
+              "observed_s": 3.302016496658325,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50538479616,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36209917952,
+                  "active_bytes": 14334738432,
+                  "inactive_bytes": 12801818624,
+                  "speculative_bytes": 1529577472,
+                  "wired_bytes": 2143813632,
+                  "file_backed_bytes": 26905657344,
+                  "anonymous_bytes": 1760477184,
+                  "compressor_stored_bytes": 2717155328,
+                  "compressor_occupied_bytes": 1098055680
+                },
+                "span_s": 0.03288016701117158,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 261,
+                "other_uss_missing": 677,
+                "other_process_count": 677,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 10,
+              "observed_s": 10.463019609451294,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50448809984,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36120936448,
+                  "active_bytes": 14334787584,
+                  "inactive_bytes": 12801425408,
+                  "speculative_bytes": 1529610240,
+                  "wired_bytes": 2233188352,
+                  "file_backed_bytes": 26905788416,
+                  "anonymous_bytes": 1760034816,
+                  "compressor_stored_bytes": 2716762112,
+                  "compressor_occupied_bytes": 1097973760
+                },
+                "span_s": 0.03560945810750127,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 261,
+                "other_uss_missing": 677,
+                "other_process_count": 677,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 30,
+              "observed_s": 30.350935697555542,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50535628800,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36201955328,
+                  "active_bytes": 14342602752,
+                  "inactive_bytes": 12804538368,
+                  "speculative_bytes": 1530413056,
+                  "wired_bytes": 2140815360,
+                  "file_backed_bytes": 26907983872,
+                  "anonymous_bytes": 1769570304,
+                  "compressor_stored_bytes": 2715271168,
+                  "compressor_occupied_bytes": 1097596928
+                },
+                "span_s": 0.03633299982175231,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 261,
+                "other_uss_missing": 677,
+                "other_process_count": 677,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 60,
+              "observed_s": 60.295610666275024,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601571328,
+                "available_bytes": 50539823104,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36210688000,
+                  "active_bytes": 14338637824,
+                  "inactive_bytes": 12799524864,
+                  "speculative_bytes": 1531084800,
+                  "wired_bytes": 2141028352,
+                  "file_backed_bytes": 26908966912,
+                  "anonymous_bytes": 1760280576,
+                  "compressor_stored_bytes": 2713485312,
+                  "compressor_occupied_bytes": 1096941568
+                },
+                "span_s": 0.03750312514603138,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 261,
+                "other_uss_missing": 679,
+                "other_process_count": 679,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 75,
+              "observed_s": 75.32238364219666,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50530746368,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36192108544,
+                  "active_bytes": 14348484608,
+                  "inactive_bytes": 12808994816,
+                  "speculative_bytes": 1531428864,
+                  "wired_bytes": 2140323840,
+                  "file_backed_bytes": 26909409280,
+                  "anonymous_bytes": 1779499008,
+                  "compressor_stored_bytes": 2712420352,
+                  "compressor_occupied_bytes": 1096581120
+                },
+                "span_s": 0.03673945786431432,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 675,
+                "other_process_count": 675,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 88,
+              "observed_s": 88.30248069763184,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50537250816,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36204019712,
+                  "active_bytes": 14341799936,
+                  "inactive_bytes": 12796624896,
+                  "speculative_bytes": 1540079616,
+                  "wired_bytes": 2140930048,
+                  "file_backed_bytes": 26921025536,
+                  "anonymous_bytes": 1757478912,
+                  "compressor_stored_bytes": 2704818176,
+                  "compressor_occupied_bytes": 1094467584
+                },
+                "span_s": 0.036378417164087296,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 675,
+                "other_process_count": 675,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 180,
+              "observed_s": 180.37033653259277,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50530795520,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36188454912,
+                  "active_bytes": 14352384000,
+                  "inactive_bytes": 12802310144,
+                  "speculative_bytes": 1542733824,
+                  "wired_bytes": 2140307456,
+                  "file_backed_bytes": 26926006272,
+                  "anonymous_bytes": 1771421696,
+                  "compressor_stored_bytes": 2694627328,
+                  "compressor_occupied_bytes": 1091731456
+                },
+                "span_s": 0.03582137497141957,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 675,
+                "other_process_count": 675,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 300,
+              "observed_s": 300.61946272850037,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50400247808,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35900604416,
+                  "active_bytes": 14504361984,
+                  "inactive_bytes": 12883869696,
+                  "speculative_bytes": 1617526784,
+                  "wired_bytes": 2143191040,
+                  "file_backed_bytes": 27090731008,
+                  "anonymous_bytes": 1915027456,
+                  "compressor_stored_bytes": 2626830336,
+                  "compressor_occupied_bytes": 1068367872
+                },
+                "span_s": 0.03637941740453243,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 675,
+                "other_process_count": 675,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            }
+          ],
+          "mode": {
+            "native_ane_off": false,
+            "reported_state": "split",
+            "reported_share": 0.4705882353,
+            "contrast_valid": true
+          },
+          "inference_total_s": [
+            0.3843314870027825,
+            8.551947816013126
+          ],
+          "loaded": {
+            "native": {
+              "allocated_bytes": 32787122500,
+              "current_bytes": 32794034176,
+              "released": false,
+              "restoring": false,
+              "restores": 0,
+              "ane_state": "split",
+              "ane_share": 0.4705882353
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 44,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 16947396608,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 1988411392,
+                "active_bytes": 14864318464,
+                "inactive_bytes": 13900742656,
+                "speculative_bytes": 1056473088,
+                "wired_bytes": 35209428992,
+                "file_backed_bytes": 26422509568,
+                "anonymous_bytes": 3399024640,
+                "compressor_stored_bytes": 2718318592,
+                "compressor_occupied_bytes": 1098547200
+              },
+              "span_s": 0.04461016599088907,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 261,
+              "other_uss_missing": 677,
+              "other_process_count": 677,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 4340006912,
+              "owned_uss_bytes": null
+            }
+          },
+          "resumed": {
+            "native": {
+              "allocated_bytes": 32947161412,
+              "current_bytes": 32954073088,
+              "released": false,
+              "restoring": false,
+              "restores": 1,
+              "ane_state": "split",
+              "ane_share": 0.4705882353
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 44,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 16907747328,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 1593720832,
+                "active_bytes": 14891778048,
+                "inactive_bytes": 13783023616,
+                "speculative_bytes": 1529397248,
+                "wired_bytes": 35221946368,
+                "file_backed_bytes": 26895679488,
+                "anonymous_bytes": 3308519424,
+                "compressor_stored_bytes": 2717204480,
+                "compressor_occupied_bytes": 1098055680
+              },
+              "span_s": 0.04461591597646475,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 675,
+              "other_process_count": 675,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 4315414528,
+              "owned_uss_bytes": null
+            }
+          },
+          "idle": {
+            "observed_s": 21.478442175022792,
+            "native": {
+              "allocated_bytes": 1989904708,
+              "current_bytes": 1996816384,
+              "released": true,
+              "restoring": false,
+              "restores": 0,
+              "ane_state": "split",
+              "ane_share": 0.4705882353
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 48537518080,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 33096499200,
+                "active_bytes": 16345120768,
+                "inactive_bytes": 14376665088,
+                "speculative_bytes": 1056505856,
+                "wired_bytes": 2144665600,
+                "file_backed_bytes": 26431946752,
+                "anonymous_bytes": 5346344960,
+                "compressor_stored_bytes": 2717908992,
+                "compressor_occupied_bytes": 1098465280
+              },
+              "span_s": 0.04551337519660592,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 675,
+              "other_process_count": 675,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 1785020416,
+              "owned_uss_bytes": null
+            }
+          },
+          "owned_generations_gone": true,
+          "listener_closed": true,
+          "known_other_process_rss_growth": {
+            "matched_readable_generations": 416,
+            "top_positive_growth_bytes": [
+              1654784,
+              1490944,
+              1294336,
+              1245184,
+              802816
+            ],
+            "coverage_incomplete": true
+          }
+        },
+        {
+          "variant": "gpu-only",
+          "status": "complete",
+          "attempted": 2,
+          "captured": 2,
+          "review": {
+            "gate": "pass",
+            "recovered_90_s": true,
+            "baseline_drift_bytes": 54280192,
+            "threshold_bytes": 45361446912.0,
+            "baseline_available_bytes": 50401607680,
+            "primary_observed_s": 88.2999632358551,
+            "available_gap_bytes": 20185088,
+            "primary_available_bytes": 50381422592,
+            "latest_above_threshold": true,
+            "latest_available_bytes": 50377211904,
+            "vm_delta_bytes": {
+              "free_bytes": -45432832,
+              "active_bytes": 30228480,
+              "inactive_bytes": 458752,
+              "speculative_bytes": 24788992,
+              "wired_bytes": 278528,
+              "file_backed_bytes": 35749888,
+              "anonymous_bytes": 19726336,
+              "compressor_stored_bytes": -28147712,
+              "compressor_occupied_bytes": -10321920
+            },
+            "other_rss_delta_bytes": null,
+            "other_uss_delta_bytes": null,
+            "other_uss_missing_before": 674,
+            "other_uss_missing_after": 673
+          },
+          "baseline": [
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 50402312192,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 35900211200,
+                "active_bytes": 14504722432,
+                "inactive_bytes": 12883804160,
+                "speculative_bytes": 1617526784,
+                "wired_bytes": 2143289344,
+                "file_backed_bytes": 27090731008,
+                "anonymous_bytes": 1915322368,
+                "compressor_stored_bytes": 2626830336,
+                "compressor_occupied_bytes": 1068367872
+              },
+              "span_s": 0.03689679177477956,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 675,
+              "other_process_count": 675,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            },
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 50348032000,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 35800367104,
+                "active_bytes": 14557003776,
+                "inactive_bytes": 12918358016,
+                "speculative_bytes": 1630912512,
+                "wired_bytes": 2143567872,
+                "file_backed_bytes": 27108261888,
+                "anonymous_bytes": 1998012416,
+                "compressor_stored_bytes": 2623488000,
+                "compressor_occupied_bytes": 1067712512
+              },
+              "span_s": 0.03559687500819564,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 674,
+              "other_process_count": 674,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            },
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 50401607680,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 35882336256,
+                "active_bytes": 14507360256,
+                "inactive_bytes": 12886736896,
+                "speculative_bytes": 1630912512,
+                "wired_bytes": 2142978048,
+                "file_backed_bytes": 27108130816,
+                "anonymous_bytes": 1916878848,
+                "compressor_stored_bytes": 2623078400,
+                "compressor_occupied_bytes": 1067597824
+              },
+              "span_s": 0.03637733310461044,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 674,
+              "other_process_count": 674,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            }
+          ],
+          "stops": [
+            {
+              "target_s": 2,
+              "observed_s": 2.8400380611419678,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50424971264,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35854319616,
+                  "active_bytes": 14506803200,
+                  "inactive_bytes": 12916670464,
+                  "speculative_bytes": 1652391936,
+                  "wired_bytes": 2126659584,
+                  "file_backed_bytes": 27138441216,
+                  "anonymous_bytes": 1937424384,
+                  "compressor_stored_bytes": 2605334528,
+                  "compressor_occupied_bytes": 1061076992
+                },
+                "span_s": 0.032767708878964186,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 261,
+                "other_uss_missing": 676,
+                "other_process_count": 676,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 10,
+              "observed_s": 10.373586177825928,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50392580096,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35830087680,
+                  "active_bytes": 14540275712,
+                  "inactive_bytes": 12905578496,
+                  "speculative_bytes": 1655291904,
+                  "wired_bytes": 2127085568,
+                  "file_backed_bytes": 27142225920,
+                  "anonymous_bytes": 1958920192,
+                  "compressor_stored_bytes": 2602090496,
+                  "compressor_occupied_bytes": 1059602432
+                },
+                "span_s": 0.03597412537783384,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 261,
+                "other_uss_missing": 676,
+                "other_process_count": 676,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 30,
+              "observed_s": 30.350462913513184,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50391973888,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35842523136,
+                  "active_bytes": 14542503936,
+                  "inactive_bytes": 12892585984,
+                  "speculative_bytes": 1655259136,
+                  "wired_bytes": 2126675968,
+                  "file_backed_bytes": 27142668288,
+                  "anonymous_bytes": 1947680768,
+                  "compressor_stored_bytes": 2598862848,
+                  "compressor_occupied_bytes": 1058373632
+                },
+                "span_s": 0.036068208049982786,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 260,
+                "other_uss_missing": 675,
+                "other_process_count": 675,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 60,
+              "observed_s": 60.35651922225952,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50413813760,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35839803392,
+                  "active_bytes": 14504984576,
+                  "inactive_bytes": 12917014528,
+                  "speculative_bytes": 1655373824,
+                  "wired_bytes": 2143158272,
+                  "file_backed_bytes": 27142832128,
+                  "anonymous_bytes": 1934540800,
+                  "compressor_stored_bytes": 2595651584,
+                  "compressor_occupied_bytes": 1057587200
+                },
+                "span_s": 0.03593470808118582,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 673,
+                "other_process_count": 673,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 75,
+              "observed_s": 75.29715514183044,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50400346112,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35864494080,
+                  "active_bytes": 14510374912,
+                  "inactive_bytes": 12886884352,
+                  "speculative_bytes": 1655373824,
+                  "wired_bytes": 2143207424,
+                  "file_backed_bytes": 27142881280,
+                  "anonymous_bytes": 1909751808,
+                  "compressor_stored_bytes": 2595618816,
+                  "compressor_occupied_bytes": 1057587200
+                },
+                "span_s": 0.036254958249628544,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 673,
+                "other_process_count": 673,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 88,
+              "observed_s": 88.2999632358551,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50381422592,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35836903424,
+                  "active_bytes": 14537588736,
+                  "inactive_bytes": 12887195648,
+                  "speculative_bytes": 1655701504,
+                  "wired_bytes": 2143256576,
+                  "file_backed_bytes": 27143880704,
+                  "anonymous_bytes": 1936605184,
+                  "compressor_stored_bytes": 2594930688,
+                  "compressor_occupied_bytes": 1057275904
+                },
+                "span_s": 0.03559370897710323,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 673,
+                "other_process_count": 673,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 180,
+              "observed_s": 180.46989798545837,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50417795072,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35835904000,
+                  "active_bytes": 14518960128,
+                  "inactive_bytes": 12907757568,
+                  "speculative_bytes": 1655685120,
+                  "wired_bytes": 2143223808,
+                  "file_backed_bytes": 27142635520,
+                  "anonymous_bytes": 1939767296,
+                  "compressor_stored_bytes": 2592227328,
+                  "compressor_occupied_bytes": 1056391168
+                },
+                "span_s": 0.035984667018055916,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 673,
+                "other_process_count": 673,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 300,
+              "observed_s": 300.481703042984,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 93,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50377211904,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35832954880,
+                  "active_bytes": 14543126528,
+                  "inactive_bytes": 12886540288,
+                  "speculative_bytes": 1656094720,
+                  "wired_bytes": 2143059968,
+                  "file_backed_bytes": 27143831552,
+                  "anonymous_bytes": 1941929984,
+                  "compressor_stored_bytes": 2590965760,
+                  "compressor_occupied_bytes": 1056145408
+                },
+                "span_s": 0.036064207553863525,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 673,
+                "other_process_count": 673,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            }
+          ],
+          "mode": {
+            "native_ane_off": true,
+            "reported_state": "off",
+            "reported_share": 0,
+            "contrast_valid": true
+          },
+          "inference_total_s": [
+            0.3632033499889076,
+            8.21521340898471
+          ],
+          "loaded": {
+            "native": {
+              "allocated_bytes": 32485884224,
+              "current_bytes": 32492109824,
+              "released": false,
+              "restoring": false,
+              "restores": 0,
+              "ane_state": "off",
+              "ane_share": 0
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 45,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 17227005952,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 2099052544,
+                "active_bytes": 15098806272,
+                "inactive_bytes": 13476265984,
+                "speculative_bytes": 1650098176,
+                "wired_bytes": 34730213376,
+                "file_backed_bytes": 27135508480,
+                "anonymous_bytes": 3089661952,
+                "compressor_stored_bytes": 2612019200,
+                "compressor_occupied_bytes": 1063485440
+              },
+              "span_s": 0.04605237487703562,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 261,
+              "other_uss_missing": 676,
+              "other_process_count": 676,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 3894755328,
+              "owned_uss_bytes": null
+            }
+          },
+          "resumed": {
+            "native": {
+              "allocated_bytes": 32645923136,
+              "current_bytes": 32652148736,
+              "released": false,
+              "restoring": false,
+              "restores": 1,
+              "ane_state": "off",
+              "ane_share": 0
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 45,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 17155932160,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 2046640128,
+                "active_bytes": 15012118528,
+                "inactive_bytes": 13455310848,
+                "speculative_bytes": 1652391936,
+                "wired_bytes": 34890334208,
+                "file_backed_bytes": 27138473984,
+                "anonymous_bytes": 2981347328,
+                "compressor_stored_bytes": 2605432832,
+                "compressor_occupied_bytes": 1061126144
+              },
+              "span_s": 0.04457174986600876,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 260,
+              "other_uss_missing": 675,
+              "other_process_count": 675,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 3809001472,
+              "owned_uss_bytes": null
+            }
+          },
+          "idle": {
+            "observed_s": 21.30648330200347,
+            "native": {
+              "allocated_bytes": 1688666432,
+              "current_bytes": 1694892032,
+              "released": true,
+              "restoring": false,
+              "restores": 0,
+              "ane_state": "off",
+              "ane_share": 0
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 48493658112,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 32944504832,
+                "active_bytes": 16408723456,
+                "inactive_bytes": 13903806464,
+                "speculative_bytes": 1650933760,
+                "wired_bytes": 2147631104,
+                "file_backed_bytes": 27137032192,
+                "anonymous_bytes": 4826431488,
+                "compressor_stored_bytes": 2609725440,
+                "compressor_occupied_bytes": 1062322176
+              },
+              "span_s": 0.04548275005072355,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 261,
+              "other_uss_missing": 676,
+              "other_process_count": 676,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 1305231360,
+              "owned_uss_bytes": null
+            }
+          },
+          "owned_generations_gone": true,
+          "listener_closed": true,
+          "known_other_process_rss_growth": {
+            "matched_readable_generations": 414,
+            "top_positive_growth_bytes": [
+              6586368,
+              3325952,
+              2048000,
+              2031616,
+              1671168
+            ],
+            "coverage_incomplete": true
+          }
+        }
+      ]
+    },
+    {
+      "window": "reclaim-stock-w2",
+      "order": [
+        "gpu-only",
+        "default"
+      ],
+      "status": "complete",
+      "restoration_verified": true,
+      "phases": [
+        {
+          "variant": "gpu-only",
+          "status": "complete",
+          "attempted": 2,
+          "captured": 2,
+          "review": {
+            "gate": "inconclusive",
+            "recovered_90_s": false,
+            "baseline_drift_bytes": 103284736,
+            "threshold_bytes": 56427459379.2,
+            "baseline_available_bytes": 62697177088,
+            "primary_observed_s": 88.51255512237549,
+            "available_gap_bytes": 12798181376,
+            "primary_available_bytes": 49898995712,
+            "latest_above_threshold": false,
+            "latest_available_bytes": 49862492160,
+            "vm_delta_bytes": {
+              "free_bytes": 560627712,
+              "active_bytes": 12796182528,
+              "inactive_bytes": -13931675648,
+              "speculative_bytes": 572866560,
+              "wired_bytes": 10731520,
+              "file_backed_bytes": -421724160,
+              "anonymous_bytes": -140902400,
+              "compressor_stored_bytes": -38060032,
+              "compressor_occupied_bytes": -8732672
+            },
+            "other_rss_delta_bytes": null,
+            "other_uss_delta_bytes": null,
+            "other_uss_missing_before": 700,
+            "other_uss_missing_after": 672
+          },
+          "baseline": [
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 92,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 62800461824,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 34637479936,
+                "active_bytes": 1875066880,
+                "inactive_bytes": 28154003456,
+                "speculative_bytes": 7389184,
+                "wired_bytes": 2128232448,
+                "file_backed_bytes": 28895608832,
+                "anonymous_bytes": 1140850688,
+                "compressor_stored_bytes": 3391586304,
+                "compressor_occupied_bytes": 1315749888
+              },
+              "span_s": 0.037211999762803316,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 283,
+              "other_uss_missing": 699,
+              "other_process_count": 699,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            },
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 92,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 62750392320,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 34590294016,
+                "active_bytes": 1924808704,
+                "inactive_bytes": 28151087104,
+                "speculative_bytes": 7421952,
+                "wired_bytes": 2128609280,
+                "file_backed_bytes": 28896215040,
+                "anonymous_bytes": 1187102720,
+                "compressor_stored_bytes": 3391225856,
+                "compressor_occupied_bytes": 1315700736
+              },
+              "span_s": 0.036988040897995234,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 284,
+              "other_uss_missing": 700,
+              "other_process_count": 700,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            },
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 92,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 62697177088,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 34571583488,
+                "active_bytes": 1980055552,
+                "inactive_bytes": 28116385792,
+                "speculative_bytes": 7421952,
+                "wired_bytes": 2127003648,
+                "file_backed_bytes": 28896378880,
+                "anonymous_bytes": 1207484416,
+                "compressor_stored_bytes": 3390406656,
+                "compressor_occupied_bytes": 1315471360
+              },
+              "span_s": 0.04462675005197525,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 284,
+              "other_uss_missing": 700,
+              "other_process_count": 700,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            }
+          ],
+          "stops": [
+            {
+              "target_s": 2,
+              "observed_s": 2.9785308837890625,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 49945362432,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35212148736,
+                  "active_bytes": 14742077440,
+                  "inactive_bytes": 14158282752,
+                  "speculative_bytes": 573571072,
+                  "wired_bytes": 2120712192,
+                  "file_backed_bytes": 28417998848,
+                  "anonymous_bytes": 1055932416,
+                  "compressor_stored_bytes": 3374022656,
+                  "compressor_occupied_bytes": 1311129600
+                },
+                "span_s": 0.03448595805093646,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 261,
+                "other_uss_missing": 675,
+                "other_process_count": 675,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 10,
+              "observed_s": 10.31855297088623,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 49928192000,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35186442240,
+                  "active_bytes": 14754988032,
+                  "inactive_bytes": 14165786624,
+                  "speculative_bytes": 578584576,
+                  "wired_bytes": 2121302016,
+                  "file_backed_bytes": 28470640640,
+                  "anonymous_bytes": 1028718592,
+                  "compressor_stored_bytes": 3371384832,
+                  "compressor_occupied_bytes": 1310818304
+                },
+                "span_s": 0.03594749979674816,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 260,
+                "other_uss_missing": 674,
+                "other_process_count": 674,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 30,
+              "observed_s": 30.454766035079956,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 49909170176,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35164749824,
+                  "active_bytes": 14757265408,
+                  "inactive_bytes": 14168997888,
+                  "speculative_bytes": 578584576,
+                  "wired_bytes": 2138374144,
+                  "file_backed_bytes": 28470788096,
+                  "anonymous_bytes": 1034059776,
+                  "compressor_stored_bytes": 3367272448,
+                  "compressor_occupied_bytes": 1309949952
+                },
+                "span_s": 0.03668204229325056,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 260,
+                "other_uss_missing": 674,
+                "other_process_count": 674,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 60,
+              "observed_s": 60.341896057128906,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 49887297536,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35119906816,
+                  "active_bytes": 14779547648,
+                  "inactive_bytes": 14191427584,
+                  "speculative_bytes": 580288512,
+                  "wired_bytes": 2138144768,
+                  "file_backed_bytes": 28474507264,
+                  "anonymous_bytes": 1076756480,
+                  "compressor_stored_bytes": 3361669120,
+                  "compressor_occupied_bytes": 1308606464
+                },
+                "span_s": 0.0361885828897357,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 673,
+                "other_process_count": 673,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 75,
+              "observed_s": 75.2427830696106,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 49924685824,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35169894400,
+                  "active_bytes": 14755741696,
+                  "inactive_bytes": 14167293952,
+                  "speculative_bytes": 580288512,
+                  "wired_bytes": 2137833472,
+                  "file_backed_bytes": 28474589184,
+                  "anonymous_bytes": 1028734976,
+                  "compressor_stored_bytes": 3352739840,
+                  "compressor_occupied_bytes": 1306869760
+                },
+                "span_s": 0.03816787479445338,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 88,
+              "observed_s": 88.51255512237549,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 49898995712,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35132211200,
+                  "active_bytes": 14776238080,
+                  "inactive_bytes": 14184710144,
+                  "speculative_bytes": 580288512,
+                  "wired_bytes": 2137735168,
+                  "file_backed_bytes": 28474654720,
+                  "anonymous_bytes": 1066582016,
+                  "compressor_stored_bytes": 3352346624,
+                  "compressor_occupied_bytes": 1306738688
+                },
+                "span_s": 0.03535499982535839,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 180,
+              "observed_s": 180.36200404167175,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 49880498176,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35076194304,
+                  "active_bytes": 14804533248,
+                  "inactive_bytes": 14211694592,
+                  "speculative_bytes": 585170944,
+                  "wired_bytes": 2139013120,
+                  "file_backed_bytes": 28503949312,
+                  "anonymous_bytes": 1097449472,
+                  "compressor_stored_bytes": 3329572864,
+                  "compressor_occupied_bytes": 1301315584
+                },
+                "span_s": 0.036845041904598475,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 300,
+              "observed_s": 300.5712809562683,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 49862492160,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 35069689856,
+                  "active_bytes": 14812348416,
+                  "inactive_bytes": 14212186112,
+                  "speculative_bytes": 585269248,
+                  "wired_bytes": 2138537984,
+                  "file_backed_bytes": 28504965120,
+                  "anonymous_bytes": 1104838656,
+                  "compressor_stored_bytes": 3325149184,
+                  "compressor_occupied_bytes": 1299890176
+                },
+                "span_s": 0.03586858371272683,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            }
+          ],
+          "mode": {
+            "native_ane_off": true,
+            "reported_state": "off",
+            "reported_share": 0,
+            "contrast_valid": true
+          },
+          "inference_total_s": [
+            0.3576740470016375,
+            8.416087577003054
+          ],
+          "loaded": {
+            "native": {
+              "allocated_bytes": 32485884224,
+              "current_bytes": 32492109824,
+              "released": false,
+              "restoring": false,
+              "restores": 0,
+              "ane_state": "off",
+              "ane_share": 0
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 45,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 17086676992,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 1964589056,
+                "active_bytes": 15015493632,
+                "inactive_bytes": 15089008640,
+                "speculative_bytes": 11042816,
+                "wired_bytes": 34724724736,
+                "file_backed_bytes": 27853996032,
+                "anonymous_bytes": 2261549056,
+                "compressor_stored_bytes": 3381526528,
+                "compressor_occupied_bytes": 1313062912
+              },
+              "span_s": 0.04578737495467067,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 263,
+              "other_uss_missing": 678,
+              "other_process_count": 678,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 3895869440,
+              "owned_uss_bytes": null
+            }
+          },
+          "resumed": {
+            "native": {
+              "allocated_bytes": 32645923136,
+              "current_bytes": 32652148736,
+              "released": false,
+              "restoring": false,
+              "restores": 1,
+              "ane_state": "off",
+              "ane_share": 0
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 45,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 18258591744,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 1348354048,
+                "active_bytes": 15043018752,
+                "inactive_bytes": 14957756416,
+                "speculative_bytes": 573374464,
+                "wired_bytes": 34883895296,
+                "file_backed_bytes": 28417654784,
+                "anonymous_bytes": 2156494848,
+                "compressor_stored_bytes": 3376201728,
+                "compressor_occupied_bytes": 1311522816
+              },
+              "span_s": 0.04466399969533086,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 673,
+              "other_process_count": 673,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 3874488320,
+              "owned_uss_bytes": null
+            }
+          },
+          "idle": {
+            "observed_s": 20.282974300003843,
+            "native": {
+              "allocated_bytes": 1688666432,
+              "current_bytes": 1694892032,
+              "released": true,
+              "restoring": false,
+              "restores": 0,
+              "ane_state": "off",
+              "ane_share": 0
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 47887073280,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 32853065728,
+                "active_bytes": 16734552064,
+                "inactive_bytes": 15026798592,
+                "speculative_bytes": 11960320,
+                "wired_bytes": 2179858432,
+                "file_backed_bytes": 27856240640,
+                "anonymous_bytes": 3917070336,
+                "compressor_stored_bytes": 3376988160,
+                "compressor_occupied_bytes": 1311686656
+              },
+              "span_s": 0.045099500101059675,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 673,
+              "other_process_count": 673,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 1340751872,
+              "owned_uss_bytes": null
+            }
+          },
+          "owned_generations_gone": true,
+          "listener_closed": true,
+          "known_other_process_rss_growth": {
+            "matched_readable_generations": 413,
+            "top_positive_growth_bytes": [
+              4521984,
+              2768896,
+              1835008,
+              753664,
+              671744
+            ],
+            "coverage_incomplete": true
+          }
+        },
+        {
+          "variant": "default",
+          "status": "complete",
+          "attempted": 2,
+          "captured": 2,
+          "review": {
+            "gate": "pass",
+            "recovered_90_s": true,
+            "baseline_drift_bytes": 3555328,
+            "threshold_bytes": 44879737651.2,
+            "baseline_available_bytes": 49866375168,
+            "primary_observed_s": 88.268137216568,
+            "available_gap_bytes": -764968960,
+            "primary_available_bytes": 50631344128,
+            "latest_above_threshold": true,
+            "latest_available_bytes": 50623873024,
+            "vm_delta_bytes": {
+              "free_bytes": 1533067264,
+              "active_bytes": -766230528,
+              "inactive_bytes": -199393280,
+              "speculative_bytes": -569311232,
+              "wired_bytes": 8601600,
+              "file_backed_bytes": -1567784960,
+              "anonymous_bytes": 32849920,
+              "compressor_stored_bytes": -23085056,
+              "compressor_occupied_bytes": -6733824
+            },
+            "other_rss_delta_bytes": null,
+            "other_uss_delta_bytes": null,
+            "other_uss_missing_before": 672,
+            "other_uss_missing_after": 672
+          },
+          "baseline": [
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 92,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 49869930496,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 35069673472,
+                "active_bytes": 14806925312,
+                "inactive_bytes": 14217527296,
+                "speculative_bytes": 585269248,
+                "wired_bytes": 2138636288,
+                "file_backed_bytes": 28504965120,
+                "anonymous_bytes": 1104756736,
+                "compressor_stored_bytes": 3325149184,
+                "compressor_occupied_bytes": 1299890176
+              },
+              "span_s": 0.03400500025600195,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 672,
+              "other_process_count": 672,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            },
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 92,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 49867423744,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 35068493824,
+                "active_bytes": 14809694208,
+                "inactive_bytes": 14216052736,
+                "speculative_bytes": 585269248,
+                "wired_bytes": 2138521600,
+                "file_backed_bytes": 28505145344,
+                "anonymous_bytes": 1105870848,
+                "compressor_stored_bytes": 3325132800,
+                "compressor_occupied_bytes": 1299890176
+              },
+              "span_s": 0.03527833288535476,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 672,
+              "other_process_count": 672,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            },
+            {
+              "pressure_level": 1,
+              "pressure_free_percent": 92,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 49866375168,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 35055861760,
+                "active_bytes": 14819590144,
+                "inactive_bytes": 14227800064,
+                "speculative_bytes": 585547776,
+                "wired_bytes": 2130198528,
+                "file_backed_bytes": 28505915392,
+                "anonymous_bytes": 1127022592,
+                "compressor_stored_bytes": 3320791040,
+                "compressor_occupied_bytes": 1298923520
+              },
+              "span_s": 0.0356861250475049,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 672,
+              "other_process_count": 672,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 0,
+              "owned_uss_bytes": 0
+            }
+          ],
+          "stops": [
+            {
+              "target_s": 2,
+              "observed_s": 2.9989943504333496,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50612404224,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36556062720,
+                  "active_bytes": 14064222208,
+                  "inactive_bytes": 14051966976,
+                  "speculative_bytes": 4816896,
+                  "wired_bytes": 2142437376,
+                  "file_backed_bytes": 26919075840,
+                  "anonymous_bytes": 1201930240,
+                  "compressor_stored_bytes": 3319463936,
+                  "compressor_occupied_bytes": 1298415616
+                },
+                "span_s": 0.03279845789074898,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 261,
+                "other_uss_missing": 674,
+                "other_process_count": 674,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 10,
+              "observed_s": 10.231837272644043,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50640420864,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36592992256,
+                  "active_bytes": 14056751104,
+                  "inactive_bytes": 14037860352,
+                  "speculative_bytes": 11780096,
+                  "wired_bytes": 2122645504,
+                  "file_backed_bytes": 26931871744,
+                  "anonymous_bytes": 1174519808,
+                  "compressor_stored_bytes": 3310469120,
+                  "compressor_occupied_bytes": 1295892480
+                },
+                "span_s": 0.03604229213669896,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 260,
+                "other_uss_missing": 673,
+                "other_process_count": 673,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 30,
+              "observed_s": 30.17815613746643,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50641043456,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36613242880,
+                  "active_bytes": 14052655104,
+                  "inactive_bytes": 14022098944,
+                  "speculative_bytes": 13123584,
+                  "wired_bytes": 2121826304,
+                  "file_backed_bytes": 26933690368,
+                  "anonymous_bytes": 1154187264,
+                  "compressor_stored_bytes": 3304947712,
+                  "compressor_occupied_bytes": 1294974976
+                },
+                "span_s": 0.03201150009408593,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 260,
+                "other_uss_missing": 673,
+                "other_process_count": 673,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 60,
+              "observed_s": 60.21384811401367,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50628591616,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36566794240,
+                  "active_bytes": 14057537536,
+                  "inactive_bytes": 14047100928,
+                  "speculative_bytes": 13090816,
+                  "wired_bytes": 2138587136,
+                  "file_backed_bytes": 26933723136,
+                  "anonymous_bytes": 1184006144,
+                  "compressor_stored_bytes": 3304685568,
+                  "compressor_occupied_bytes": 1294811136
+                },
+                "span_s": 0.03609625017270446,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 75,
+              "observed_s": 75.26376819610596,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50635489280,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36597317632,
+                  "active_bytes": 14047625216,
+                  "inactive_bytes": 14025687040,
+                  "speculative_bytes": 16236544,
+                  "wired_bytes": 2138750976,
+                  "file_backed_bytes": 26937769984,
+                  "anonymous_bytes": 1151778816,
+                  "compressor_stored_bytes": 3297869824,
+                  "compressor_occupied_bytes": 1292304384
+                },
+                "span_s": 0.035783249884843826,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 88,
+              "observed_s": 88.268137216568,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50631344128,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36588929024,
+                  "active_bytes": 14053359616,
+                  "inactive_bytes": 14028406784,
+                  "speculative_bytes": 16236544,
+                  "wired_bytes": 2138800128,
+                  "file_backed_bytes": 26938130432,
+                  "anonymous_bytes": 1159872512,
+                  "compressor_stored_bytes": 3297705984,
+                  "compressor_occupied_bytes": 1292189696
+                },
+                "span_s": 0.03589612478390336,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 180,
+              "observed_s": 180.32130813598633,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50629230592,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36553981952,
+                  "active_bytes": 14060273664,
+                  "inactive_bytes": 14057062400,
+                  "speculative_bytes": 16400384,
+                  "wired_bytes": 2138505216,
+                  "file_backed_bytes": 26938900480,
+                  "anonymous_bytes": 1194835968,
+                  "compressor_stored_bytes": 3295821824,
+                  "compressor_occupied_bytes": 1291698176
+                },
+                "span_s": 0.03604012494906783,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            },
+            {
+              "target_s": 300,
+              "observed_s": 300.35045623779297,
+              "memory": {
+                "pressure_level": 1,
+                "pressure_free_percent": 92,
+                "pageable_identity_residual_bytes": 0,
+                "selected_vm_residual_bytes": 601554944,
+                "available_bytes": 50623873024,
+                "total_bytes": 68719476736,
+                "vm_bytes": {
+                  "free_bytes": 36541890560,
+                  "active_bytes": 14066417664,
+                  "inactive_bytes": 14063157248,
+                  "speculative_bytes": 17203200,
+                  "wired_bytes": 2139144192,
+                  "file_backed_bytes": 26941063168,
+                  "anonymous_bytes": 1205714944,
+                  "compressor_stored_bytes": 3289137152,
+                  "compressor_occupied_bytes": 1290108928
+                },
+                "span_s": 0.036051000002771616,
+                "other_rss_bytes": null,
+                "other_uss_bytes": null,
+                "other_rss_missing": 259,
+                "other_uss_missing": 672,
+                "other_process_count": 672,
+                "uss_readable_count": 0,
+                "owned_rss_bytes": 0,
+                "owned_uss_bytes": 0
+              }
+            }
+          ],
+          "mode": {
+            "native_ane_off": false,
+            "reported_state": "split",
+            "reported_share": 0.4705882353,
+            "contrast_valid": true
+          },
+          "inference_total_s": [
+            0.351206113002263,
+            8.3551946170046
+          ],
+          "loaded": {
+            "native": {
+              "allocated_bytes": 32787122500,
+              "current_bytes": 32794034176,
+              "released": false,
+              "restoring": false,
+              "restores": 0,
+              "ane_state": "split",
+              "ane_share": 0.4705882353
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 44,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 16816111616,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 1983873024,
+                "active_bytes": 14791966720,
+                "inactive_bytes": 14810234880,
+                "speculative_bytes": 2277376,
+                "wired_bytes": 35230875648,
+                "file_backed_bytes": 26907197440,
+                "anonymous_bytes": 2697281536,
+                "compressor_stored_bytes": 3320135680,
+                "compressor_occupied_bytes": 1298694144
+              },
+              "span_s": 0.04424829175695777,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 261,
+              "other_uss_missing": 674,
+              "other_process_count": 674,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 4314890240,
+              "owned_uss_bytes": null
+            }
+          },
+          "resumed": {
+            "native": {
+              "allocated_bytes": 32947161412,
+              "current_bytes": 32954073088,
+              "released": false,
+              "restoring": false,
+              "restores": 1,
+              "ane_state": "split",
+              "ane_share": 0.4705882353
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 44,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 16720707584,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 1884372992,
+                "active_bytes": 14873296896,
+                "inactive_bytes": 14836400128,
+                "speculative_bytes": 4669440,
+                "wired_bytes": 35220652032,
+                "file_backed_bytes": 26909425664,
+                "anonymous_bytes": 2804940800,
+                "compressor_stored_bytes": 3319660544,
+                "compressor_occupied_bytes": 1298530304
+              },
+              "span_s": 0.045078959316015244,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 259,
+              "other_uss_missing": 672,
+              "other_process_count": 672,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 4337745920,
+              "owned_uss_bytes": null
+            }
+          },
+          "idle": {
+            "observed_s": 20.072093405993655,
+            "native": {
+              "allocated_bytes": 1989904708,
+              "current_bytes": 1996816384,
+              "released": true,
+              "restoring": false,
+              "restores": 0,
+              "ane_state": "split",
+              "ane_share": 0.4705882353
+            },
+            "host": {
+              "pressure_level": 1,
+              "pressure_free_percent": 93,
+              "pageable_identity_residual_bytes": 0,
+              "selected_vm_residual_bytes": 601554944,
+              "available_bytes": 48018735104,
+              "total_bytes": 68719476736,
+              "vm_bytes": {
+                "free_bytes": 32988200960,
+                "active_bytes": 16623943680,
+                "inactive_bytes": 15022227456,
+                "speculative_bytes": 2310144,
+                "wired_bytes": 2182643712,
+                "file_backed_bytes": 26916585472,
+                "anonymous_bytes": 4731895808,
+                "compressor_stored_bytes": 3319857152,
+                "compressor_occupied_bytes": 1298595840
+              },
+              "span_s": 0.04117587488144636,
+              "other_rss_bytes": null,
+              "other_uss_bytes": null,
+              "other_rss_missing": 261,
+              "other_uss_missing": 674,
+              "other_process_count": 674,
+              "uss_readable_count": 0,
+              "owned_rss_bytes": 1759920128,
+              "owned_uss_bytes": null
+            }
+          },
+          "owned_generations_gone": true,
+          "listener_closed": true,
+          "known_other_process_rss_growth": {
+            "matched_readable_generations": 413,
+            "top_positive_growth_bytes": [
+              2473984,
+              2457600,
+              2326528,
+              1982464,
+              1507328
+            ],
+            "coverage_incomplete": true
+          }
+        }
+      ]
+    }
+  ],
+  "attempted_inferences": 8,
+  "captured_inferences": 8,
+  "prior_publication_files_unchanged": 65,
+  "source_review": {
+    "installed_runtime_files_unchanged": 57,
+    "installed_mlx_python_source_files_unchanged": 1476,
+    "native_launch_receipts_reviewed": 110,
+    "original_instrumented_sources_and_bootstrap_unchanged": true,
+    "host_tooling_and_available_formula_pinned": true
+  },
+  "restoration": {
+    "restored_windows": 2,
+    "original_real_inference_admin_config_intent_assets_sidecars_verified": true,
+    "owned_processes_ports_helpers_transports_closed": true,
+    "previous_shared_agent_environment_restored": true
+  },
+  "limitations": [
+    "Earlier inconclusive lifecycle evidence is unchanged; no pooling or retroactive pass.",
+    "180/300-second observations are diagnostic; qualification retains the 90-second threshold.",
+    "File-backed/anonymous overlap active/inactive; compressor stored bytes are not physical compressor occupancy.",
+    "RSS sums include shared mappings. Restricted RSS/USS and unobserved process growth stay unknown.",
+    "Counterbalanced process-local mode associations do not uniquely identify an allocation owner.",
+    "No source patch, production default change, deployment, cache purge, pressure injection or commit."
+  ]
+}

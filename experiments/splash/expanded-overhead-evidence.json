@@ -1,0 +1,107 @@
+{
+  "contract": "splash-expanded-overhead-evidence-1",
+  "date": "2026-10-26",
+  "cohort": "modified-4bit",
+  "scope": "MLX collector overhead only; no native cross-engine speed or broad quality verdict.",
+  "design_sha256": "67a6bc2f0f9af1392821f8c3c6789ba5b3e79de6d7126198366870c1651e186b",
+  "private_campaign_sha256": "6eadc793242e74e64c7f09591775b4132de3ef4d3e8b1d1bc3eee1def03dcbcc",
+  "sources": {
+    "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+    "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+    "collector_sha256": "00a81cf8769bc9b0e9af39cd9b8d119e380d62fdf467e6c6d086f25866809416"
+  },
+  "model_pins": {
+    "weights_sha256": "fe4b166f932a8215bb3be532d49c581396d2d91b6c0687106c5b255118d95e0d",
+    "tokenizer_sha256": "5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836",
+    "template_sha256": "b6e05e626073de17d62afe10ce1078e70cf16fcc2ffb521f2f6a2e05af6abf31"
+  },
+  "code_sha256": {
+    "bench.py": "361dd318aaf2f239bee33abeea3ca03e1fe52a894a85e09bb8b797c1aacaaa56",
+    "native_validation.py": "33502b054725afb9b6e10769163a471de16def031190389b07a3ecd1e1defdb7",
+    "native_timing.py": "4dbc8d8627cf1cd7555ba39eec1a4a74c8efd64b84712e3eba1495f3cfa540f3",
+    "overhead_validation.py": "612009a1b42baba96cff5b3e5aa6659fd739f15523aacf137cd505f1d5f6d892"
+  },
+  "tokenization_receipt_sha256": "a7f0cf2f274a0c7c8580580ab215529f96dea95ad617fa5ad5f2a91ae9be5f8e",
+  "windows": [
+    {
+      "window": 0,
+      "status": "failed",
+      "requests": 2,
+      "warmups": 2,
+      "accounted_native_traces": 0,
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "admin_loaded": true,
+        "preserved_state_and_config": true,
+        "experiment_cleanup": true,
+        "sidecars_restored": true,
+        "within_approved_window": true
+      },
+      "resources": {
+        "samples": 23,
+        "minimum_available_gib": 15.099533081054688,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.487838745117188
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "27a71e97e62d2c7e4308960c170b7460b0dee3cbe13750d8031ad8cbd9ebe073",
+        "samples.json": "6fc8e1285a08bbe43f1b8cbdb22cfd6032391b5d1034bb4076ff7fce5d225ad9",
+        "sidecar-restoration-proof.json": "2edd6a13234c3235e1665055dc9444d85b0bc56e67cfab7ce08dc8be6fbe935a",
+        "mac-audit/restoration-proof.json": "cde5015e43fdf668602cb44aa729994e32b5db00cc9385936652cfcd68bbb989",
+        "mac-audit/target-fingerprints-after.json": "96195d9c5f5faaf1fdb1681c44810cf8cd051644da309fdc0358b00d8ce0a569",
+        "mac-audit/resources.jsonl": "b1df9df9fe3920ef77253745250cc672ea0b704240994597a5d36243c6a426dd"
+      }
+    }
+  ],
+  "review": {
+    "contract": "splash-expanded-overhead-1",
+    "backend": "mlx",
+    "cohort": "modified-4bit",
+    "decision": "inconclusive",
+    "native_gate": "unassessed",
+    "scope": "collector_overhead_only",
+    "threshold": 1.05,
+    "issues": [
+      "incomplete_window_schedule",
+      "missing_or_duplicate_samples"
+    ],
+    "windows": 4,
+    "uncertainty": "10000 seed-0 hierarchical bootstrap draws over four independent ABBA windows, paired launches, categories and repetitions; 95% percentile bounds.",
+    "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+    "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67"
+  },
+  "native_gate": "unassessed",
+  "quality_gate": "unassessed",
+  "limitations": [
+    "Four independent ABBA windows are the bootstrap clusters; within-window requests are dependent.",
+    "The prior inconclusive pilot and unresolved timeout remain separate and unchanged; no records are pooled.",
+    "The native interval is not isolated GPU compute and this MLX-only audit cannot establish cross-engine native speed.",
+    "Stock pilot observer noise remains disclosed; modified-checkpoint bounds do not create new stock measurements."
+  ],
+  "source_audit": {
+    "private_receipt_sha256": "4def8881d1b2311d60d2c0fa6c05965aa601016d45c933911b1af32a0ab891d2",
+    "isolated_source_checks": {
+      "mlx-original": {
+        "files": 1477,
+        "unchanged": true
+      },
+      "mlx-instrumented": {
+        "files": 1478,
+        "unchanged": true
+      },
+      "splash-original": {
+        "files": 35,
+        "unchanged": true
+      },
+      "splash-instrumented": {
+        "files": 36,
+        "unchanged": true
+      }
+    },
+    "installed_runtime_files_unchanged": 57,
+    "bootstrap_unchanged": true,
+    "launch_receipts": 25
+  }
+}

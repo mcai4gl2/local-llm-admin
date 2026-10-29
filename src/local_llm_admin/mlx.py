@@ -420,6 +420,46 @@ class MlxClient:
             return False
         return self.port_listening(self.settings.mlx_port)
 
+    @staticmethod
+    def owned_listener_pid(port: int) -> int | None:
+        """Attribute a listener by its executable and socket, never by HTTP liveness."""
+        modules = {"mlx_vlm.server", "mlx_vlm.chat_ui", "mlx_lm.server"}
+
+        def recognized(args: list[str]) -> bool:
+            return any(Path(arg).name in modules for arg in args[:2]) or (
+                len(args) > 2 and args[1] == "-m" and args[2] in modules
+            )
+
+        try:
+            listeners = [c for c in psutil.net_connections(kind="tcp")
+                         if c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == port]
+            if not listeners or any(c.pid is None for c in listeners):
+                return None
+            pids = {c.pid for c in listeners}
+            if len(pids) != 1:
+                return None
+            pid = pids.pop()
+            args = psutil.Process(pid).cmdline()
+            return pid if recognized(args) else None
+        except (psutil.Error, OSError, ValueError):
+            # macOS may restrict the global table while allowing the owning user's
+            # processes and sockets. Chat UI mode has no API-server PID file.
+            owners: set[int] = set()
+            try:
+                for process in psutil.process_iter(["cmdline"]):
+                    try:
+                        args = process.info.get("cmdline") or []
+                        if not recognized(args):
+                            continue
+                        if any(c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == port
+                               for c in process.net_connections(kind="tcp")):
+                            owners.add(process.pid)
+                    except (psutil.Error, OSError, ValueError):
+                        continue
+            except (psutil.Error, OSError):
+                return None
+            return next(iter(owners)) if len(owners) == 1 else None
+
     def strata_pid_alive(self) -> bool:
         try:
             pid = int((self.settings.strata_root / "run" / "strata.pid").read_text().strip())

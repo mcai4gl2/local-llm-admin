@@ -1,0 +1,277 @@
+{
+  "contract": "splash-overhead-followup-evidence-1",
+  "date": "2026-10-26",
+  "incomplete_attempt_evidence_sha256": "77e529bcab4940a012cbd467bae15acdaec6d0807ce974e45fc8ecc4d9bb2a11",
+  "cohort": "modified-4bit",
+  "scope": "MLX collector overhead only; no native cross-engine speed or broad quality verdict.",
+  "design_sha256": "4b5acc0d565afebac0ee1a2157b23cad45916e3ba083052b5e4c846bb9d5bd00",
+  "private_campaign_sha256": "3c5f7e7b540d9dab24a844c345b94d2a74653dd243a0b04cd8fc7b6092abd813",
+  "sources": {
+    "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+    "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+    "collector_sha256": "00a81cf8769bc9b0e9af39cd9b8d119e380d62fdf467e6c6d086f25866809416"
+  },
+  "model_pins": {
+    "weights_sha256": "fe4b166f932a8215bb3be532d49c581396d2d91b6c0687106c5b255118d95e0d",
+    "tokenizer_sha256": "5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836",
+    "template_sha256": "b6e05e626073de17d62afe10ce1078e70cf16fcc2ffb521f2f6a2e05af6abf31"
+  },
+  "code_sha256": {
+    "bench.py": "361dd318aaf2f239bee33abeea3ca03e1fe52a894a85e09bb8b797c1aacaaa56",
+    "native_validation.py": "33502b054725afb9b6e10769163a471de16def031190389b07a3ecd1e1defdb7",
+    "native_timing.py": "4dbc8d8627cf1cd7555ba39eec1a4a74c8efd64b84712e3eba1495f3cfa540f3",
+    "overhead_validation.py": "f914d1873e004764e2516aa1097df276f0ecc561c2708c3d1108f0eeb58ff9d5"
+  },
+  "tokenization_receipt_sha256": "0e054d5ce178cd9e4b2c91c3401f9f0ce1e06c3ff0a8d457ab324e9efb93f337",
+  "windows": [
+    {
+      "window": 0,
+      "status": "complete",
+      "requests": 36,
+      "warmups": 12,
+      "accounted_native_traces": 18,
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "admin_loaded": true,
+        "preserved_state_and_config": true,
+        "experiment_cleanup": true,
+        "sidecars_restored": true,
+        "within_approved_window": true
+      },
+      "resources": {
+        "samples": 437,
+        "minimum_available_gib": 15.075225830078125,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.488296508789062
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "a74856c28bcd6e26ada9fd6837fc15c55e5db6654b5a4cfd8682e9971a3be397",
+        "samples.json": "f5d3b1152264e4016bd13910be6f96d59135e6b8675286efc4c1fd75972ddeb2",
+        "sidecar-restoration-proof.json": "a608813293b57d693d1ba9646c200a641575444cf40171aaf205e5b9366d50b0",
+        "mac-audit/restoration-proof.json": "59d0086d126bf0efabc398396b7cf8d36a5829079d173948a2fe4ceee89f1919",
+        "mac-audit/target-fingerprints-after.json": "80c47ef280f9efb58a83407356c7be2c555264c091c77d30425dbd35abb9c3fd",
+        "mac-audit/resources.jsonl": "749561a4471056f280cf84f9a84f3b48c518a576e06c748b4271b7af72b7fd0f"
+      }
+    },
+    {
+      "window": 1,
+      "status": "complete",
+      "requests": 36,
+      "warmups": 12,
+      "accounted_native_traces": 18,
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "admin_loaded": true,
+        "preserved_state_and_config": true,
+        "experiment_cleanup": true,
+        "sidecars_restored": true,
+        "within_approved_window": true
+      },
+      "resources": {
+        "samples": 433,
+        "minimum_available_gib": 14.858612060546875,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.4888916015625
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "be0de50a7f45685d7f3dc68cd5035e96db33b24cb4875a29698ff6490092eac6",
+        "samples.json": "2bf91911f9836dd70bd9f43475242446c0b6cc073f38b5490024ef3326f45f15",
+        "sidecar-restoration-proof.json": "7d7214799d47ce6c6930c0344a30e6d13120f14879064834a0454b91b0ea7a6c",
+        "mac-audit/restoration-proof.json": "4bc99e23b9ece09da9d8b7f11c270ed724c44e5b3afe8cd04acc0ac5cc7d93f4",
+        "mac-audit/target-fingerprints-after.json": "8b6f40dd9584d9388b2ecb87353d05fa8a3a8cddb3b1022af715c6875e6577f1",
+        "mac-audit/resources.jsonl": "75ca0d6c0da3ebdfcee8c01f65ef027154c5848fa56a3639eb57df8d4728b893"
+      }
+    },
+    {
+      "window": 2,
+      "status": "complete",
+      "requests": 36,
+      "warmups": 12,
+      "accounted_native_traces": 18,
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "admin_loaded": true,
+        "preserved_state_and_config": true,
+        "experiment_cleanup": true,
+        "sidecars_restored": true,
+        "within_approved_window": true
+      },
+      "resources": {
+        "samples": 435,
+        "minimum_available_gib": 15.17657470703125,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.488510131835938
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "8284179b0d4af6c8064484f4d20cd5eeba977d32a59568fd4b18c9b9f4d316f0",
+        "samples.json": "9e61f71d5018a1231b7bd33716e2cf8027a090f9849a333f269c886a12131ab7",
+        "sidecar-restoration-proof.json": "1a6b220bf061b92f5a5d264284bb0f061e71ab16587e31bcdae44f91200e4223",
+        "mac-audit/restoration-proof.json": "6f044c92e7ddb1f8bf8cc7b38245ca3871b8a2ee7d2be0569d45ac71c4075d87",
+        "mac-audit/target-fingerprints-after.json": "ba344e587ba53944ca91f85d0c1cf81848447f907bbf6535b852c0f20cd7923c",
+        "mac-audit/resources.jsonl": "16728ecf8c31df695f2ad2350e05d9b8cf4ed7178cfdf9fd6553e69da83f8a0f"
+      }
+    },
+    {
+      "window": 3,
+      "status": "complete",
+      "requests": 36,
+      "warmups": 12,
+      "accounted_native_traces": 18,
+      "restoration": {
+        "verified": true,
+        "real_original_inference": true,
+        "admin_loaded": true,
+        "preserved_state_and_config": true,
+        "experiment_cleanup": true,
+        "sidecars_restored": true,
+        "within_approved_window": true
+      },
+      "resources": {
+        "samples": 435,
+        "minimum_available_gib": 14.826644897460938,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.4981689453125
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "2e00fcf5caa7baec235d1d181aad36acc58c6a1a23c5f8af9337db1fcdc87757",
+        "samples.json": "4412c0004b1224c2dd009e930d7372739ec610836607de809ad28278938c9633",
+        "sidecar-restoration-proof.json": "7ae93393a18cf9f7a24d8acaa747aad41b5a5c85f5440b5789e70682b63f52ac",
+        "mac-audit/restoration-proof.json": "496c3df5f13da7957f06b00b956de4ce2c33221379fb433ccb90ded9eafcd3e8",
+        "mac-audit/target-fingerprints-after.json": "905caffd6414f3620cfe4b86f40945cffe31fb5f1856ac3afbf80a57a66ea473",
+        "mac-audit/resources.jsonl": "72980eac19967c041e48ef3066ebba4aaf56eb4a5b26d178d10f829486d61183"
+      }
+    }
+  ],
+  "review": {
+    "contract": "splash-expanded-overhead-1",
+    "backend": "mlx",
+    "cohort": "modified-4bit",
+    "decision": "eligible",
+    "native_gate": "unassessed",
+    "scope": "collector_overhead_only",
+    "threshold": 1.05,
+    "issues": [],
+    "windows": 4,
+    "uncertainty": "10000 seed-0 hierarchical bootstrap draws over four independent ABBA windows, paired launches, categories and repetitions; 95% percentile bounds.",
+    "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+    "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+    "median_wall_ratio": 0.997389035403522,
+    "ci95": [
+      0.9909963247453516,
+      0.9993614551341843
+    ],
+    "categories": {
+      "short": {
+        "median_wall_ratio": 0.999246234715018,
+        "ci95": [
+          0.9975710767744349,
+          1.0002359510011563
+        ],
+        "decision": "eligible"
+      },
+      "2k": {
+        "median_wall_ratio": 0.9922252684246431,
+        "ci95": [
+          0.9882441156820563,
+          1.0007375085508912
+        ],
+        "decision": "eligible"
+      },
+      "8k": {
+        "median_wall_ratio": 0.9938674303577865,
+        "ci95": [
+          0.9788035886213691,
+          1.002261011586275
+        ],
+        "decision": "eligible"
+      }
+    },
+    "paired_requests": 48,
+    "excluded_warmups": 48,
+    "accounted_native_traces": 72,
+    "private_samples_sha256": "cc45fa6aeda76df28ac6f1c6f41ea9b97e0382e1de8e45e1f20def73c14a4178"
+  },
+  "native_gate": "unassessed",
+  "quality_gate": "unassessed",
+  "limitations": [
+    "Four independent ABBA windows are the bootstrap clusters; within-window requests are dependent.",
+    "The incomplete expanded attempt, prior inconclusive pilot and unresolved timeout remain separate and unchanged; no records are pooled.",
+    "The native interval is not isolated GPU compute and this MLX-only audit cannot establish cross-engine native speed.",
+    "Stock pilot observer noise remains disclosed; modified-checkpoint bounds do not create new stock measurements."
+  ],
+  "source_audit": {
+    "private_receipt_sha256": "003b5388ed3801f8de830b90993323d334a818d29aff8cf87838926883088d23",
+    "isolated_source_checks": {
+      "mlx-original": {
+        "files": 1477,
+        "unchanged": true
+      },
+      "mlx-instrumented": {
+        "files": 1478,
+        "unchanged": true
+      },
+      "splash-original": {
+        "files": 35,
+        "unchanged": true
+      },
+      "splash-instrumented": {
+        "files": 36,
+        "unchanged": true
+      }
+    },
+    "installed_runtime_files_unchanged": 57,
+    "bootstrap_unchanged": true,
+    "source_manifest_sha256": "4521a844efdc132cef086d1a20eb97441043013d860409c2e818ec3c4bb1f972",
+    "launch_receipts": 41
+  },
+  "final_restoration": {
+    "real_readiness_proof_generation_matches": true,
+    "admin_loaded": true,
+    "preserved": true,
+    "active_jobs": 0,
+    "experiment_cleanup": true,
+    "sidecars_restored": true,
+    "private_receipt_sha256": "b3adde682cb4bc56a052d10a7ad1b8972f47f5c1e9c9092194bd16dc9eb8dab3"
+  },
+  "owned_helper_cleanup": {
+    "verified_restored_windows": 7,
+    "tunnel_closed": true,
+    "agent_socket_removed": true,
+    "temporary_path_removed": true,
+    "host_agent_untouched": true,
+    "private_receipt_sha256": "673364c8590bb9f8f642d6965acbf57f58ed92685a0cf2e5f3162101c9974b02"
+  },
+  "thermal_observers": [
+    {
+      "window": 0,
+      "samples": 31,
+      "failed_observations": 0,
+      "private_receipt_sha256": "d93353b383e9d1684327082c73d4d7ad8f5d4dfb1c4dbba203a2b3561391b154"
+    },
+    {
+      "window": 1,
+      "samples": 31,
+      "failed_observations": 0,
+      "private_receipt_sha256": "264d894b040b57b44a2f02ceac3c9156f3fcecd95ccf497eab037c763ff38de8"
+    },
+    {
+      "window": 2,
+      "samples": 31,
+      "failed_observations": 0,
+      "private_receipt_sha256": "214589f05d7f14a66b42a53d2b26332fcf6e16ad4e87c0c77d5188496b1050dd"
+    },
+    {
+      "window": 3,
+      "samples": 31,
+      "failed_observations": 0,
+      "private_receipt_sha256": "8d140e3fe596018e60e286180b9d41446118814007b214bea2952a73c8a10cb8"
+    }
+  ]
+}

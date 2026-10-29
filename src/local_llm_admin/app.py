@@ -35,7 +35,10 @@ from . import quality as quality_mod
 from .alerts import AlertStore, Snapshot
 from .auth import COOKIE_NAME, LoginLimiter, SessionManager, csrf_ok, verify_password
 from .availability import AvailabilityRecorder, AvailabilityStore, summarize
-from .chat import STRATA_CHAT, ChatRequest, ChatTarget, stream_chat
+from .backend_availability import BackendAvailabilityStore, backend_state
+from .backend_types import EngineObservation, resolve_observations
+from .backends import BackendUnavailable
+from .chat import ChatRequest, stream_chat
 from .comfy_outputs import (
     ID_RE,
     Entry,
@@ -58,7 +61,8 @@ from .download_store import DownloadStore
 from .downloads import DownloadError, DownloadService
 from .embed import QUERY_INSTRUCTION, EmbedClient, EmbedError, validate_embed, validate_rerank
 from .embed_store import EmbedStore
-from .engines import ComfyClient, StrataClient, badge_state, resolve_active
+from .engine_telemetry import EngineTelemetryStore
+from .engines import ComfyClient, StrataClient, observation_badge
 from .eval_graders import grade_response
 from .eval_judge import judge_target
 from .eval_stats import paired
@@ -74,6 +78,7 @@ from .eval_suites import (
     messages_for,
     parse_jsonl,
 )
+from .inference_gateway import create_inference_app
 from .ingestion import HostLogs, IngestStore
 from .inventory import InventoryStore, build_inventory
 from .jobs import JobRunner, JobStore, ops_tz
@@ -90,7 +95,7 @@ from .logs import (
     tail_lines,
 )
 from .metrics import Sampler, window_seconds
-from .mlx import MlxClient, is_serving, parse_start_markers, validate_name
+from .mlx import MlxClient, parse_start_markers, validate_name
 from .performance_store import (
     PARSER,
     PERF_SOURCE,
@@ -110,6 +115,8 @@ from .sidecars import (
     read_service_intent,
     service_unavailable_reason,
 )
+from .splash import SplashClient
+from .splash_monitor import SplashMonitor
 from .strata_usage import StrataUsage
 from .tts import TtsClient, TtsError, text_weight, validate_speech
 from .tts_store import TtsStore
@@ -271,12 +278,14 @@ def create_app(
     tts_transport: httpx.MockTransport | None = None,
     embed_transport: httpx.MockTransport | None = None,
     strata_transport: httpx.MockTransport | None = None,
+    splash_transport: httpx.MockTransport | None = None,
     judge_transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     mlx = MlxClient(settings)
     comfy = ComfyClient(settings, transport=comfy_transport)
     strata = StrataClient(settings, transport=strata_transport)
+    splash = SplashClient(settings, transport=splash_transport)
     store = JobStore(settings.admin_data_dir / "admin.sqlite")
     runner = JobRunner(
         settings, store, current_name=lambda: mlx.active_env().get("MLX_ACTIVE_NAME")
@@ -299,12 +308,21 @@ def create_app(
         decision=decision,
         sidecars=sidecar_registry,
         strata=strata,
+        splash=splash,
     )
-    # the metrics "engine process" tile follows whichever engine owns the GPU
-    sampler = Sampler(
-        settings,
-        mlx_pid=lambda: mlx.pid_from_file() or comfy.pid_from_file() or strata.pid_from_file(),
-    )
+
+    # The process tile follows the same unambiguous generation as lifecycle control.
+    def engine_pid() -> int | None:
+        generation = control.observe()["generation"]
+        return int(generation["pid"]) if generation else None
+
+    def metric_observation() -> EngineObservation | None:
+        observed, selected = control._snapshot()
+        if selected is not None or observed["engine"] == "none":
+            return selected
+        return EngineObservation(observed["engine"])
+
+    sampler = Sampler(settings, mlx_pid=engine_pid, engine_observation=metric_observation)
     usage = LiteLLMUsage(settings)
     db_path = settings.admin_data_dir / "admin.sqlite"
     events = IngestStore(db_path)
@@ -312,8 +330,44 @@ def create_app(
     probes = ProbeRunner()
     perf = PerformanceStore(db_path)
     perf_logs = PerfLogs(settings, events, perf)
+    native_telemetry = EngineTelemetryStore(db_path)
+    splash_monitor = SplashMonitor(settings, splash, native_telemetry)
+    backend_availability = BackendAvailabilityStore(db_path)
+
+    def backend_health(observed: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+        descriptions = {
+            b.spec.id: {
+                "label": b.spec.label,
+                "enabled": b.spec.enabled,
+                "auto_recover": b.spec.auto_recover,
+            }
+            for b in control.backends
+        }
+        cached = splash_monitor.snapshot()
+        if cached.get("ready") is True:
+            generation = (observed or {}).get("generation") or {}
+            members = [
+                {k: p[k] for k in ("pid", "started", "role")}
+                for p in generation.get("processes", [])
+            ]
+            expected = cached.get("identity", {}).get("processes")
+            if (observed or {}).get("engine") != "splash" or not members or members != expected:
+                cached.update(
+                    state="unknown", ready=None, profile=None, fingerprint=None, epoch=None
+                )
+        descriptions["splash"].update(cached)
+        return descriptions
+
     supervisor = Supervisor(
-        settings, control, alerts, events, HostLogs(settings, events), probes, sampler, mlx
+        settings,
+        control,
+        alerts,
+        events,
+        HostLogs(settings, events),
+        probes,
+        sampler,
+        mlx,
+        backend_health=backend_health,
     )
 
     async def ingest_requests(snap: Snapshot, observed: dict[str, Any] | None) -> None:
@@ -327,6 +381,39 @@ def create_app(
         if res.state == "error":
             log.warning("request ingestion failed: %s", res.error)
 
+    last_backend_sample: float | None = None
+
+    async def record_backend_availability(snap: Snapshot, observed: dict[str, Any] | None) -> None:
+        nonlocal last_backend_sample
+        if (
+            last_backend_sample is not None
+            and 0 <= snap.wall - last_backend_sample < settings.availability_interval_s
+        ):
+            return
+        last_backend_sample = snap.wall
+        if settings.splash_enabled or (snap.intent or "").startswith("splash:"):
+            sample = backend_state(snap, "splash")
+            # The monitor's cached bundle must match this tick's local generation.
+            identity = snap.backends.get("splash", {}).get("identity", {})
+            generation = (observed or {}).get("generation") or {}
+            observed_members = [
+                {k: p[k] for k in ("pid", "started", "role")}
+                for p in generation.get("processes", [])
+            ]
+            if sample["state"] == "serving" and (
+                not observed_members or observed_members != identity.get("processes")
+            ):
+                sample["state"] = "unknown"
+
+            def persist() -> None:
+                backend_availability.add("splash", snap.wall, sample)
+                backend_availability.prune(
+                    snap.wall - settings.observability_retention_days * 86400
+                )
+
+            await probes.run("backend-availability", persist, settings.probe_timeout_s)
+
+    supervisor.add_listener(record_backend_availability)
     supervisor.add_listener(ingest_requests)
     strata_usage = StrataUsage(settings, strata, perf)
     supervisor.add_listener(strata_usage.on_tick)
@@ -353,6 +440,7 @@ def create_app(
         return service_unavailable_reason(
             sidecar_registry, store, "qwen-embed", control.exclusive_running
         )
+
     supervisor.add_listener(
         SidecarMonitor(
             settings,
@@ -360,6 +448,7 @@ def create_app(
             store,
             alerts,
             history=decision_history,
+            backends=control.backends,
             prune_extra=[tts_history.prune, embed_history.prune],
         )
     )
@@ -384,7 +473,14 @@ def create_app(
         ttl_s=settings.comfyui_output_cache_s,
     )
     diagnostics = Diagnostics(
-        settings, mlx, control, sampler, events, probes, watchdog_state=supervisor.state
+        settings,
+        mlx,
+        control,
+        sampler,
+        events,
+        probes,
+        watchdog_state=supervisor.state,
+        backend_health=lambda: backend_health(control.observe()),
     )
     sessions = SessionManager(
         settings.admin_session_secret.get_secret_value(), settings.admin_session_max_age_s
@@ -415,9 +511,11 @@ def create_app(
         app.state.startup_task = startup_task
         if start_background:
             sampler.start()
+            splash_monitor.start()
             supervisor.start()
         yield
         await quality.shutdown()  # before anything it depends on stops
+        await splash_monitor.stop()
         await supervisor.stop()
         await sampler.stop()
         probes.shutdown()  # never waits for a hung probe thread
@@ -434,6 +532,7 @@ def create_app(
         openapi_url=None,
     )
     app.state.control = control
+    app.state.backends = control.backends
     app.state.decision = decision
     app.state.sidecars = sidecar_registry
     app.state.tts = tts
@@ -451,6 +550,8 @@ def create_app(
     app.state.maintenance = maintenance
     app.state.perf_logs = perf_logs
     app.state.strata_usage = strata_usage
+    app.state.splash_monitor = splash_monitor
+    app.state.backend_availability = backend_availability
     app.state.inventory_timeout_s = settings.inventory_timeout_s
     app.state.inventory_cache = None  # (monotonic time, result)
     app.state.downloaded_at = downloads_svc.downloaded_at  # published path -> time
@@ -460,6 +561,15 @@ def create_app(
     app.state.follow_interval_s = 1.0
     app.state.follow_max_s = 1800.0
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+
+    inference = create_inference_app(
+        settings,
+        control.backends,
+        transport=chat_transport,
+        busy=lambda: runner.running() is not None,
+    )
+    app.state.inference = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.inference.mount("/v1", inference)
 
     @app.middleware("http")
     async def require_session(
@@ -562,21 +672,30 @@ def create_app(
     @app.get("/api/status")
     async def status() -> dict[str, Any]:
         job = runner.running()
-        st = await mlx.status(job_running=job is not None)
-        mlx_running = await asyncio.to_thread(mlx.engine_running)
-        comfy_st = await comfy.status()
-        # a deployment without Strata never probes its port or pid file
-        strata_st = await strata.status() if settings.strata_enabled else None
-        strata_running = bool(strata_st and strata_st["running"])
-        active = resolve_active(mlx_running, comfy_st["running"], strata_running)
-        st["state"] = badge_state(
-            st["state"], active, comfy_st["ready"], bool(strata_st and strata_st["ready"])
-        )
+        details = await control.backends.status_details(job_running=job is not None)
+        # Keep the existing public fields; normalized metadata stays internal.
+        st = dict(details["mlx"])
+        st.pop("ready", None)
+        st.pop("reference", None)
+        comfy_st = dict(details["comfyui"])
+        strata_st = dict(details["strata"]) if "strata" in details else None
+        if strata_st is not None:
+            strata_st.pop("reference", None)
+        observations = await asyncio.to_thread(control.backends.from_status, details)
+        active = resolve_observations(observations)
+        st["state"] = observation_badge(st["state"], observations)
         st["engine"] = {
             "active": active,
             "comfyui": comfy_st,
             "strata": strata_st,
             "strata_enabled": settings.strata_enabled,
+            "splash_enabled": settings.splash_enabled,
+            "splash": {k: v for k, v in details["splash"].items() if k not in {"target_options"}}
+            if "splash" in details
+            else None,
+            "backends": await asyncio.to_thread(
+                control.backends.descriptions, details, observations
+            ),
         }
         st["job"] = job
         st["intent"] = await asyncio.to_thread(control.intent)
@@ -919,7 +1038,9 @@ def create_app(
         intent = await asyncio.to_thread(read_intent, store)
         return {
             "sidecars": views,
-            "intent": {"name": intent.get("name"), "value": intent.get("value")} if intent else None,
+            "intent": {"name": intent.get("name"), "value": intent.get("value")}
+            if intent
+            else None,
             "conflict": sum(v["running"] for v in views) > 1,
         }
 
@@ -1502,9 +1623,7 @@ def create_app(
     ) -> dict[str, Any]:
         raw = await file.read(settings.eval_import_max_bytes + 1)
         if len(raw) > settings.eval_import_max_bytes:
-            raise HTTPException(
-                400, f"file is larger than {settings.eval_import_max_bytes} bytes"
-            )
+            raise HTTPException(400, f"file is larger than {settings.eval_import_max_bytes} bytes")
         try:
             text = raw.decode()
             if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,63}", id):
@@ -1674,12 +1793,16 @@ def create_app(
                 raise HTTPException(409, f"not comparable: {what} differs")
         # same suite version on both sides (checked above), so one lookup names its judge cases
         stored = await asyncio.to_thread(evals.suite_by_hash, suite, rows_a[0]["suite_hash"])
-        judged_ids = {c.id for c in stored.cases if isinstance(c.grader, Judge)} if stored else set()
+        judged_ids = (
+            {c.id for c in stored.cases if isinstance(c.grader, Judge)} if stored else set()
+        )
         extra: dict[str, Any] = {}
         if judged_ids:
 
             def judged(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-                return [r for r in rows if r["case_id"] in judged_ids and r["grade_state"] == "graded"]
+                return [
+                    r for r in rows if r["case_id"] in judged_ids and r["grade_state"] == "graded"
+                ]
 
             ja, jb = judged(rows_a), judged(rows_b)
             if {r["judge"] for r in ja} != {r["judge"] for r in jb}:
@@ -1693,41 +1816,36 @@ def create_app(
             result = paired(a, b)
         except ValueError:
             raise HTTPException(409, "not comparable: no shared cases") from None
-        return dataclasses.asdict(result) | extra | {
-            "disagreements": [
-                {"case_id": k, "a_score": a[k], "b_score": b[k]}
-                for k in sorted(a.keys() & b.keys())
-                if a[k] != b[k]
-            ]
-        }
+        return (
+            dataclasses.asdict(result)
+            | extra
+            | {
+                "disagreements": [
+                    {"case_id": k, "a_score": a[k], "b_score": b[k]}
+                    for k in sorted(a.keys() & b.keys())
+                    if a[k] != b[k]
+                ]
+            }
+        )
 
     # --- chat --------------------------------------------------------------
     @app.post("/api/chat")
     async def chat(req: ChatRequest) -> StreamingResponse:
         if quality.active():
             raise HTTPException(409, "a quality run is in progress; test chat is paused")
-        if (await asyncio.to_thread(comfy.running)).running:
-            raise HTTPException(409, "ComfyUI owns the GPU; the LLM is stopped")
-        if settings.strata_enabled and (await asyncio.to_thread(strata.running)).running:
-            st = await strata.status()
-            if not st["ready"] or not st["model"]:
-                raise HTTPException(409, "Strata is still loading the model")
-            target = ChatTarget(
-                settings.strata_api_base, st["model"], settings.strata_api_key.get_secret_value()
-            )
-            return StreamingResponse(
-                stream_chat(
-                    settings, req, transport=chat_transport, defaults=STRATA_CHAT, target=target
-                ),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-            )
-        if not is_serving(await mlx.health()):
-            raise HTTPException(409, "model server is not serving")
-        name = (await asyncio.to_thread(mlx.active_env)).get("MLX_ACTIVE_NAME")
-        defaults = await asyncio.to_thread(profiles.chat_defaults, name)
+        try:
+            descriptor = await control.backends.resolve_inference(profiles.chat_defaults)
+        except BackendUnavailable as exc:
+            raise HTTPException(409, str(exc)) from None
         return StreamingResponse(
-            stream_chat(settings, req, transport=chat_transport, defaults=defaults),
+            stream_chat(
+                settings,
+                req,
+                transport=chat_transport,
+                defaults=dict(descriptor.defaults),
+                target=descriptor.target,
+                estimate_usage=descriptor.estimate_usage,
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -1922,6 +2040,14 @@ def create_app(
                 "parser": PARSER,
                 "last_ingest": await asyncio.to_thread(perf.last_ingest, PERF_SOURCE),
             },
+            "coverage": {
+                "splash": await asyncio.to_thread(
+                    native_telemetry.coverage,
+                    settings.splash_enabled,
+                    now=time.time(),
+                    stale_s=settings.splash_poll_interval_s * 3,
+                )
+            },
             **out,
         }
 
@@ -1947,6 +2073,44 @@ def create_app(
             "days": days["rows"],
             "models": models["rows"],
             "totals": days["totals"],
+            "coverage": {
+                "splash": await asyncio.to_thread(
+                    native_telemetry.coverage,
+                    settings.splash_enabled,
+                    now=time.time(),
+                    stale_s=settings.splash_poll_interval_s * 3,
+                )
+            },
+        }
+
+    @app.get("/api/performance/engines")
+    async def performance_engines(
+        frm: str | None = Query(None, alias="from"),
+        to: str | None = None,
+        profile: str | None = Query(None, max_length=128),
+        fingerprint: str | None = Query(None, max_length=128),
+        limit: int = Query(200, ge=1, le=500),
+    ) -> dict[str, Any]:
+        start, end, lo, hi = _epoch_range(frm, to)
+        return {
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "source": "splash",
+            "readings": await asyncio.to_thread(
+                native_telemetry.readings,
+                lo,
+                hi,
+                profile=profile,
+                fingerprint=fingerprint,
+                limit=limit,
+            ),
+            "coverage": await asyncio.to_thread(
+                native_telemetry.coverage,
+                settings.splash_enabled,
+                now=time.time(),
+                stale_s=settings.splash_poll_interval_s * 3,
+            ),
+            "semantics": "Cumulative native execution snapshots; never sum polls or add to request/gateway totals.",
         }
 
     @app.get("/api/performance/requests")
@@ -1991,10 +2155,25 @@ def create_app(
 
     @app.get("/api/availability")
     async def availability_view(
-        frm: str | None = Query(None, alias="from"), to: str | None = None
+        frm: str | None = Query(None, alias="from"),
+        to: str | None = None,
+        source: Literal["mlx", "splash"] = "mlx",
+        profile: str | None = Query(None, max_length=128),
     ) -> dict[str, Any]:
         start, end, lo, hi = _epoch_range(frm, to)
         interval = settings.availability_interval_s
+        if source == "splash":
+            out = await asyncio.to_thread(
+                backend_availability.query,
+                source,
+                lo,
+                hi,
+                interval_s=interval,
+                tz_offset_min=settings.litellm_timezone_offset_min,
+                now=time.time(),
+                profile=profile,
+            )
+            return {"from": start.isoformat(), "to": end.isoformat(), **out}
         samples = await asyncio.to_thread(availability.samples, lo, hi, 2 * interval)
         out = summarize(
             samples,

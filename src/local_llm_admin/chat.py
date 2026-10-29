@@ -99,6 +99,7 @@ async def stream_chat(
     transport: httpx.AsyncBaseTransport | None = None,
     defaults: dict[str, Any] | None = None,
     target: ChatTarget | None = None,
+    estimate_usage: bool = True,
 ) -> AsyncIterator[str]:
     """Yield SSE events: reasoning/delta chunks, then one ``done`` (or one ``error``).
 
@@ -153,7 +154,7 @@ async def stream_chat(
         yield _event({"type": "error", "message": "model server is unreachable"})
         return
     t_end = time.monotonic()
-    completion = (usage or {}).get("completion_tokens", n_deltas)
+    completion = (usage or {}).get("completion_tokens", n_deltas if estimate_usage else None)
     gen_time = t_end - t_first if t_first else None
     yield _event(
         {

@@ -321,6 +321,33 @@ def _v15_token_usage(conn: sqlite3.Connection) -> None:
     )
 
 
+def _v16_engine_telemetry(conn: sqlite3.Connection) -> None:
+    # Independent cumulative snapshots: never folded into billed/request token totals.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS engine_readings (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " source TEXT NOT NULL, epoch TEXT NOT NULL, observed REAL NOT NULL,"
+        " profile TEXT NOT NULL, fingerprint TEXT NOT NULL, model TEXT NOT NULL,"
+        " identity TEXT NOT NULL, counters TEXT NOT NULL, digest TEXT NOT NULL,"
+        " UNIQUE(source, epoch, digest))"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS engine_readings_time ON engine_readings(source, observed)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS backend_availability (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " source TEXT NOT NULL, ts REAL NOT NULL, profile TEXT, fingerprint TEXT,"
+        " state TEXT NOT NULL, intended INTEGER, epoch TEXT)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS backend_availability_time ON backend_availability(source, ts)"
+    )
+
+    conn.execute("CREATE INDEX IF NOT EXISTS engine_readings_prune ON engine_readings(observed)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS backend_availability_prune ON backend_availability(ts)"
+    )
+
+
 # Append only; never edit a released step. Each must be safe to re-run.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v1_base,
@@ -338,6 +365,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v13_embed_service,
     _v14_evals,
     _v15_token_usage,
+    _v16_engine_telemetry,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

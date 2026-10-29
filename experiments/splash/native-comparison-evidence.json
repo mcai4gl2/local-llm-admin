@@ -1,0 +1,573 @@
+{
+  "contract": "splash-native-comparison-evidence-1",
+  "date": "2026-10-27",
+  "scope": "Fresh native token-delivery callback emission, including runtime IPC/delivery; no isolated GPU-compute finding.",
+  "adoption_decision": "inconclusive",
+  "public_design_sha256": "02fb5b0d4576c376c38a64a0ba993b01b4c77a004cbe865e62706854ff92afae",
+  "private_campaign_sha256": "b68ba31654771b928e817a64391016683a9a936b6b1b2c403aa35c1eb20e3393",
+  "boundary_audit_sha256": "7c76116a2c8cc60de358ebc08578ff8ecaf8034b96c87480669e4b4f8af2e5f9",
+  "code_sha256": {
+    "bench.py": "361dd318aaf2f239bee33abeea3ca03e1fe52a894a85e09bb8b797c1aacaaa56",
+    "native_timing.py": "4dbc8d8627cf1cd7555ba39eec1a4a74c8efd64b84712e3eba1495f3cfa540f3",
+    "native_validation.py": "33502b054725afb9b6e10769163a471de16def031190389b07a3ecd1e1defdb7",
+    "native_comparison.py": "565b26a0f0fb5adfec42601e3493015bc6b4449ab7d8d4190202a9076b20f442"
+  },
+  "tokenization_receipt_sha256": "7c4f75bd4d73a646e67f2f0024969ff95e8dfa698ff5776d3059a477aad5d8a8",
+  "collector_proofs": {
+    "stock-8bit": {
+      "mlx": {
+        "cohort": "stock-8bit",
+        "backend": "mlx",
+        "evidence_sha256": "aa81fcfc240e0474957a8f4fed0e40ed34f404d96a19a36127bdb47c7439d23b",
+        "runtime_sha256": "9c65e7603fc136cec2801abb606a222a25e860406894339bc6826ec56167dd6e",
+        "model_pins": {
+          "weights_sha256": "b5d511fe911490ff389642abb1b9671a3c75736c8faa990dfaf9dd113b646711",
+          "tokenizer_sha256": "ac82a3ef50a623a2cc41cb5094c6fee5bdc9068d88672885e745f66c0ad27760",
+          "template_sha256": "cd13b5b6d2a8c4eeab703d83ded6d1d4d92df3ab0cd23b11a8620219a38720c6"
+        },
+        "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+        "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+        "decision": "eligible",
+        "threshold": 1.05,
+        "median_wall_ratio": 0.9990484771297183,
+        "category_upper95": {
+          "short": 1.0009231516035093,
+          "2k": 1.0016333602929426,
+          "8k": 1.0003004672016296
+        }
+      },
+      "splash": {
+        "cohort": "stock-8bit",
+        "backend": "splash",
+        "evidence_sha256": "2021f7d7e389e54bcd6b8b539031020a6211bceadab991bfef3faf4e8169a5cb",
+        "runtime_sha256": "4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d",
+        "model_pins": {
+          "weights_sha256": "b5d511fe911490ff389642abb1b9671a3c75736c8faa990dfaf9dd113b646711",
+          "tokenizer_sha256": "ac82a3ef50a623a2cc41cb5094c6fee5bdc9068d88672885e745f66c0ad27760",
+          "template_sha256": "cd13b5b6d2a8c4eeab703d83ded6d1d4d92df3ab0cd23b11a8620219a38720c6"
+        },
+        "source_sha256": "0ce85023177d4029942e9505a4b0f8c67dddb29a7fef37ac9c0fd15ce1b0bcd6",
+        "adapter_sha256": "635904e4052151e5533be770caa0b83ec0e40b6471333959e29ca6b5d7c98311",
+        "decision": "eligible",
+        "threshold": 1.05,
+        "median_wall_ratio": 0.9989812938090765,
+        "category_upper95": {
+          "short": 1.0035749144045165,
+          "2k": 1.0173411251215696,
+          "8k": 1.011496232632888
+        }
+      }
+    },
+    "modified-4bit": {
+      "mlx": {
+        "cohort": "modified-4bit",
+        "backend": "mlx",
+        "evidence_sha256": "3512dd26a40e5931805578c6b47afcc766d006a30290b0ffa5d933b164a49afd",
+        "runtime_sha256": "9c65e7603fc136cec2801abb606a222a25e860406894339bc6826ec56167dd6e",
+        "model_pins": {
+          "weights_sha256": "fe4b166f932a8215bb3be532d49c581396d2d91b6c0687106c5b255118d95e0d",
+          "tokenizer_sha256": "5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836",
+          "template_sha256": "b6e05e626073de17d62afe10ce1078e70cf16fcc2ffb521f2f6a2e05af6abf31"
+        },
+        "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+        "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+        "decision": "eligible",
+        "threshold": 1.05,
+        "median_wall_ratio": 0.997389035403522,
+        "category_upper95": {
+          "short": 1.0002359510011563,
+          "2k": 1.0007375085508912,
+          "8k": 1.002261011586275
+        }
+      },
+      "splash": {
+        "cohort": "modified-4bit",
+        "backend": "splash",
+        "evidence_sha256": "2021f7d7e389e54bcd6b8b539031020a6211bceadab991bfef3faf4e8169a5cb",
+        "runtime_sha256": "4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d",
+        "model_pins": {
+          "weights_sha256": "fe4b166f932a8215bb3be532d49c581396d2d91b6c0687106c5b255118d95e0d",
+          "tokenizer_sha256": "5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836",
+          "template_sha256": "b6e05e626073de17d62afe10ce1078e70cf16fcc2ffb521f2f6a2e05af6abf31"
+        },
+        "source_sha256": "0ce85023177d4029942e9505a4b0f8c67dddb29a7fef37ac9c0fd15ce1b0bcd6",
+        "adapter_sha256": "635904e4052151e5533be770caa0b83ec0e40b6471333959e29ca6b5d7c98311",
+        "decision": "eligible",
+        "threshold": 1.05,
+        "median_wall_ratio": 0.9983562062765596,
+        "category_upper95": {
+          "short": 1.0069781689351884,
+          "2k": 1.0470989925610306,
+          "8k": 1.0050905908177419
+        }
+      }
+    }
+  },
+  "cohorts": {
+    "stock-8bit": {
+      "review": {
+        "contract": "splash-native-comparison-1",
+        "decision": "inconclusive",
+        "emission_speed_gate": "pass",
+        "native_gpu_compute_gate": "unassessed",
+        "ttft_gate": "pass",
+        "e2e_gate": "pass",
+        "issues": [],
+        "scope": "First-to-last native token-delivery callback interval, excluding the entire first batch; includes runtime delivery/IPC, not isolated GPU compute.",
+        "cohort": "stock-8bit",
+        "design_sha256": "0b2113f1edbb9a514e524d63489a18064838bb160c26257fe281899d1b0b19b6",
+        "median_paired_ratio": 2.4949961802269556,
+        "ratio_ci95": [
+          2.389975934189482,
+          3.328202089354354
+        ],
+        "categories": {
+          "short": {
+            "paired_ratio": 2.4949961802269556
+          },
+          "2k": {
+            "paired_ratio": 3.328202089354354
+          },
+          "8k": {
+            "paired_ratio": 2.389975934189482
+          }
+        },
+        "latency": {
+          "mlx": {
+            "p95_ttft_s": 23.295080698396486,
+            "median_total_s": 108.07679004500096,
+            "median_output_tokens": 1024
+          },
+          "splash": {
+            "p95_ttft_s": 14.930340758591774,
+            "median_total_s": 34.20566063700244,
+            "median_output_tokens": 1024
+          }
+        },
+        "samples": {
+          "measured": 90,
+          "warmup": 18,
+          "errors": 0,
+          "early_stops": 0
+        },
+        "accounted_native_traces": 108,
+        "private_runs_sha256": "bd6b549669e6f28061394f10b5cc756ab0af297e47f1b4a5c2ba134e2df54611",
+        "collector_evidence_sha256": {
+          "mlx": "aa81fcfc240e0474957a8f4fed0e40ed34f404d96a19a36127bdb47c7439d23b",
+          "splash": "2021f7d7e389e54bcd6b8b539031020a6211bceadab991bfef3faf4e8169a5cb"
+        },
+        "boundary_audit_sha256": "7c76116a2c8cc60de358ebc08578ff8ecaf8034b96c87480669e4b4f8af2e5f9",
+        "uncertainty": "2000 seed-0 bootstrap draws over paired sessions, then primary prompts; median of per-prompt paired repetition medians."
+      },
+      "native_emission_distribution": {
+        "mlx": {
+          "short": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 10.014858321124683,
+            "p95_emission_tok_s": 10.016197490065046,
+            "minimum_emission_tok_s": 10.002714402547296,
+            "maximum_emission_tok_s": 10.016800503988382,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 512,
+            "completion_tokens_maximum": 512
+          },
+          "2k": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 9.941638307163485,
+            "p95_emission_tok_s": 9.942685386909815,
+            "minimum_emission_tok_s": 9.928831505038305,
+            "maximum_emission_tok_s": 9.942715646392138,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 1024,
+            "completion_tokens_maximum": 1024
+          },
+          "8k": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 9.742309424004803,
+            "p95_emission_tok_s": 9.743322850881318,
+            "minimum_emission_tok_s": 9.712016879940123,
+            "maximum_emission_tok_s": 9.743326415419762,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 1024,
+            "completion_tokens_maximum": 1024
+          }
+        },
+        "splash": {
+          "short": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 24.98185836145519,
+            "p95_emission_tok_s": 26.40623007559561,
+            "minimum_emission_tok_s": 23.205905318241832,
+            "maximum_emission_tok_s": 26.63267129766403,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 512,
+            "completion_tokens_maximum": 512
+          },
+          "2k": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 33.08957481327659,
+            "p95_emission_tok_s": 33.81523324821836,
+            "minimum_emission_tok_s": 29.29648587919896,
+            "maximum_emission_tok_s": 33.945971896212356,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 1024,
+            "completion_tokens_maximum": 1024
+          },
+          "8k": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 23.38037051780583,
+            "p95_emission_tok_s": 24.46695509144992,
+            "minimum_emission_tok_s": 22.808212038606968,
+            "maximum_emission_tok_s": 24.56140158913187,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 1024,
+            "completion_tokens_maximum": 1024
+          }
+        }
+      }
+    },
+    "modified-4bit": {
+      "review": {
+        "contract": "splash-native-comparison-1",
+        "decision": "inconclusive",
+        "emission_speed_gate": "pass",
+        "native_gpu_compute_gate": "unassessed",
+        "ttft_gate": "pass",
+        "e2e_gate": "pass",
+        "issues": [],
+        "scope": "First-to-last native token-delivery callback interval, excluding the entire first batch; includes runtime delivery/IPC, not isolated GPU compute.",
+        "cohort": "modified-4bit",
+        "design_sha256": "008f940fb7b3ef89c9a730de52aa9a0b2cb787d82e966e6a08a2deb2b0ccd947",
+        "median_paired_ratio": 2.365861424040426,
+        "ratio_ci95": [
+          2.2750806109009956,
+          2.9449391336223347
+        ],
+        "categories": {
+          "short": {
+            "paired_ratio": 2.2828002538811787
+          },
+          "2k": {
+            "paired_ratio": 2.9449391336223347
+          },
+          "8k": {
+            "paired_ratio": 2.3026467014593557
+          }
+        },
+        "latency": {
+          "mlx": {
+            "p95_ttft_s": 21.585304826201174,
+            "median_total_s": 61.60945533399354,
+            "median_output_tokens": 1024
+          },
+          "splash": {
+            "p95_ttft_s": 14.397506139808684,
+            "median_total_s": 22.178861596999923,
+            "median_output_tokens": 1024
+          }
+        },
+        "samples": {
+          "measured": 90,
+          "warmup": 18,
+          "errors": 0,
+          "early_stops": 0
+        },
+        "accounted_native_traces": 108,
+        "private_runs_sha256": "08e84ef057f781cb550faa6000c9680ee2f6dcf44e5b84cadb820fd233ab5168",
+        "collector_evidence_sha256": {
+          "mlx": "3512dd26a40e5931805578c6b47afcc766d006a30290b0ffa5d933b164a49afd",
+          "splash": "2021f7d7e389e54bcd6b8b539031020a6211bceadab991bfef3faf4e8169a5cb"
+        },
+        "boundary_audit_sha256": "7c76116a2c8cc60de358ebc08578ff8ecaf8034b96c87480669e4b4f8af2e5f9",
+        "uncertainty": "2000 seed-0 bootstrap draws over paired sessions, then primary prompts; median of per-prompt paired repetition medians."
+      },
+      "native_emission_distribution": {
+        "mlx": {
+          "short": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 18.20349486528971,
+            "p95_emission_tok_s": 18.214552153223206,
+            "minimum_emission_tok_s": 18.198023573934623,
+            "maximum_emission_tok_s": 18.21459981726858,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 512,
+            "completion_tokens_maximum": 512
+          },
+          "2k": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 17.95974636237281,
+            "p95_emission_tok_s": 17.97054931264504,
+            "minimum_emission_tok_s": 17.95479167752847,
+            "maximum_emission_tok_s": 17.97100620572836,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 1024,
+            "completion_tokens_maximum": 1024
+          },
+          "8k": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 17.3224559721765,
+            "p95_emission_tok_s": 17.331321549477533,
+            "minimum_emission_tok_s": 17.31084077064877,
+            "maximum_emission_tok_s": 17.33157200456333,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 1024,
+            "completion_tokens_maximum": 1024
+          }
+        },
+        "splash": {
+          "short": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 42.14387500374094,
+            "p95_emission_tok_s": 43.670766685037236,
+            "minimum_emission_tok_s": 39.38587769218897,
+            "maximum_emission_tok_s": 44.32322570930532,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 512,
+            "completion_tokens_maximum": 512
+          },
+          "2k": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 53.810593496392755,
+            "p95_emission_tok_s": 58.86882837755127,
+            "minimum_emission_tok_s": 46.6614095912638,
+            "maximum_emission_tok_s": 59.788891441781686,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 1024,
+            "completion_tokens_maximum": 1024
+          },
+          "8k": {
+            "measured_requests": 15,
+            "median_emission_tok_s": 39.884856421253446,
+            "p95_emission_tok_s": 41.532153060118056,
+            "minimum_emission_tok_s": 38.48433472912561,
+            "maximum_emission_tok_s": 41.727218110037484,
+            "first_batch_tokens_minimum": 1,
+            "first_batch_tokens_maximum": 1,
+            "completion_tokens_minimum": 1024,
+            "completion_tokens_maximum": 1024
+          }
+        }
+      }
+    }
+  },
+  "windows": [
+    {
+      "cohort": "stock-8bit",
+      "session": 1,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 36,
+      "restored": true,
+      "resources": {
+        "samples": 1214,
+        "minimum_available_gib": 11.175704956054688,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 28.010696411132812
+      },
+      "thermal": {
+        "samples": 83,
+        "failed_observations": 0
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "aea1d431d6f593979dc01e2c1989162d811c9790b9e57a0a4023bbe555116fb4",
+        "sidecar-restoration-proof.json": "d07b5f30c1ad376701c65c1beeaa9a0f2d5764a7767958a2ae7af33356c26999",
+        "mac-audit/restoration-proof.json": "f99ed1469fcb37a91ef4350a3fa917231e1d1e73bafc4b522846ae680d1ae48a",
+        "mac-audit/target-fingerprints-after.json": "53fcc415322808dd16207e32f2fcb762c671f20817bb4804f27dbbbc5ebb537e",
+        "mac-audit/resources.jsonl": "f5386cf3e27583828416ee82cdb3258a459be934fb3faf9dd05cad0939a7d9f2"
+      }
+    },
+    {
+      "cohort": "modified-4bit",
+      "session": 1,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 36,
+      "restored": true,
+      "resources": {
+        "samples": 741,
+        "minimum_available_gib": 15.894485473632812,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.357025146484375
+      },
+      "thermal": {
+        "samples": 51,
+        "failed_observations": 0
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "fd849d04393bf90363cc06bdb3d53fb50f6e532c6ceae8682b7b066766b5c8d9",
+        "sidecar-restoration-proof.json": "dc5caff2c4871d2abe0d78d7e4bec3eb687699e44ad32fb62f0e89d43fcfdb97",
+        "mac-audit/restoration-proof.json": "dec3fe4d359050a76e7d779af008a64f7146ffaf2a64d583948d94e3f248be86",
+        "mac-audit/target-fingerprints-after.json": "08f9fe7e4ab8fc0089221ae42ce1065b6199c3553836b3c433a18ef5e020e05e",
+        "mac-audit/resources.jsonl": "4bbb138e9ea3297be02f2b4dec802eafe5ae25d41e46e7d47444b0e06a369a95"
+      }
+    },
+    {
+      "cohort": "stock-8bit",
+      "session": 2,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 36,
+      "restored": true,
+      "resources": {
+        "samples": 1220,
+        "minimum_available_gib": 11.061660766601562,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 28.010345458984375
+      },
+      "thermal": {
+        "samples": 83,
+        "failed_observations": 0
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "382f78610a22be8c0753f4f30b435b696e6ae6ced619b3978b79ddbff2858b62",
+        "sidecar-restoration-proof.json": "ecb64381cf42c0103e95c76817f47cd99eb4be24369213fdcbeaa9f47f4881d6",
+        "mac-audit/restoration-proof.json": "719562a3fb64b9b05649ce64df3e1663b56ee692d36588b5aa5464054632e3b4",
+        "mac-audit/target-fingerprints-after.json": "1e022db5404f7ff3894d280c528612d21c26d0e3881a93e4a228204e60377fdb",
+        "mac-audit/resources.jsonl": "935030c8bd6ac9c9532cc0638af28c27003dd25980214646ff08da62682257db"
+      }
+    },
+    {
+      "cohort": "modified-4bit",
+      "session": 2,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 36,
+      "restored": true,
+      "resources": {
+        "samples": 747,
+        "minimum_available_gib": 15.498199462890625,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.489151000976562
+      },
+      "thermal": {
+        "samples": 52,
+        "failed_observations": 0
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "ab5859726c37555082f63a650c20b217308cb9e5642a85d396f33901c858c706",
+        "sidecar-restoration-proof.json": "305d5cac93ab9574cf242684b48fe774cd95cc33b8df5a3d4eb177b3708950dd",
+        "mac-audit/restoration-proof.json": "844719c4ff71b2d13f38fb2a44149a8b7079d7d348f7d85b7f7750c56f4ec153",
+        "mac-audit/target-fingerprints-after.json": "cdb6e41826dd0e4acd846226100a9c86846b08d5ac66acdd39d9a96475414f56",
+        "mac-audit/resources.jsonl": "2fc0a32dddd64ddeb9fa7f058bbe010d60dee2c8f42ff1d7e51b07ddfb63b7a5"
+      }
+    },
+    {
+      "cohort": "stock-8bit",
+      "session": 3,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 36,
+      "restored": true,
+      "resources": {
+        "samples": 1216,
+        "minimum_available_gib": 10.655929565429688,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 28.011215209960938
+      },
+      "thermal": {
+        "samples": 83,
+        "failed_observations": 0
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "91c20e4c9b1089abe6f55551bf831671aa053b6183e84f143b056981d13e40b2",
+        "sidecar-restoration-proof.json": "a903b7430150520981a62d5295f185e364d4c94f6bfef5fd5deccdcc1e378428",
+        "mac-audit/restoration-proof.json": "39037e926498adc072fc458d3ed4d7912a67e522fb88a83eaaa1fdd380c65d20",
+        "mac-audit/target-fingerprints-after.json": "f9eea2ff819a8a54209347b0357b71dde9b9e09e7ee59129caca2e6c35764e16",
+        "mac-audit/resources.jsonl": "c9876b2b73c4dd49c68a74967b15347f6e0f024a82ddcbc191959c6a1342abe6"
+      }
+    },
+    {
+      "cohort": "modified-4bit",
+      "session": 3,
+      "status": "complete",
+      "requests": 36,
+      "accounted_native_traces": 36,
+      "restored": true,
+      "resources": {
+        "samples": 744,
+        "minimum_available_gib": 15.810516357421875,
+        "maximum_new_swap_mib": 0.0,
+        "maximum_pressure_level": 1,
+        "maximum_owned_rss_gib": 15.488906860351562
+      },
+      "thermal": {
+        "samples": 51,
+        "failed_observations": 0
+      },
+      "private_receipt_sha256": {
+        "ledger.json": "8444d81dd9d445c2b3ba70f77c869b002d0a9260fac7055709f3c8223f01376c",
+        "sidecar-restoration-proof.json": "8eb283dfc8c2aa45e43940e5473ec68bfff0472634a0e1f59cf8918584afe391",
+        "mac-audit/restoration-proof.json": "4d7d20dd05ffbfa83ba9b401879395a98f11d956ab1490c06366f745183b07c9",
+        "mac-audit/target-fingerprints-after.json": "a170af0d5e100a1d8c9f3baae126e0bec0639173f15c2d02d17fc7feb34f4f39",
+        "mac-audit/resources.jsonl": "d9bc101f57b7789af2c9fb4d3c7b7c1980b935200b4d405f98544f7aaef2d9cf"
+      }
+    }
+  ],
+  "source_audit": {
+    "private_receipt_sha256": "6533d1aa624e86601c0d6141810d6410ea0327e1c37eb05370a161a60d751b21",
+    "source_manifest_sha256": "4521a844efdc132cef086d1a20eb97441043013d860409c2e818ec3c4bb1f972",
+    "installed_runtime_files_unchanged": 57,
+    "bootstrap_unchanged": true,
+    "isolated_source_checks": {
+      "mlx-original": {
+        "files": 1477,
+        "unchanged": true
+      },
+      "mlx-instrumented": {
+        "files": 1478,
+        "unchanged": true
+      },
+      "splash-original": {
+        "files": 35,
+        "unchanged": true
+      },
+      "splash-instrumented": {
+        "files": 36,
+        "unchanged": true
+      }
+    },
+    "launch_receipts": 74
+  },
+  "final_restoration": {
+    "real_readiness_proof_generation_matches": true,
+    "admin_loaded": true,
+    "preserved": true,
+    "active_jobs": 0,
+    "experiment_cleanup": true,
+    "sidecars_restored": true
+  },
+  "owned_cleanup": {
+    "restored_windows": 12,
+    "tunnel_closed": true,
+    "agent_socket_removed": true,
+    "temporary_path_removed": true,
+    "host_agent_untouched": true
+  },
+  "private_final_receipt_sha256": {
+    "final-live-review.json": "72ebc51eb739acb205367e44cee81e4cfa04c6e696beb18b8039f0c43affcc4e",
+    "cleanup-proof.json": "a50f5af713245e54071512a9a7f234c93e0fa2223bf5571e9789000c0cf321ed"
+  },
+  "limitations": [
+    "Different in-process and native wire-reader delivery paths are included; GPU kernel compute and queue-latency decomposition are not isolated.",
+    "Collector overhead calibration used 256-token length caps; the fresh native series uses the original 512/1024-token workload caps. No longer-cap overhead bound or correction is invented.",
+    "Three paired sessions per checkpoint are independent top-level bootstrap units; repetitions and tokens are dependent.",
+    "Earlier timing, quality, context, collector pilots and overhead audits remain separate and unchanged.",
+    "Broader representative quality precision, replay/concurrency, deliberate cold/idle/restart/memory-release cycles, any required sidecar coexistence and actual authenticated gateway inference remain open."
+  ]
+}

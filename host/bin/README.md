@@ -203,3 +203,11 @@ A profile is `etc/profiles/<name>.json`, read and validated by `bin/mlx-profile`
 - `chat` fields are defaults for the admin's test chat only.
 
 `set`, `reset` and `revert` take `run/mlx.lock` and work only for registered names. Each write is a temp file plus rename and keeps the previous version as `<name>.json.prev`. `start` records the fingerprint of the flags it used as `MLX_PROFILE_FINGERPRINT` in `run/active.env` (`default` for none). A missing helper or an invalid profile never stops a start: the model starts with the built-in flags, the fingerprint is `default-fallback`, and the reason is written to `mlx-server.log`.
+
+
+## Shared client endpoint
+
+For transparent engine switching with the same external URL and upstream model ID,
+use the [shared serving topology](../../docs/shared-inference.md). The optional private
+`etc/engine-ports.json` moves native MLX/Strata listeners to loopback internal ports;
+legacy behavior remains when this configuration is absent. Clients keep port 8080.

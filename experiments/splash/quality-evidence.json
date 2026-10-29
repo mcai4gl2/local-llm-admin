@@ -1,0 +1,666 @@
+{
+  "contract": "splash-quality-public-summary-1",
+  "scope": "Deterministic pilot only; no native speed or broad adoption claim.",
+  "followup_suite_sha256": "25a34b84cd86234b561820fcb26b46b8164bafddbe8c6ed0761569d5ef321fb9",
+  "followup_max_tokens": 512,
+  "request_deadline_s": 60,
+  "cohorts": {
+    "stock-8bit": {
+      "contract": "splash-quality-1",
+      "decision": "inconclusive",
+      "issues": [],
+      "samples": {
+        "measured": 70,
+        "errors": 0,
+        "truncated": 0
+      },
+      "per_case": [
+        {
+          "id": "if-ready",
+          "category": "instruction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "if-colors",
+          "category": "instruction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "if-five-words",
+          "category": "instruction",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "if-json-capital",
+          "category": "instruction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "if-backwards",
+          "category": "instruction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ex-invoice",
+          "category": "extraction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ex-meeting",
+          "category": "extraction",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "ex-contact",
+          "category": "extraction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ex-order",
+          "category": "extraction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ex-flight",
+          "category": "extraction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-speed",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-percent",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-discount",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-marbles",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-sum",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-feathers",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-syllogism",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-weekday",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-bat-ball",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-sequence",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-weather",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-event",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-currency",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-weather-f",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-none",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-slice",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-alias",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-copy",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-bool",
+          "category": "coding",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "code-range",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-dict",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-sort",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-set",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-closure",
+          "category": "coding",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "code-exception",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        }
+      ],
+      "categories": {
+        "coding": {
+          "cases": 10,
+          "mlx_score": 0.8,
+          "splash_score": 0.8
+        },
+        "extraction": {
+          "cases": 5,
+          "mlx_score": 0.8,
+          "splash_score": 0.8
+        },
+        "instruction": {
+          "cases": 5,
+          "mlx_score": 0.8,
+          "splash_score": 0.8
+        },
+        "math": {
+          "cases": 5,
+          "mlx_score": 1.0,
+          "splash_score": 1.0
+        },
+        "reasoning": {
+          "cases": 5,
+          "mlx_score": 1.0,
+          "splash_score": 1.0
+        },
+        "tools": {
+          "cases": 5,
+          "mlx_score": 1.0,
+          "splash_score": 1.0
+        }
+      },
+      "cases": 35,
+      "baseline_score": 0.8857142857142857,
+      "candidate_score": 0.8857142857142857,
+      "mean_difference": 0.0,
+      "difference_ci95": [
+        -0.1255221985142252,
+        0.1255221985142252
+      ],
+      "wins": 0,
+      "losses": 0,
+      "ties": 35,
+      "uncertainty_method": "Approximate 95% Bonferroni Wilson intervals on paired binary wins/losses; cases are sampling units.",
+      "scope": "Deterministic fixed-suite binary pass rate; no speed, broad quality or adoption verdict.",
+      "raw_runs": [
+        {
+          "backend": "mlx",
+          "status": "complete",
+          "samples": 35,
+          "sha256": "6f97c95a4828330dac16a96a42430faaff903ad332c14468eaa0d2ed19900088"
+        },
+        {
+          "backend": "splash",
+          "status": "complete",
+          "samples": 35,
+          "sha256": "b1d700f52407ef9cc2c7ecc9c2dd331a2174934c98a7151527a8731a6add762e"
+        }
+      ],
+      "caps_and_suite_frozen": true,
+      "failed_captures": []
+    },
+    "modified-4bit": {
+      "contract": "splash-quality-1",
+      "decision": "inconclusive",
+      "issues": [],
+      "samples": {
+        "measured": 70,
+        "errors": 0,
+        "truncated": 0
+      },
+      "per_case": [
+        {
+          "id": "if-ready",
+          "category": "instruction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "if-colors",
+          "category": "instruction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "if-five-words",
+          "category": "instruction",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "if-json-capital",
+          "category": "instruction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "if-backwards",
+          "category": "instruction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ex-invoice",
+          "category": "extraction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ex-meeting",
+          "category": "extraction",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "ex-contact",
+          "category": "extraction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ex-order",
+          "category": "extraction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ex-flight",
+          "category": "extraction",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-speed",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-percent",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-discount",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-marbles",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "ma-sum",
+          "category": "math",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-feathers",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-syllogism",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-weekday",
+          "category": "reasoning",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "re-bat-ball",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "re-sequence",
+          "category": "reasoning",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-weather",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-event",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-currency",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-weather-f",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "tl-none",
+          "category": "tools",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-slice",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-alias",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-copy",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-bool",
+          "category": "coding",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "code-range",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-dict",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-sort",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-set",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        },
+        {
+          "id": "code-closure",
+          "category": "coding",
+          "mlx_pass": false,
+          "splash_pass": false
+        },
+        {
+          "id": "code-exception",
+          "category": "coding",
+          "mlx_pass": true,
+          "splash_pass": true
+        }
+      ],
+      "categories": {
+        "coding": {
+          "cases": 10,
+          "mlx_score": 0.8,
+          "splash_score": 0.8
+        },
+        "extraction": {
+          "cases": 5,
+          "mlx_score": 0.8,
+          "splash_score": 0.8
+        },
+        "instruction": {
+          "cases": 5,
+          "mlx_score": 0.8,
+          "splash_score": 0.8
+        },
+        "math": {
+          "cases": 5,
+          "mlx_score": 1.0,
+          "splash_score": 1.0
+        },
+        "reasoning": {
+          "cases": 5,
+          "mlx_score": 0.8,
+          "splash_score": 0.8
+        },
+        "tools": {
+          "cases": 5,
+          "mlx_score": 1.0,
+          "splash_score": 1.0
+        }
+      },
+      "cases": 35,
+      "baseline_score": 0.8571428571428571,
+      "candidate_score": 0.8571428571428571,
+      "mean_difference": 0.0,
+      "difference_ci95": [
+        -0.1255221985142252,
+        0.1255221985142252
+      ],
+      "wins": 0,
+      "losses": 0,
+      "ties": 35,
+      "uncertainty_method": "Approximate 95% Bonferroni Wilson intervals on paired binary wins/losses; cases are sampling units.",
+      "scope": "Deterministic fixed-suite binary pass rate; no speed, broad quality or adoption verdict.",
+      "raw_runs": [
+        {
+          "backend": "mlx",
+          "status": "complete",
+          "samples": 35,
+          "sha256": "b6a891043338241a7f62bf4e17cb3dd00fe839d84d16847ec6006159132a450d"
+        },
+        {
+          "backend": "splash",
+          "status": "complete",
+          "samples": 35,
+          "sha256": "f3ea788d123d632b34e7bcf65a57b31c27d43c765f10e3bc681ed7901f6c9895"
+        }
+      ],
+      "caps_and_suite_frozen": true,
+      "failed_captures": []
+    }
+  },
+  "maintenance": [
+    {
+      "attempt": "quality-stock-1",
+      "restore_by": 1792998740.397891,
+      "serving_verified_at": 1792991572.777528,
+      "independent_review_at": 1792991592.189475,
+      "restored_within_bound": true,
+      "sidecars_and_config_restored": true,
+      "targets_unchanged": true,
+      "minimum_available_gib": 14.791732788085938,
+      "maximum_pressure": 1,
+      "maximum_new_swap_bytes": 0,
+      "raw_restoration_proof_sha256": "c0df2cd01e72dab1f3795141468f3934c3c78c56a2db6893e28d3ac00f6f10b0",
+      "raw_sidecar_review_sha256": "933e4f95d3fdf1b7f8ebdfebbd57da2f7b36288424092fa8c691ebdc75c9c504"
+    },
+    {
+      "attempt": "quality-stock-1-retry",
+      "restore_by": 1792998740.397891,
+      "serving_verified_at": 1792991831.782331,
+      "independent_review_at": 1792991853.0812428,
+      "restored_within_bound": true,
+      "sidecars_and_config_restored": true,
+      "targets_unchanged": true,
+      "minimum_available_gib": 15.693679809570312,
+      "maximum_pressure": 1,
+      "maximum_new_swap_bytes": 0,
+      "raw_restoration_proof_sha256": "fb610bd1aa88304efaa2f5852041ccba07771d8868bb4103b60d9fdfc0cf7bff",
+      "raw_sidecar_review_sha256": "a30d37aaa74e5867a87b740ce7807c399203a1b664ae46cd4ba40907152df6f8"
+    },
+    {
+      "attempt": "quality-stock-512",
+      "restore_by": 1792998740.397891,
+      "serving_verified_at": 1792992292.796578,
+      "independent_review_at": 1792992313.142744,
+      "restored_within_bound": true,
+      "sidecars_and_config_restored": true,
+      "targets_unchanged": true,
+      "minimum_available_gib": 14.282485961914062,
+      "maximum_pressure": 1,
+      "maximum_new_swap_bytes": 0,
+      "raw_restoration_proof_sha256": "3abe51cd52cfd67965e1c55aa99519a81a9f6e88e1520f1aa63e9eb939bf5e98",
+      "raw_sidecar_review_sha256": "a62dabc2c6b0676bb08baa841e40c0a9ef534d5f7c326991ba63825191fc3c1f"
+    },
+    {
+      "attempt": "quality-modified-512",
+      "restore_by": 1792999563.353337,
+      "serving_verified_at": 1792992565.546506,
+      "independent_review_at": 1792992586.397961,
+      "restored_within_bound": true,
+      "sidecars_and_config_restored": true,
+      "targets_unchanged": true,
+      "minimum_available_gib": 16.166244506835938,
+      "maximum_pressure": 1,
+      "maximum_new_swap_bytes": 0,
+      "raw_restoration_proof_sha256": "3eeba703539932f483a3f6d06c0fbce15548a6a02ddaad573a3b781322a9d8f0",
+      "raw_sidecar_review_sha256": "3253985332e890886b0af7a3e19e368b0cda7b5badac792d61302a50ca21a14c"
+    }
+  ],
+  "native_gate": "unassessed",
+  "original_256_pilot": {
+    "backend": "mlx",
+    "cohort": "stock-8bit",
+    "status": "failed",
+    "captured_cases": 15,
+    "expected_cases": 35,
+    "truncated_cases": [
+      "ma-sum"
+    ],
+    "raw_run_sha256": "f272e286148d5e8fc007a68f50a19c526cc984172577d8a6e73c2882e89e75e5",
+    "candidate_cases": 0,
+    "retained": true
+  },
+  "orchestration_failure": {
+    "attempt": "quality-stock-1",
+    "stage": "review metadata before quality capture",
+    "quality_cases_sent": 0,
+    "restored": true,
+    "retained": true
+  },
+  "grader_sha256": "ef32e08beed4196b235165010f997f7982f73466bcdf3ccec01695ef9a80c26e",
+  "post_capture_review": {
+    "runtime_files_unchanged": 57,
+    "original_generation_matches_ready_proof": true,
+    "intent_config_preserved": true,
+    "experiment_cleanup": true,
+    "raw_receipt_sha256": "ca8dc930973024e838ccb970c41ad8b1302c46a6cf391f8dbef1d06db7ac91b0"
+  },
+  "local_cleanup": {
+    "tunnel_port_closed": true,
+    "temporary_agent_bridge_closed": true
+  }
+}

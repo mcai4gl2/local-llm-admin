@@ -1,0 +1,406 @@
+{
+  "$defs": {
+    "Case": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "short",
+            "2k",
+            "8k",
+            "32k",
+            "long",
+            "tools",
+            "other"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "fresh",
+            "replay"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "max_tokens": {
+          "exclusiveMinimum": 0,
+          "maximum": 32768,
+          "title": "Max Tokens",
+          "type": "integer"
+        },
+        "messages": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "minItems": 1,
+          "title": "Messages",
+          "type": "array"
+        },
+        "primary": {
+          "title": "Primary",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "kind",
+        "max_tokens",
+        "messages",
+        "primary"
+      ],
+      "title": "Case",
+      "type": "object"
+    },
+    "Draft": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint": {
+          "minLength": 1,
+          "title": "Checkpoint",
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint",
+        "revision",
+        "sha256"
+      ],
+      "title": "Draft",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "preflight_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Preflight Sha256",
+          "type": "string"
+        },
+        "cache_control": {
+          "minLength": 1,
+          "title": "Cache Control",
+          "type": "string"
+        },
+        "native_timing_audit_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Native Timing Audit Sha256"
+        }
+      },
+      "required": [
+        "preflight_sha256",
+        "cache_control"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "ModelAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint": {
+          "minLength": 1,
+          "title": "Checkpoint",
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "weights_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Weights Sha256",
+          "type": "string"
+        },
+        "tokenizer_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Tokenizer Sha256",
+          "type": "string"
+        },
+        "template_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Template Sha256",
+          "type": "string"
+        },
+        "quantization": {
+          "minLength": 1,
+          "title": "Quantization",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint",
+        "revision",
+        "weights_sha256",
+        "tokenizer_sha256",
+        "template_sha256",
+        "quantization"
+      ],
+      "title": "ModelAsset",
+      "type": "object"
+    },
+    "Runtime": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "sha256"
+      ],
+      "title": "Runtime",
+      "type": "object"
+    },
+    "Settings": {
+      "additionalProperties": false,
+      "properties": {
+        "temperature": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Seed"
+        },
+        "reasoning": {
+          "title": "Reasoning",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "temperature",
+        "seed",
+        "reasoning"
+      ],
+      "title": "Settings",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "session": {
+      "exclusiveMinimum": 0,
+      "title": "Session",
+      "type": "integer"
+    },
+    "order": {
+      "enum": [
+        "mlx-first",
+        "splash-first"
+      ],
+      "title": "Order",
+      "type": "string"
+    },
+    "backend": {
+      "enum": [
+        "mlx",
+        "splash"
+      ],
+      "title": "Backend",
+      "type": "string"
+    },
+    "base_url": {
+      "title": "Base Url",
+      "type": "string"
+    },
+    "api_key_env": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Api Key Env"
+    },
+    "request_model": {
+      "minLength": 1,
+      "title": "Request Model",
+      "type": "string"
+    },
+    "response_model": {
+      "minLength": 1,
+      "title": "Response Model",
+      "type": "string"
+    },
+    "runtime": {
+      "$ref": "#/$defs/Runtime"
+    },
+    "draft": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Draft"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "model": {
+      "$ref": "#/$defs/ModelAsset"
+    },
+    "settings": {
+      "$ref": "#/$defs/Settings"
+    },
+    "context_tokens": {
+      "exclusiveMinimum": 0,
+      "title": "Context Tokens",
+      "type": "integer"
+    },
+    "kv_precision": {
+      "minLength": 1,
+      "title": "Kv Precision",
+      "type": "string"
+    },
+    "cache_policy": {
+      "enum": [
+        "disabled",
+        "isolated",
+        "replay"
+      ],
+      "title": "Cache Policy",
+      "type": "string"
+    },
+    "concurrency": {
+      "enum": [
+        1,
+        2,
+        4
+      ],
+      "title": "Concurrency",
+      "type": "integer"
+    },
+    "repeats": {
+      "exclusiveMinimum": 0,
+      "maximum": 1000,
+      "title": "Repeats",
+      "type": "integer"
+    },
+    "warmups": {
+      "const": 1,
+      "title": "Warmups",
+      "type": "integer"
+    },
+    "deadline_s": {
+      "exclusiveMinimum": 0,
+      "maximum": 7200,
+      "title": "Deadline S",
+      "type": "number"
+    },
+    "corpus_version": {
+      "minLength": 1,
+      "title": "Corpus Version",
+      "type": "string"
+    },
+    "corpus_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Corpus Sha256",
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/Case"
+      },
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    },
+    "rate_metric": {
+      "enum": [
+        "backend_decode_tok_s",
+        "client_output_wall_tok_s"
+      ],
+      "title": "Rate Metric",
+      "type": "string"
+    },
+    "evidence": {
+      "$ref": "#/$defs/Evidence"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "session",
+    "order",
+    "backend",
+    "base_url",
+    "api_key_env",
+    "request_model",
+    "response_model",
+    "runtime",
+    "draft",
+    "model",
+    "settings",
+    "context_tokens",
+    "kv_precision",
+    "cache_policy",
+    "concurrency",
+    "repeats",
+    "warmups",
+    "deadline_s",
+    "corpus_version",
+    "corpus_sha256",
+    "cases",
+    "rate_metric",
+    "evidence"
+  ],
+  "title": "Manifest",
+  "type": "object"
+}

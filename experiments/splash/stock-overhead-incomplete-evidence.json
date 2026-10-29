@@ -1,0 +1,45 @@
+{
+  "contract": "splash-stock-overhead-incomplete-1",
+  "cohort": "stock-8bit",
+  "decision": "inconclusive",
+  "scope": "Retained incomplete clean stock collector audit, no new speed or overhead eligibility verdict.",
+  "design_sha256": "4de1051e99ed44b77c4657018603e8c6501a8ea9f0f1910a91090def3e625bbc",
+  "attempts": [
+    {
+      "window": 0,
+      "status": "complete",
+      "requests": 36,
+      "native_traces": 18,
+      "restored": true,
+      "private_ledger_sha256": "6e25205972560e95ceec34e54ab913452f9f519b7951ead0d9f458f30d32a9d3"
+    },
+    {
+      "window": 1,
+      "status": "failed",
+      "requests": 0,
+      "native_traces": 0,
+      "restored": true,
+      "private_ledger_sha256": "37d5f6248df2a292c9a0c1413bc70844d029df0c882c157978fdcea6471bc0c2"
+    }
+  ],
+  "observed_requests": 36,
+  "review": {
+    "contract": "splash-expanded-overhead-1",
+    "backend": "mlx",
+    "decision": "inconclusive",
+    "native_gate": "unassessed",
+    "scope": "collector_overhead_only",
+    "threshold": 1.05,
+    "issues": [
+      "missing_or_duplicate_samples"
+    ],
+    "windows": 4,
+    "uncertainty": "10000 seed-0 hierarchical bootstrap draws over four independent ABBA windows, paired launches, categories and repetitions; 95% percentile bounds.",
+    "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+    "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67"
+  },
+  "failure": "Launcher subprocess lacked the temporary SSH environment. Window 2 failed authentication during readiness preflight before sending benchmark requests.",
+  "policy": "All original records and identities stay unchanged; do not pool with the independently frozen follow-up.",
+  "private_campaign_file_sha256": "6aab999254781bee5cd5f747ab7e05d86c2eb3018ab840e8c26ec1d5012dbd6f",
+  "private_campaign_sha256": "bca6bd585295eec7c37536f1ea73ab1676c2c99c86ab8c5fa0f570b04d071c95"
+}

@@ -1,7 +1,12 @@
 from dataclasses import replace
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from local_llm_admin.backend_types import EngineObservation
+from local_llm_admin.backends import BackendRegistry, ComfyBackend, MlxBackend, StrataBackend
+from local_llm_admin.config import Settings
 from local_llm_admin.engines import Target, TransitionRefused, plan_transition
 from local_llm_admin.sidecars import SidecarSpec
 
@@ -53,6 +58,28 @@ class Ops:
         return (lambda: True) if name == "qwen-embed" else None
 
 
+def registry(ops):
+    settings = Settings(mlx_model_bin=Path("mlx-model"), strata_enabled=True,
+                        admin_job_timeout_s=ops.job_timeout_s,
+                        engine_stop_timeout_s=ops.stop_timeout_s,
+                        comfyui_ready_timeout_s=ops.ready_timeout_s,
+                        strata_ready_timeout_s=ops.strata_ready_timeout_s)
+    return BackendRegistry((
+        ComfyBackend(settings, SimpleNamespace(argv=ops.comfy_argv, down_sync=ops.comfy_down,
+                     ready_sync=ops.comfy_ready, cancel_all_sync=ops.comfy_cancel_all)),
+        StrataBackend(settings, SimpleNamespace(argv=ops.strata_argv, down_sync=ops.strata_down,
+                      ready_sync=ops.strata_ready)),
+        MlxBackend(settings, SimpleNamespace(engine_running=lambda: not ops.mlx_down())),
+    ))
+
+
+def observations(mlx=False, name=None, comfy=False, strata=False, pack=None):
+    return [EngineObservation(k, ref, state="ready" if up else "absent",
+                              ownership="verified")
+            for k, up, ref in (("comfyui", comfy, None), ("strata", strata, pack),
+                               ("mlx", mlx, name))]
+
+
 def plan(
     target,
     mlx=False,
@@ -71,17 +98,14 @@ def plan(
     allowed = frozenset({"qwen", "qwen2", "big"}) if ok else frozenset()
     return plan_transition(
         target,
-        mlx_running=mlx,
-        mlx_name=name,
-        comfy_running=comfy,
-        comfy_queue=queue,
+        observations=observations(mlx, name, comfy, strata, pack),
+        registry=registry(Ops()),
+        queues={"comfyui": queue},
         force=force,
         ops=Ops(),
         sidecar=replace(spec, allowed_mlx=allowed) if dj else None,
         services=services,
         restore=restore,
-        strata_running=strata,
-        strata_pack=pack,
     )
 
 
@@ -273,10 +297,9 @@ def test_tts_sidecar_is_stopped_the_same_way():
 def test_defaults_keep_old_behaviour():
     t = plan_transition(
         Target("comfyui"),
-        mlx_running=True,
-        mlx_name="qwen",
-        comfy_running=False,
-        comfy_queue=0,
+        observations=observations(mlx=True, name="qwen"),
+        registry=registry(Ops()),
+        queues={"comfyui": 0},
         force=False,
         ops=Ops(),
     )
@@ -299,10 +322,9 @@ EMBED = SidecarSpec(
 def plan_svc(target, *, mlx=False, comfy=False, force=False, running=(EMBED,), restore=()):
     return plan_transition(
         target,
-        mlx_running=mlx,
-        mlx_name="qwen" if mlx else None,
-        comfy_running=comfy,
-        comfy_queue=0,
+        observations=observations(mlx, "qwen" if mlx else None, comfy),
+        registry=registry(Ops()),
+        queues={"comfyui": 0},
         force=force,
         ops=Ops(),
         services=list(running),
@@ -508,3 +530,19 @@ def test_conflict_with_strata_stops_every_other_engine():
     t = plan(Target("strata"), mlx=True, comfy=True, strata=True)
     assert labels(t.steps) == [*COMFY_DOWN, *MLX_DOWN]
     assert t.from_label == "conflict"
+
+
+@pytest.mark.parametrize(("source", "target"), [
+    ("mlx", "comfyui"), ("mlx", "strata"),
+    ("comfyui", "mlx"), ("comfyui", "strata"),
+    ("strata", "mlx"), ("strata", "comfyui"),
+])
+def test_pair_rollback_stops_target_before_restoring_source(source, target):
+    t = plan(Target(target, "gemma" if target == "mlx" else None),
+             **{source if source != "comfyui" else "comfy": True})
+    assert t.rollback_after == 2
+    assert t.rollback[0].optional
+    assert t.rollback[1].wait is not None and not t.rollback[1].optional
+    assert t.rollback[1].timeout_s == 30
+    assert t.rollback[2].argv is not None
+    assert all(s.timeout_s == 300 for s in t.steps if s.argv is not None)

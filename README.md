@@ -12,6 +12,32 @@ uv sync --all-extras
 .venv/bin/ruff check src tests && .venv/bin/mypy src
 ```
 
+### Private denylist setup
+
+The private pattern list is supplied separately; it must never be committed to this public
+repository. Copy it into the ignored workspace directory inside the devcontainer:
+
+```bash
+mkdir -p .private
+install -m 600 /path/to/private/public-denylist.txt .private/public-denylist.txt
+```
+
+On each container start, the devcontainer links
+`~/.config/local-llm-admin/public-denylist.txt` to this workspace copy, preserving an existing
+file or link. The patterns survive container rebuilds because `.private/` is in the mounted
+workspace. After the first copy, reopen the container or create the link in the current one:
+
+```bash
+mkdir -p "$HOME/.config/local-llm-admin"
+ln -s "$PWD/.private/public-denylist.txt" "$HOME/.config/local-llm-admin/public-denylist.txt"
+uv run python scripts/check_public.py --patterns-file ~/.config/local-llm-admin/public-denylist.txt --git .
+```
+
+Skip the `ln` command if a file or link already exists at that path. The pre-commit denylist
+hook permits an absent list for contributors; the required scan above fails if it is absent.
+GitHub Actions receives its separate copy through the `PUBLIC_DENYLIST` repository secret;
+keep that secret and the private source in sync when patterns change.
+
 ## Run
 
 ```bash
@@ -374,7 +400,7 @@ curl -s http://mac-mini.local:8082/v1/rerank -H 'Content-Type: application/json'
   -d '{"model": "qwen3-rerank", "query": "capital of france", "documents": ["Bread needs yeast.", "Paris is the capital of France."]}'
 ```
 
-**Correctness check:** `python -m local_llm_admin.embed_check --base http://mac-mini.local:8082 --reference tests/fixtures/embed/reference.json` compares live vectors and rankings with CPU references from the model cards' own code (`ops/embed-reference.py`). It must print `PASS`.
+**Correctness check:** `python -m local_llm_admin.embed_check --base http://mac-mini.local:8082 --reference tests/fixtures/embed/reference.json` compares live vectors and rankings with CPU references from the model cards' own code (`experiments/embed/reference.py`). It must print `PASS`.
 
 ### Roll back M8 (schema 13 → 12)
 
@@ -383,3 +409,9 @@ curl -s http://mac-mini.local:8082/v1/rerank -H 'Content-Type: application/json'
 3. `sqlite3 ~/local-llm-admin/data/admin.sqlite 'PRAGMA user_version = 12'`
 4. Run `ops/rollback-mac.sh`, and restore `~/.config/local-llm-admin/env.bak-pre-m8`. The M7 app ignores `embed_requests` and `embed_intent`.
 5. Remove the `qwen3-embed` and `qwen3-rerank` routes from `~/litellm/config.yaml` (backup `config.yaml.bak-20261010-204828`) and restart LiteLLM.
+
+
+## Repository navigation
+
+[Operations](ops/README.md) · [Experiments](experiments/README.md) · [Plans](plans/README.md) ·
+[Splash rollout evidence](docs/reports/splash/INDEX.md) · [Shared LiteLLM endpoint](docs/shared-inference.md).

@@ -28,14 +28,14 @@
 </header>
 <main>
 <div class="error" id="conflict-banner" hidden>
-  More than one engine (MLX, ComfyUI, Strata) is running and they compete for memory. Keep one:
-  <button data-keep="mlx">Keep MLX</button> <button data-keep="comfyui">Keep ComfyUI</button>
-  <button data-keep="strata" hidden>Keep Strata</button> <button data-keep="off">Stop all</button>
+  More than one engine is running and competing for memory. Keep one:
+  <span id="conflict-engine-controls"></span> <button data-keep="off">Stop all</button>
 </div>
 {% block content %}{% endblock %}
 </main>
 <footer class="muted">local-llm-admin {{ version }}</footer>
 <script src="/static/theme.js"></script>
+<script src="/static/engine_ui.js"></script>
 <script src="/static/app.js"></script>
 {% block scripts %}{% endblock %}
 </body>

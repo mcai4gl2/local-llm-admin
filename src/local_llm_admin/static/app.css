@@ -41,7 +41,7 @@ code { font-size: 12px; }
 .top nav { display: flex; gap: 4px; flex-wrap: wrap; }
 .top nav a { color: var(--ink-2); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
 .top nav a[aria-current="page"] { color: var(--ink); background: var(--log-bg); font-weight: 600; }
-.top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 100%; }
 .top-right form { margin: 0; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
   display: grid; gap: 12px; min-width: 0; }
@@ -205,3 +205,7 @@ fieldset.question input:not([type]), fieldset.question textarea { width: 100%; b
 .decision-layout input[type=number] { width: 6em; }
 .prob-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 code.wrap { overflow-wrap: anywhere; }
+
+.badge[data-state^="splash"]::before { background: var(--warning); }
+.badge[data-state="splash"]::before, .badge[data-state="splash-ready"]::before { background: var(--good); }
+.badge[data-state="splash-unknown"]::before { background: var(--critical); }

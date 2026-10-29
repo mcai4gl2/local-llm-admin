@@ -212,7 +212,7 @@ def test_v15_adds_token_usage_and_is_rerunnable(tmp_path):
     path = tmp_path / "admin.sqlite"
     conn = sqlite3.connect(path, isolation_level=None)
     migrate(conn)
-    assert SCHEMA_VERSION == 15
+    assert SCHEMA_VERSION >= 15
     assert {"requests", "origin"} <= _columns(path, "inference_requests")
     assert {"date", "source", "model", "origin", "cached_tokens"} <= _columns(
         path, "token_usage_daily"

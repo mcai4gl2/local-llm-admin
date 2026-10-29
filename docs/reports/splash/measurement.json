@@ -1,0 +1,94 @@
+{
+  "contract": "splash-phase3-integrated-1",
+  "status": "frozen prospective design; not executed; approval required",
+  "files_sha256": {
+    "ops/splash-phase0/corpus.json": "70eb3f6ce5d280abaa9eeca6e612c5a9ee4715d4efc609059d03bb70697e7bc9",
+    "ops/splash-phase0/native-comparison-design.json": "8f2e7f899184ac36b0979cff1d7c8572f100e7cf426e463daad6f49990e8f879",
+    "ops/splash-phase0/reasoning-lifecycle-design.json": "4c974c6e66c1ad1ca14793a2d05cd558eaa51c53b104911c44bf8430386819db",
+    "ops/splash-phase0/quality-suite-512.json": "39eacfa01f7f4dd839f70f980d46cf66e3728e3e5176d9842ceabfdd82f330a2"
+  },
+  "checkpoint_identities": {
+    "stock-8bit": {
+      "weights_sha256": "b5d511fe911490ff389642abb1b9671a3c75736c8faa990dfaf9dd113b646711",
+      "tokenizer_sha256": "ac82a3ef50a623a2cc41cb5094c6fee5bdc9068d88672885e745f66c0ad27760",
+      "template_sha256": "cd13b5b6d2a8c4eeab703d83ded6d1d4d92df3ab0cd23b11a8620219a38720c6"
+    },
+    "modified-4bit": {
+      "weights_sha256": "fe4b166f932a8215bb3be532d49c581396d2d91b6c0687106c5b255118d95e0d",
+      "tokenizer_sha256": "5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836",
+      "template_sha256": "b6e05e626073de17d62afe10ce1078e70cf16fcc2ffb521f2f6a2e05af6abf31"
+    }
+  },
+  "runtime_pins": {
+    "mlx": {
+      "version": "mlx-vlm-0.7.3-mlx-0.32.2",
+      "sha256": "9c65e7603fc136cec2801abb606a222a25e860406894339bc6826ec56167dd6e"
+    },
+    "splash": {
+      "version": "1.4.0",
+      "sha256": "4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d"
+    }
+  },
+  "settings": {
+    "context_tokens": 32768,
+    "reasoning": true,
+    "kv": "bf16",
+    "state": "fp32",
+    "disk_cache_bytes": 0,
+    "idle_release": "off",
+    "concurrency": 1,
+    "temperature": 0,
+    "seed": 0,
+    "gpu_sidecars": "stopped"
+  },
+  "measurement": {
+    "windows_per_profile": 1,
+    "max_window_s": 1800,
+    "restoration_reserve_s": 600,
+    "request_cap_per_window": 36,
+    "warmups_per_condition": 1,
+    "measured_repeats_per_condition": 3,
+    "completion_cap": 2048,
+    "request_deadline_s": 120,
+    "cases": [
+      "short",
+      "2k"
+    ],
+    "conditions": [
+      "mlx-direct",
+      "splash-direct-monitor-off",
+      "splash-direct-monitor-on",
+      "splash-gateway"
+    ],
+    "condition_order": [
+      "mlx-direct",
+      "splash-direct-monitor-on",
+      "splash-direct-monitor-off",
+      "splash-gateway"
+    ],
+    "context_smoke": "one direct and one gateway 32K request per profile, separately labeled and inside the 36-request cap; failures/timeouts retained"
+  },
+  "boundaries": {
+    "client": "HTTP dispatch to first nonempty emission, and to EOF, measured by the existing capture runner",
+    "runtime": "final response request-lifecycle metrics only; native execution counters reported separately",
+    "admin_enabled": "monitor on; direct inference remains direct to runtime",
+    "gateway": "actual authenticated gateway public route, recorded separately, never pooled with direct samples",
+    "ingestion_overhead": "Isolated ingestion on/off is unassessed without a separately reviewed recording-only toggle; the monitor-off condition compares whole-admin overhead and cannot be relabeled ingestion-only overhead.",
+    "monitor_off_method": "After owned readiness, stop the admin service only; the independently owned Splash runtime remains alive. This measures whole-admin overhead, not isolated ingestion. Exact commands need live worksheet approval."
+  },
+  "review_thresholds": {
+    "proposed_decode_improvement": 0.25,
+    "direct_ttft_regression_max_fraction": 0.15,
+    "monitor_ttft_or_wall_regression_investigate_fraction": 0.05,
+    "minimum_samples_note": "Three repeats are a bounded integration diagnostic, not a new statistical/adoption pass. Compare only identical boundaries/conditions; retained frozen Phase 0 results remain unchanged.",
+    "quality": "required functional/32K and gateway checks; reasoning-off remains unqualified",
+    "memory": "no pressure escalation or sidecar residency; stock reclamation remains inconclusive"
+  },
+  "accounting": "Keep failed/partial/cancelled/unassessed attempts; missing usage remains null. Never infer rates from chunks; stop before request/time cap and reserve restoration time.",
+  "private_inputs_pending": [
+    "deployed revision/hashes and original intent",
+    "both actual checkpoint receipts and prepared paths",
+    "gateway public/upstream names and Host/auth file references",
+    "backup/restore paths and reviewed command set"
+  ]
+}

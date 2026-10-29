@@ -1,0 +1,1645 @@
+{
+  "contract": "splash-phase3-integrated-1",
+  "scope": "One frozen window per profile; three measured repeats per condition/case; whole-admin overhead only; no statistical adoption or all-client usage claim.",
+  "profiles": [
+    {
+      "profile": "stock",
+      "attempts": 24,
+      "passed": 24,
+      "not_attempted": [
+        "splash-direct-monitor-off-code-2k-2",
+        "splash-direct-monitor-off-code-2k-3",
+        "splash-gateway-instruction-short-0",
+        "splash-gateway-instruction-short-1",
+        "splash-gateway-instruction-short-2",
+        "splash-gateway-instruction-short-3",
+        "splash-gateway-code-2k-0",
+        "splash-gateway-code-2k-1",
+        "splash-gateway-code-2k-2",
+        "splash-gateway-code-2k-3",
+        "context-splash-direct-monitor-on",
+        "context-splash-gateway"
+      ],
+      "raw_samples": [
+        {
+          "artifact": "stock/request-01.json",
+          "sha256": "4bf1da9a280cf9660891b180de9d76f283fc3c0cba2a50100f15444b1e81c548",
+          "number": 1,
+          "key": "original-before",
+          "kind": "original-before",
+          "condition": null,
+          "case": null,
+          "rep": null,
+          "warmup": null,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-02.json",
+          "sha256": "6a4c4eba49c4eaf799fbb7d2db922fba13969a8030c3d36f9e9378391470ff8e",
+          "number": 2,
+          "key": "mlx-direct-instruction-short-0",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "instruction-short",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-03.json",
+          "sha256": "ac454313a6fbb1eff552e86b517ddfb2022fa4cc0e9a11979cf91bfd3de18abc",
+          "number": 3,
+          "key": "mlx-direct-instruction-short-1",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "instruction-short",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-04.json",
+          "sha256": "cd741099603f733c44c9fc61ed2799f303c323cc4d5cea2d8c1a4ea589cca215",
+          "number": 4,
+          "key": "mlx-direct-instruction-short-2",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "instruction-short",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-05.json",
+          "sha256": "2df13996db39d80ef55d7998cc6e8e8d3043d323fd6cc8abd1be373f39608f5a",
+          "number": 5,
+          "key": "mlx-direct-instruction-short-3",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "instruction-short",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-06.json",
+          "sha256": "664f703312582ec12d84870f8e4b13b786d3520c61bcbe2ec9a65113aeecad03",
+          "number": 6,
+          "key": "mlx-direct-code-2k-0",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "code-2k",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-07.json",
+          "sha256": "6ea53974fe4e8a036d116471b1721bcb343a0e7a2261fba86cd9a750b041ae6d",
+          "number": 7,
+          "key": "mlx-direct-code-2k-1",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "code-2k",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-08.json",
+          "sha256": "db8a0ec17e20679022fa447a703da98a5374734d588a334aab257df49b9a1f45",
+          "number": 8,
+          "key": "mlx-direct-code-2k-2",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "code-2k",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-09.json",
+          "sha256": "6cc7dd5463b34b09ec318829e31bc559742e95ab2db7905cd3abf2d1eeac88d2",
+          "number": 9,
+          "key": "mlx-direct-code-2k-3",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "code-2k",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-10.json",
+          "sha256": "216e12619fe303bd0e523e7a541e6165a26e26efa2a24832fff62bcaf08a3117",
+          "number": 10,
+          "key": "splash-direct-monitor-on-instruction-short-0",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "instruction-short",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-11.json",
+          "sha256": "13d1d306280d9548bd8b5b781c8a6a2a790c1af49a1e3372802bdd718f627ad9",
+          "number": 11,
+          "key": "splash-direct-monitor-on-instruction-short-1",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "instruction-short",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-12.json",
+          "sha256": "9214024fdb127fc7c574b046ed689ca86ed71d02e9feadae7a1478b4fd5d71c4",
+          "number": 12,
+          "key": "splash-direct-monitor-on-instruction-short-2",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "instruction-short",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-13.json",
+          "sha256": "6d7f53fd5d86232fe4d2e85854387bac415e081e5b2cc3e07a0a7e59211f8a3b",
+          "number": 13,
+          "key": "splash-direct-monitor-on-instruction-short-3",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "instruction-short",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-14.json",
+          "sha256": "7af9416a7c50e4d0f08585386665c65821ec6ddce46588864e989c843350d9a9",
+          "number": 14,
+          "key": "splash-direct-monitor-on-code-2k-0",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "code-2k",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-15.json",
+          "sha256": "024c8dc1bd3c879c19170691ddcbe2ff0c6115a9951548a0798d0e1c4026e780",
+          "number": 15,
+          "key": "splash-direct-monitor-on-code-2k-1",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "code-2k",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-16.json",
+          "sha256": "5a4b07849e236a6bc737093389ea01709fce82f2c772af60c1f865b1f703012e",
+          "number": 16,
+          "key": "splash-direct-monitor-on-code-2k-2",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "code-2k",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-17.json",
+          "sha256": "0750b4c0963ef1078f7caa96bb63882ae286b9de52e4ed7be03303cc051f6d07",
+          "number": 17,
+          "key": "splash-direct-monitor-on-code-2k-3",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "code-2k",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-18.json",
+          "sha256": "fdf32a25aa821b27c5e26c5d69d75b2f08bcedff32b95a02cc9459fe113d6cd8",
+          "number": 18,
+          "key": "splash-direct-monitor-off-instruction-short-0",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "instruction-short",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-19.json",
+          "sha256": "47d58e1c154aa23d006a35a6d3dd22687e6697feac060f613a1d24c823652cb4",
+          "number": 19,
+          "key": "splash-direct-monitor-off-instruction-short-1",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "instruction-short",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-20.json",
+          "sha256": "e95b8198ad3115bfd834071cd61d56d7fb6fc7c5181dd0c298f732edd91a170e",
+          "number": 20,
+          "key": "splash-direct-monitor-off-instruction-short-2",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "instruction-short",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-21.json",
+          "sha256": "1dc8a9df2e641c428fcba494ebb3340e252ba2fedbaef9662ffa9d7004dbad19",
+          "number": 21,
+          "key": "splash-direct-monitor-off-instruction-short-3",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "instruction-short",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-22.json",
+          "sha256": "1d41a8c002e44acea2f174ef3af131c304420f4f92fdf19548f35ff667829012",
+          "number": 22,
+          "key": "splash-direct-monitor-off-code-2k-0",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "code-2k",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-23.json",
+          "sha256": "c3f46ab96e19d0dbe9c244b08c14f0c19e08ae31efe50359237d65454ad82115",
+          "number": 23,
+          "key": "splash-direct-monitor-off-code-2k-1",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "code-2k",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "stock/request-24.json",
+          "sha256": "6e7078fec8c0683b71cc6d2843d445bc3703d1edec1aa204583d21546b73dab1",
+          "number": 24,
+          "key": "original-after",
+          "kind": "original-after",
+          "condition": null,
+          "case": null,
+          "rep": null,
+          "warmup": null,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        }
+      ],
+      "cases": {
+        "instruction-short": {
+          "mlx-direct": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 0.9737844570190646,
+                "min": 0.8496349900087807,
+                "max": 1.412169830990024,
+                "samples": [
+                  0.9737844570190646,
+                  1.412169830990024,
+                  0.8496349900087807
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 52.17496433202177,
+                "min": 52.098916204995476,
+                "max": 52.34174849902047,
+                "samples": [
+                  52.17496433202177,
+                  52.098916204995476,
+                  52.34174849902047
+                ]
+              },
+              "completion_tokens": {
+                "median": 512,
+                "min": 512,
+                "max": 512,
+                "samples": [
+                  512,
+                  512,
+                  512
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 9.966506054606509,
+                "min": 9.963276365879032,
+                "max": 9.973016541552848,
+                "samples": [
+                  9.966506054606509,
+                  9.973016541552848,
+                  9.963276365879032
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 9.813135601623516,
+                "min": 9.781866572714545,
+                "max": 9.827459711165876,
+                "samples": [
+                  9.813135601623516,
+                  9.827459711165876,
+                  9.781866572714545
+                ]
+              }
+            },
+            "prompt_tokens": [
+              144,
+              144,
+              143
+            ]
+          },
+          "splash-direct-monitor-on": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 0.7401934619992971,
+                "min": 0.5990747569885571,
+                "max": 0.7495973649783991,
+                "samples": [
+                  0.7495973649783991,
+                  0.7401934619992971,
+                  0.5990747569885571
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 22.20456236298196,
+                "min": 22.029572342988104,
+                "max": 23.15314504498383,
+                "samples": [
+                  23.15314504498383,
+                  22.029572342988104,
+                  22.20456236298196
+                ]
+              },
+              "completion_tokens": {
+                "median": 512,
+                "min": 512,
+                "max": 512,
+                "samples": [
+                  512,
+                  512,
+                  512
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 23.623335121186788,
+                "min": 22.784479159291067,
+                "max": 24.026664990285656,
+                "samples": [
+                  22.784479159291067,
+                  24.026664990285656,
+                  23.623335121186788
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 23.058324304268837,
+                "min": 22.11362642117278,
+                "max": 23.241486127304096,
+                "samples": [
+                  22.11362642117278,
+                  23.241486127304096,
+                  23.058324304268837
+                ]
+              }
+            },
+            "prompt_tokens": [
+              144,
+              144,
+              143
+            ]
+          },
+          "splash-direct-monitor-off": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 0.6701924630033318,
+                "min": 0.6016144379973412,
+                "max": 0.8639760970254429,
+                "samples": [
+                  0.6701924630033318,
+                  0.8639760970254429,
+                  0.6016144379973412
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 22.206160378991626,
+                "min": 21.752512913022656,
+                "max": 22.967819285026053,
+                "samples": [
+                  22.967819285026053,
+                  21.752512913022656,
+                  22.206160378991626
+                ]
+              },
+              "completion_tokens": {
+                "median": 512,
+                "min": 512,
+                "max": 512,
+                "samples": [
+                  512,
+                  512,
+                  512
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 23.696200061591572,
+                "min": 22.909302028437125,
+                "max": 24.158675314117147,
+                "samples": [
+                  22.909302028437125,
+                  24.158675314117147,
+                  23.696200061591572
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 23.0566649642134,
+                "min": 22.292059757445067,
+                "max": 23.5375104498147,
+                "samples": [
+                  22.292059757445067,
+                  23.5375104498147,
+                  23.0566649642134
+                ]
+              }
+            },
+            "prompt_tokens": [
+              144,
+              144,
+              143
+            ]
+          },
+          "splash-gateway": {
+            "measured": 0,
+            "truncated": 0,
+            "metrics": {
+              "ttft_s": null,
+              "first_answer_s": null,
+              "total_s": null,
+              "completion_tokens": null,
+              "backend_decode_tok_s": null,
+              "client_output_wall_tok_s": null
+            },
+            "prompt_tokens": []
+          },
+          "comparisons": {
+            "monitor_ttft_s": {
+              "ratio": 1.1044490991173939,
+              "investigate": true,
+              "method": "ratio of same-case same-boundary three-sample medians; not statistical adoption proof"
+            },
+            "native_vs_mlx_ttft_s": 0.760120431851179,
+            "monitor_total_s": {
+              "ratio": 0.9999280372661283,
+              "investigate": false,
+              "method": "ratio of same-case same-boundary three-sample medians; not statistical adoption proof"
+            },
+            "native_vs_mlx_total_s": 0.42557887000517164,
+            "native_vs_mlx_backend_decode_tok_s": 2.3702724898529617,
+            "native_vs_mlx_client_output_wall_tok_s": 2.3497407190066744
+          }
+        },
+        "code-2k": {
+          "mlx-direct": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 5.91030611898168,
+                "min": 5.4078624740068335,
+                "max": 6.752120886987541,
+                "samples": [
+                  6.752120886987541,
+                  5.91030611898168,
+                  5.4078624740068335
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 108.97349917999236,
+                "min": 108.61754804599332,
+                "max": 109.14367316500284,
+                "samples": [
+                  108.97349917999236,
+                  109.14367316500284,
+                  108.61754804599332
+                ]
+              },
+              "completion_tokens": {
+                "median": 1024,
+                "min": 1024,
+                "max": 1024,
+                "samples": [
+                  1024,
+                  1024,
+                  1024
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 9.912704317698198,
+                "min": 9.91012531887923,
+                "max": 9.91633573561217,
+                "samples": [
+                  9.91633573561217,
+                  9.91012531887923,
+                  9.912704317698198
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 9.396780021798248,
+                "min": 9.38212880605477,
+                "max": 9.427574258686032,
+                "samples": [
+                  9.396780021798248,
+                  9.38212880605477,
+                  9.427574258686032
+                ]
+              }
+            },
+            "prompt_tokens": [
+              1813,
+              1812,
+              1812
+            ]
+          },
+          "splash-direct-monitor-on": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 3.4552699780033436,
+                "min": 3.455080021987669,
+                "max": 3.458407418016577,
+                "samples": [
+                  3.458407418016577,
+                  3.455080021987669,
+                  3.4552699780033436
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 40.982854945003055,
+                "min": 24.26970541800256,
+                "max": 41.34275357800652,
+                "samples": [
+                  41.34275357800652,
+                  24.26970541800256,
+                  40.982854945003055
+                ]
+              },
+              "completion_tokens": {
+                "median": 1024,
+                "min": 1024,
+                "max": 1024,
+                "samples": [
+                  1024,
+                  1024,
+                  1024
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 27.274781425153986,
+                "min": 26.997667749863417,
+                "max": 49.14873242392324,
+                "samples": [
+                  26.997667749863417,
+                  49.14873242392324,
+                  27.274781425153986
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 24.98605822786521,
+                "min": 24.76854856965179,
+                "max": 42.19251871266747,
+                "samples": [
+                  24.76854856965179,
+                  42.19251871266747,
+                  24.98605822786521
+                ]
+              }
+            },
+            "prompt_tokens": [
+              1813,
+              1812,
+              1812
+            ]
+          },
+          "splash-direct-monitor-off": {
+            "measured": 1,
+            "truncated": 1,
+            "metrics": {
+              "ttft_s": null,
+              "first_answer_s": null,
+              "total_s": null,
+              "completion_tokens": null,
+              "backend_decode_tok_s": null,
+              "client_output_wall_tok_s": null
+            },
+            "prompt_tokens": [
+              1813
+            ]
+          },
+          "splash-gateway": {
+            "measured": 0,
+            "truncated": 0,
+            "metrics": {
+              "ttft_s": null,
+              "first_answer_s": null,
+              "total_s": null,
+              "completion_tokens": null,
+              "backend_decode_tok_s": null,
+              "client_output_wall_tok_s": null
+            },
+            "prompt_tokens": []
+          },
+          "comparisons": {
+            "native_vs_mlx_ttft_s": 0.5846177691044321,
+            "native_vs_mlx_total_s": 0.3760809302572854,
+            "native_vs_mlx_backend_decode_tok_s": 2.751497527920553,
+            "native_vs_mlx_client_output_wall_tok_s": 2.6590021443413194
+          }
+        }
+      },
+      "decision": "inconclusive; bounded diagnostic, not statistical adoption proof",
+      "all_frozen_attempts_pass": false,
+      "contexts": [],
+      "stop_reason": "normal_work_reserve_guard",
+      "restored_before_original_check_dispatch_s": 1124.98,
+      "original_check_latest_completion_bound_s": 1244.98,
+      "restoration": {
+        "schema": 16,
+        "integrity": "ok",
+        "actual_services_and_semantic_intents": "original",
+        "original_gateway": "pass_unchanged_projection",
+        "splash_enabled": false,
+        "active_jobs": 0,
+        "active_splash_receipt": false,
+        "owned_splash_members": 0,
+        "locks_clear": true,
+        "database_totals": {
+          "engine_readings": 57,
+          "backend_availability": 84
+        }
+      },
+      "on_off_identity": {
+        "same_members_instance_fingerprint": true,
+        "restarts": 0,
+        "thermal": "nominal",
+        "pressure": "normal",
+        "cache_reuse_observed": false
+      }
+    },
+    {
+      "profile": "modified",
+      "attempts": 26,
+      "passed": 26,
+      "not_attempted": [
+        "splash-gateway-instruction-short-0",
+        "splash-gateway-instruction-short-1",
+        "splash-gateway-instruction-short-2",
+        "splash-gateway-instruction-short-3",
+        "splash-gateway-code-2k-0",
+        "splash-gateway-code-2k-1",
+        "splash-gateway-code-2k-2",
+        "splash-gateway-code-2k-3",
+        "context-splash-direct-monitor-on",
+        "context-splash-gateway"
+      ],
+      "raw_samples": [
+        {
+          "artifact": "modified/request-01.json",
+          "sha256": "e86b90a8f965100ac6aacbc5b8f22ee04e1d3e4a33fa29dd4fc1fce04a16fcbe",
+          "number": 1,
+          "key": "original-before",
+          "kind": "original-before",
+          "condition": null,
+          "case": null,
+          "rep": null,
+          "warmup": null,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-02.json",
+          "sha256": "a699cc97561b85056e31259398d345812e33a9869aa2eaef1e4fa5eed0f2ddab",
+          "number": 2,
+          "key": "mlx-direct-instruction-short-0",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "instruction-short",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-03.json",
+          "sha256": "1f273573db5cf3995c34581b7c61a3e6d570b1dd331384237e504b6f817aa53e",
+          "number": 3,
+          "key": "mlx-direct-instruction-short-1",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "instruction-short",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-04.json",
+          "sha256": "fd62e84a2ac0a5096056b9412b03cda8318b113f3372ab1996c8c43cea14e65c",
+          "number": 4,
+          "key": "mlx-direct-instruction-short-2",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "instruction-short",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-05.json",
+          "sha256": "5ee1fa1944112bbee6179b489fbf6e218a96966fe630a5294e89d7ee6d4aefcc",
+          "number": 5,
+          "key": "mlx-direct-instruction-short-3",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "instruction-short",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-06.json",
+          "sha256": "2aa63c9240af51db6b9246018cf8e980401d21ebbe9231248601248fd2a08efe",
+          "number": 6,
+          "key": "mlx-direct-code-2k-0",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "code-2k",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-07.json",
+          "sha256": "af690158bbabc5f341ec251fd7b3334ec1b54c6bae0d1887a06f341d10c92be9",
+          "number": 7,
+          "key": "mlx-direct-code-2k-1",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "code-2k",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-08.json",
+          "sha256": "88d4ddf69f5b69ae15ba0128f03bbcca5f3be53e9c613044cd6e99a2f0751d0e",
+          "number": 8,
+          "key": "mlx-direct-code-2k-2",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "code-2k",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-09.json",
+          "sha256": "c57d54e59523bc3243689b13d3bc59ea5d954ef2718461b1c6ae019a1460a165",
+          "number": 9,
+          "key": "mlx-direct-code-2k-3",
+          "kind": "sample",
+          "condition": "mlx-direct",
+          "case": "code-2k",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-10.json",
+          "sha256": "3b8cc14272df910c891465f746a306fc84fd1ffbac9b667480c894e1f2e5ce93",
+          "number": 10,
+          "key": "splash-direct-monitor-on-instruction-short-0",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "instruction-short",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-11.json",
+          "sha256": "c1176f6d5b0235e3e47d67ee9e990d183ed44669238a12ec9ef4eeb4f0e4b920",
+          "number": 11,
+          "key": "splash-direct-monitor-on-instruction-short-1",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "instruction-short",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-12.json",
+          "sha256": "4c6f225d5b7a73ee406249b38205b20bd193912e90b1aaf9d85ce65c439a9a10",
+          "number": 12,
+          "key": "splash-direct-monitor-on-instruction-short-2",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "instruction-short",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-13.json",
+          "sha256": "504b498089bb3ac6a5da29061ebf6bd1f1b1c39d6049bf2def419a32fe468f7c",
+          "number": 13,
+          "key": "splash-direct-monitor-on-instruction-short-3",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "instruction-short",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-14.json",
+          "sha256": "053bcebd6d2c86a96b808a70f46fe075bb0d216ea0cd1e6551705dc434ae8b86",
+          "number": 14,
+          "key": "splash-direct-monitor-on-code-2k-0",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "code-2k",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-15.json",
+          "sha256": "3f6b90253d26d7b951e608e26b7cec26005a33cf5db8a5cc4b778b9f7a259518",
+          "number": 15,
+          "key": "splash-direct-monitor-on-code-2k-1",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "code-2k",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-16.json",
+          "sha256": "014db69f1f721d9337df1c09611b132ca4135418ecb89979e3f74f6ad25d795b",
+          "number": 16,
+          "key": "splash-direct-monitor-on-code-2k-2",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "code-2k",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-17.json",
+          "sha256": "d0f833231a681581c33df32f3e943115d849206af50e2958b1dff19780c762ec",
+          "number": 17,
+          "key": "splash-direct-monitor-on-code-2k-3",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-on",
+          "case": "code-2k",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-18.json",
+          "sha256": "256528fd4fff4cf00d618557d269d2cb5affb628923831fd0e3ecce9ad857b86",
+          "number": 18,
+          "key": "splash-direct-monitor-off-instruction-short-0",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "instruction-short",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-19.json",
+          "sha256": "882507ccfa1dae1558579010e429f1818f639d0438084e2fbc8aca73f97bd233",
+          "number": 19,
+          "key": "splash-direct-monitor-off-instruction-short-1",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "instruction-short",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-20.json",
+          "sha256": "9ffbf06276e78450cffe9667ea3826b1bf45a4c15c466ae78985cd4115f234cc",
+          "number": 20,
+          "key": "splash-direct-monitor-off-instruction-short-2",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "instruction-short",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-21.json",
+          "sha256": "cd8f62763f96ccfb572843dea64e2ede3a7a6512fea1134cd7695578752353ea",
+          "number": 21,
+          "key": "splash-direct-monitor-off-instruction-short-3",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "instruction-short",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-22.json",
+          "sha256": "b58f5d774a7036ff7b1ab3f24615b3fee93c254e0713308f743bc06ce705c070",
+          "number": 22,
+          "key": "splash-direct-monitor-off-code-2k-0",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "code-2k",
+          "rep": 0,
+          "warmup": true,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-23.json",
+          "sha256": "892fde71def2cb12e2b5188478e2aa8337f1e34998c665dcaf9268ba4ec110ce",
+          "number": 23,
+          "key": "splash-direct-monitor-off-code-2k-1",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "code-2k",
+          "rep": 1,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-24.json",
+          "sha256": "7fd70a79b6590e90e65072148a999600cd3caed7c431402adfeaf4fbe0ed8038",
+          "number": 24,
+          "key": "splash-direct-monitor-off-code-2k-2",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "code-2k",
+          "rep": 2,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-25.json",
+          "sha256": "0f5052732c30114f36f24cec982a948296479c1511764ccbe21137d59fda9337",
+          "number": 25,
+          "key": "splash-direct-monitor-off-code-2k-3",
+          "kind": "sample",
+          "condition": "splash-direct-monitor-off",
+          "case": "code-2k",
+          "rep": 3,
+          "warmup": false,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        },
+        {
+          "artifact": "modified/request-26.json",
+          "sha256": "0f5e0c3735daf910010ac9da9f88131f65420b2f771674cd3bff12397dc0aa7c",
+          "number": 26,
+          "key": "original-after",
+          "kind": "original-after",
+          "condition": null,
+          "case": null,
+          "rep": null,
+          "warmup": null,
+          "status": "pass",
+          "error_type": null,
+          "measurement_error": null
+        }
+      ],
+      "cases": {
+        "instruction-short": {
+          "mlx-direct": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 0.6589385030092672,
+                "min": 0.650243624986615,
+                "max": 0.7302894050080795,
+                "samples": [
+                  0.7302894050080795,
+                  0.650243624986615,
+                  0.6589385030092672
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 28.848576972988667,
+                "min": 28.77985651299241,
+                "max": 28.85419439600082,
+                "samples": [
+                  28.77985651299241,
+                  28.848576972988667,
+                  28.85419439600082
+                ]
+              },
+              "completion_tokens": {
+                "median": 512,
+                "min": 512,
+                "max": 512,
+                "samples": [
+                  512,
+                  512,
+                  512
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 18.126495152230014,
+                "min": 18.12040654652749,
+                "max": 18.161042807621573,
+                "samples": [
+                  18.161042807621573,
+                  18.12040654652749,
+                  18.126495152230014
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 17.74784248385606,
+                "min": 17.744387279478612,
+                "max": 17.790220731950562,
+                "samples": [
+                  17.790220731950562,
+                  17.74784248385606,
+                  17.744387279478612
+                ]
+              }
+            },
+            "prompt_tokens": [
+              139,
+              145,
+              145
+            ]
+          },
+          "splash-direct-monitor-on": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 0.5216880709922407,
+                "min": 0.50466715201037,
+                "max": 0.5418462509987876,
+                "samples": [
+                  0.50466715201037,
+                  0.5418462509987876,
+                  0.5216880709922407
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 12.849431814975105,
+                "min": 11.788432668021414,
+                "max": 13.185905824007932,
+                "samples": [
+                  11.788432668021414,
+                  13.185905824007932,
+                  12.849431814975105
+                ]
+              },
+              "completion_tokens": {
+                "median": 512,
+                "min": 512,
+                "max": 512,
+                "samples": [
+                  512,
+                  512,
+                  512
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 41.446883952699295,
+                "min": 40.40595730885254,
+                "max": 45.258010069951524,
+                "samples": [
+                  45.258010069951524,
+                  40.40595730885254,
+                  41.446883952699295
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 39.84611984191395,
+                "min": 38.82933844922416,
+                "max": 43.432406530929846,
+                "samples": [
+                  43.432406530929846,
+                  38.82933844922416,
+                  39.84611984191395
+                ]
+              }
+            },
+            "prompt_tokens": [
+              139,
+              145,
+              145
+            ]
+          },
+          "splash-direct-monitor-off": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 0.5422864340071101,
+                "min": 0.5161913369956892,
+                "max": 0.5686675859906245,
+                "samples": [
+                  0.5161913369956892,
+                  0.5422864340071101,
+                  0.5686675859906245
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 12.751628527999856,
+                "min": 11.908444461005274,
+                "max": 13.297536044003209,
+                "samples": [
+                  11.908444461005274,
+                  13.297536044003209,
+                  12.751628527999856
+                ]
+              },
+              "completion_tokens": {
+                "median": 512,
+                "min": 512,
+                "max": 512,
+                "samples": [
+                  512,
+                  512,
+                  512
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 41.862245685833436,
+                "min": 40.04751782976623,
+                "max": 44.80840679369104,
+                "samples": [
+                  44.80840679369104,
+                  40.04751782976623,
+                  41.862245685833436
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 40.15173425698194,
+                "min": 38.50337373072184,
+                "max": 42.994700246246815,
+                "samples": [
+                  42.994700246246815,
+                  38.50337373072184,
+                  40.15173425698194
+                ]
+              }
+            },
+            "prompt_tokens": [
+              139,
+              145,
+              145
+            ]
+          },
+          "splash-gateway": {
+            "measured": 0,
+            "truncated": 0,
+            "metrics": {
+              "ttft_s": null,
+              "first_answer_s": null,
+              "total_s": null,
+              "completion_tokens": null,
+              "backend_decode_tok_s": null,
+              "client_output_wall_tok_s": null
+            },
+            "prompt_tokens": []
+          },
+          "comparisons": {
+            "monitor_ttft_s": {
+              "ratio": 0.9620157139785663,
+              "investigate": false,
+              "method": "ratio of same-case same-boundary three-sample medians; not statistical adoption proof"
+            },
+            "native_vs_mlx_ttft_s": 0.7917098008536068,
+            "monitor_total_s": {
+              "ratio": 1.0076698663829875,
+              "investigate": false,
+              "method": "ratio of same-case same-boundary three-sample medians; not statistical adoption proof"
+            },
+            "native_vs_mlx_total_s": 0.44540955441255253,
+            "native_vs_mlx_backend_decode_tok_s": 2.2865360128706564,
+            "native_vs_mlx_client_output_wall_tok_s": 2.2451247174499724
+          }
+        },
+        "code-2k": {
+          "mlx-direct": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 4.797501129010925,
+                "min": 4.777742584992666,
+                "max": 4.829479648993583,
+                "samples": [
+                  4.797501129010925,
+                  4.777742584992666,
+                  4.829479648993583
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 61.901694322994445,
+                "min": 61.85454966101679,
+                "max": 61.9027286110213,
+                "samples": [
+                  61.9027286110213,
+                  61.85454966101679,
+                  61.901694322994445
+                ]
+              },
+              "completion_tokens": {
+                "median": 1024,
+                "min": 1024,
+                "max": 1024,
+                "samples": [
+                  1024,
+                  1024,
+                  1024
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 17.920675339271046,
+                "min": 17.912007578076743,
+                "max": 17.922363959168624,
+                "samples": [
+                  17.912007578076743,
+                  17.920675339271046,
+                  17.922363959168624
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 16.54235818904908,
+                "min": 16.542081794722126,
+                "max": 16.5549665402441,
+                "samples": [
+                  16.542081794722126,
+                  16.5549665402441,
+                  16.54235818904908
+                ]
+              }
+            },
+            "prompt_tokens": [
+              1812,
+              1810,
+              1813
+            ]
+          },
+          "splash-direct-monitor-on": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 3.3553861970140133,
+                "min": 3.3204341270029545,
+                "max": 3.4214873970195185,
+                "samples": [
+                  3.4214873970195185,
+                  3.3553861970140133,
+                  3.3204341270029545
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 14.785209155001212,
+                "min": 14.743297314998927,
+                "max": 14.813363228022354,
+                "samples": [
+                  14.813363228022354,
+                  14.743297314998927,
+                  14.785209155001212
+                ]
+              },
+              "completion_tokens": {
+                "median": 1024,
+                "min": 1024,
+                "max": 1024,
+                "samples": [
+                  1024,
+                  1024,
+                  1024
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 89.50105393396503,
+                "min": 89.19555807864572,
+                "max": 89.8535176861674,
+                "samples": [
+                  89.50105393396503,
+                  89.8535176861674,
+                  89.19555807864572
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 69.25840475199664,
+                "min": 69.12677318699005,
+                "max": 69.45529063964851,
+                "samples": [
+                  69.12677318699005,
+                  69.45529063964851,
+                  69.25840475199664
+                ]
+              }
+            },
+            "prompt_tokens": [
+              1812,
+              1810,
+              1813
+            ]
+          },
+          "splash-direct-monitor-off": {
+            "measured": 3,
+            "truncated": 3,
+            "metrics": {
+              "ttft_s": {
+                "median": 3.3666466619761195,
+                "min": 3.355367734009633,
+                "max": 3.44227441799012,
+                "samples": [
+                  3.355367734009633,
+                  3.44227441799012,
+                  3.3666466619761195
+                ]
+              },
+              "first_answer_s": null,
+              "total_s": {
+                "median": 14.69843440799741,
+                "min": 14.650972210016334,
+                "max": 14.763046233973,
+                "samples": [
+                  14.650972210016334,
+                  14.69843440799741,
+                  14.763046233973
+                ]
+              },
+              "completion_tokens": {
+                "median": 1024,
+                "min": 1024,
+                "max": 1024,
+                "samples": [
+                  1024,
+                  1024,
+                  1024
+                ]
+              },
+              "backend_decode_tok_s": {
+                "median": 90.0517546712037,
+                "min": 89.43999546767414,
+                "max": 90.15432781752763,
+                "samples": [
+                  90.15432781752763,
+                  90.0517546712037,
+                  89.43999546767414
+                ]
+              },
+              "client_output_wall_tok_s": {
+                "median": 69.66728371035504,
+                "min": 69.36237845300192,
+                "max": 69.89297265200794,
+                "samples": [
+                  69.89297265200794,
+                  69.66728371035504,
+                  69.36237845300192
+                ]
+              }
+            },
+            "prompt_tokens": [
+              1812,
+              1810,
+              1813
+            ]
+          },
+          "splash-gateway": {
+            "measured": 0,
+            "truncated": 0,
+            "metrics": {
+              "ttft_s": null,
+              "first_answer_s": null,
+              "total_s": null,
+              "completion_tokens": null,
+              "backend_decode_tok_s": null,
+              "client_output_wall_tok_s": null
+            },
+            "prompt_tokens": []
+          },
+          "comparisons": {
+            "monitor_ttft_s": {
+              "ratio": 0.9966552875627593,
+              "investigate": false,
+              "method": "ratio of same-case same-boundary three-sample medians; not statistical adoption proof"
+            },
+            "native_vs_mlx_ttft_s": 0.6994028988807711,
+            "monitor_total_s": {
+              "ratio": 1.0059036727718829,
+              "investigate": false,
+              "method": "ratio of same-case same-boundary three-sample medians; not statistical adoption proof"
+            },
+            "native_vs_mlx_total_s": 0.2388498298262087,
+            "native_vs_mlx_backend_decode_tok_s": 4.99429023960018,
+            "native_vs_mlx_client_output_wall_tok_s": 4.186731054937814
+          }
+        }
+      },
+      "decision": "inconclusive; bounded diagnostic, not statistical adoption proof",
+      "all_frozen_attempts_pass": false,
+      "contexts": [],
+      "stop_reason": "gateway_temporary_key_setup_http_400",
+      "restored_before_original_check_dispatch_s": 697.67,
+      "original_check_latest_completion_bound_s": 817.67,
+      "restoration": {
+        "schema": 16,
+        "integrity": "ok",
+        "actual_services_and_semantic_intents": "original",
+        "original_gateway": "pass_unchanged_projection",
+        "splash_enabled": false,
+        "active_jobs": 0,
+        "active_splash_receipt": false,
+        "owned_splash_members": 0,
+        "locks_clear": true,
+        "database_totals": {
+          "engine_readings": 66,
+          "backend_availability": 94
+        }
+      },
+      "on_off_identity": {
+        "same_members_instance_fingerprint": true,
+        "restarts": 0,
+        "thermal": "nominal",
+        "pressure": "normal",
+        "cache_reuse_observed": false
+      }
+    }
+  ],
+  "status": "partial_inconclusive_both_windows_restored",
+  "deployment_scope": "Captured before dedicated-endpoint isolation; not qualification of the later endpoint configuration",
+  "runtime_provenance": {
+    "native_runtime_files_verified": 43,
+    "mlx_original_source_files_verified": 1477,
+    "mlx_framework_record_files_verified": 457,
+    "mlx_original_runtime_file_receipts_matched": 56,
+    "mlx_control_wrapper_expected_delta": 1,
+    "legacy_mlx_runtime_marker_recomputed": false,
+    "note": "Archived runtime marker retained; current original library byte identity, package versions and framework records independently verified. The approved control wrapper differs."
+  },
+  "adoption": "MLX remains the default; no statistical or production-performance adoption pass",
+  "material_overhead_investigation": {
+    "stock_short_ttft_on_s": 0.7401934619992971,
+    "stock_short_ttft_off_s": 0.6701924630033318,
+    "median_difference_s": 0.07000099899596535,
+    "on_off_ratio": 1.1044490991173939,
+    "on_range_s": [
+      0.5990747569885571,
+      0.7495973649783991
+    ],
+    "off_range_s": [
+      0.6016144379973412,
+      0.8639760970254429
+    ],
+    "wall_ratio": 0.9999280372661283,
+    "conclusion": "Inconclusive: overlapping ranges, three repeats, fixed order and asymmetric guard instrumentation. The on guard makes extra admin API calls. No isolated-ingestion or causal monitor-overhead bound. No restart/cache reuse/pressure/thermal event observed; do not correct or rescore timings."
+  }
+}

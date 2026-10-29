@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "runtime_version": "1.4.0",
+  "runtime_sha256": "4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d",
+  "asset_roots": [
+    "/Volumes/Models/models"
+  ],
+  "profiles": {
+    "stock-8bit-32k": {
+      "label": "stock-8bit \u00b7 128K",
+      "cohort": "stock-8bit",
+      "model": "example/qwen-27b-stock-8bit",
+      "aliases": [
+        "local-qwen"
+      ],
+      "target": {
+        "path": "/Volumes/Models/models/stock-8bit",
+        "revision": "0000000000000000000000000000000000000000",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "draft": {
+        "path": "/Volumes/Models/models/draft",
+        "revision": "0000000000000000000000000000000000000000",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "prepared": "stock-8bit-32k",
+      "max_context": 131072,
+      "memory_gib": 40,
+      "kv_format": "bf16",
+      "state_format": "fp32",
+      "reasoning": true
+    },
+    "modified-4bit-32k": {
+      "label": "modified-4bit \u00b7 128K",
+      "cohort": "modified-4bit",
+      "model": "example/qwen-27b-modified-4bit",
+      "aliases": [
+        "local-qwen"
+      ],
+      "target": {
+        "path": "/Volumes/Models/models/modified-4bit",
+        "revision": "0000000000000000000000000000000000000000",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "draft": {
+        "path": "/Volumes/Models/models/draft",
+        "revision": "0000000000000000000000000000000000000000",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "prepared": "modified-4bit-32k",
+      "max_context": 131072,
+      "memory_gib": 40,
+      "kv_format": "bf16",
+      "state_format": "fp32",
+      "reasoning": true
+    }
+  }
+}

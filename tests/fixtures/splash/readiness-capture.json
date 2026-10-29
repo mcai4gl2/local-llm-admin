@@ -1,0 +1,29 @@
+{
+  "runtime": "1.4.0",
+  "provenance": "Allowlisted readiness configuration from the unsuccessful Stage B stock startup. Instance/model/process/path metadata and allocation counters are omitted. Tests insert synthetic instance/model identities. This is status evidence, not inference or gateway qualification. Empty kv/state objects retain only their container shape; their allocation values are intentionally omitted.",
+  "parsed_status_sha256": "c046e76b49cc232b7a8b2d6d3fed97487f0435d0f7fa627fa7a51d738c53bd9c",
+  "status_projection": {
+    "schema_version": 6,
+    "ready": true,
+    "maximum_context_tokens": 32768,
+    "identity": {
+      "kv": {
+        "format": "bf16"
+      }
+    },
+    "memory_plan": {
+      "valid": true,
+      "maximum_context_tokens": 146937,
+      "model": {
+        "kv_format": "bf16",
+        "state_format": "fp32"
+      }
+    },
+    "kv": {},
+    "state": {},
+    "weights": {
+      "released": false,
+      "restoring": false
+    }
+  }
+}

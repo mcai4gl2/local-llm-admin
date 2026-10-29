@@ -3,6 +3,15 @@
 # Does not touch /Volumes/Models/models, /Volumes/Models/bin, or the MLX venv.
 set -euo pipefail
 
+ENGINE_GUARD="/Volumes/Models/bin/engine-guard.sh"
+if [[ -r "$ENGINE_GUARD" ]]; then
+  source "$ENGINE_GUARD"
+else
+  engine_splash_guard() { echo "Missing shared engine guard." >&2; return 1; }
+  engine_run() { echo "Missing shared engine guard." >&2; return 1; }
+fi
+
+
 ROOT="/Volumes/Models/comfyui"
 APP="$ROOT/app"
 VENV="$ROOT/venv"
@@ -114,7 +123,7 @@ strata_running() {
     pid="${pid//$'\n'/}"
     [[ "$pid" == <-> ]] && is_strata "$pid" && return 0
   fi
-  for pid in $(lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null); do
+  for pid in $(lsof -nP -tiTCP:"$(engine_native_port strata)" -sTCP:LISTEN 2>/dev/null); do
     is_strata "$pid" && return 0
   done
   return 1
@@ -166,6 +175,7 @@ cmd_status() {
 }
 
 cmd_start() {
+  engine_splash_guard
   require_volume
   local pid=""
   if pid="$(current_pid)"; then
@@ -240,10 +250,9 @@ cmd_stop() {
   echo "ComfyUI stopped"
 }
 
-require_volume
 case "${1:-}" in
-  start) cmd_start ;;
-  stop) cmd_stop ;;
-  status) cmd_status ;;
+  start) engine_run cmd_start ;;
+  stop) engine_run cmd_stop ;;
+  status) require_volume; cmd_status ;;
   *) usage; exit 1 ;;
 esac

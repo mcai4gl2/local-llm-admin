@@ -2,20 +2,23 @@
 let windowSel = "15m";
 
 onStatus((st) => {
-  document.getElementById("st-selected").textContent = st.selected || "—";
-  document.getElementById("st-state").textContent = STATE_LABEL[st.state] || st.state;
-  document.getElementById("st-decode").textContent = fmt.tok(st.inference?.last_decode_rate);
-  document.getElementById("st-prefill").textContent = fmt.tok(st.inference?.last_prefill_rate);
+  const backend = EngineUI.active(st);
+  const modelMetrics = backend?.operations.includes("multi-model");
+  const activeStatus = st.engine?.[backend?.id] || {};
+  document.getElementById("st-selected").textContent = modelMetrics ? st.selected || "—" : EngineUI.label(st);
+  document.getElementById("st-state").textContent = modelMetrics ? STATE_LABEL[st.state] || st.state : EngineUI.badge(st);
+  document.getElementById("st-decode").textContent = fmt.tok(modelMetrics ? st.inference?.last_decode_rate : null);
+  document.getElementById("st-prefill").textContent = fmt.tok(modelMetrics ? st.inference?.last_prefill_rate : null);
   document.getElementById("status-checked").textContent = `checked ${new Date(st.checked_at * 1000).toLocaleTimeString()}`;
-  const h = st.health || {}, mdl = st.model || {}, inf = st.inference || {};
+  const h = modelMetrics ? st.health || {} : {}, mdl = modelMetrics ? st.model || {} : {}, inf = modelMetrics ? st.inference || {} : {};
   const facts = [
-    ["Active engine", { mlx: "MLX", comfyui: "ComfyUI", none: "none", conflict: "CONFLICT" }[st.engine?.active] || "—"],
+    ["Active engine", EngineUI.label(st)],
     ...(st.decision?.enabled ? [["Decision sidecar", st.decision.running ? "running" : "stopped"]] : []),
-    ["Loaded model", h.loaded_model || (st.health ? "—" : "API not answering")],
-    ["Context size", fmt.num(h.loaded_context_size)],
+    ["Loaded model", modelMetrics ? h.loaded_model || (st.health ? "—" : "API not answering") : activeStatus.model || "—"],
+    ["Context size", fmt.num(modelMetrics ? h.loaded_context_size : activeStatus.max_context)],
     ["Tool parser", h.loaded_tool_parser || "—"],
-    ["Process", st.process.running ? `running (pid ${st.process.pid ?? "?"})` : "stopped"],
-    ["Requests in flight", inf.in_flight_count ?? (inf.in_flight ? "yes" : "0")],
+    ["Process", backend?.running ? `running (pid ${modelMetrics ? st.process.pid ?? "?" : activeStatus.pid ?? "?"})` : "stopped"],
+    ["Requests in flight", modelMetrics ? inf.in_flight_count ?? (inf.in_flight ? "yes" : "0") : "—"],
     ["Last time to first token", inf.last_ttft_s == null ? "—" : `${inf.last_ttft_s.toFixed(2)} s`],
     ["Last request", inf.last_request_at || "—"],
     ["Last generated tokens", fmt.num(inf.last_generated_tokens)],
@@ -56,7 +59,11 @@ async function refreshMetrics() {
   }
   tiles.push(tile("Disk I/O", fmt.rate(m.disk_read_bps), `write ${fmt.rate(m.disk_write_bps)}`));
   tiles.push(tile("Network", fmt.rate(m.net_rx_bps), `send ${fmt.rate(m.net_tx_bps)}`));
-  tiles.push(tile("Engine process", m.mlx ? fmt.bytes(m.mlx.rss) : "not running", m.mlx ? `CPU ${fmt.pct(m.mlx.cpu_percent)}` : ""));
+  const bundle = m.engine_bundle;
+  if (bundle && bundle.source) tiles.push(tile("Engine bundle · " + bundle.source,
+    bundle.rss === null ? bundle.state : fmt.bytes(bundle.rss),
+    `Sum of process RSS · ${bundle.members.length} members · CPU ${fmt.pct(bundle.cpu_percent)}; shared pages may be counted twice`));
+  tiles.push(tile("Engine process", m.mlx ? fmt.bytes(m.mlx.rss) : bundle && bundle.state !== "absent" ? "unavailable" : "not running", m.mlx ? `CPU ${fmt.pct(m.mlx.cpu_percent)}` : ""));
   document.getElementById("metric-tiles").replaceChildren(...tiles);
 }
 

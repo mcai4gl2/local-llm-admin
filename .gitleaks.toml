@@ -10,4 +10,13 @@ regexes = [
   '''sk-viewer-SECRET-123''',
   '''sk-abcdef123456''',  # tests/test_performance_api.py: redaction fixture
   '''replace-with-32-to-256-chars-of-A-Za-z0-9_-''',  # host/strata/etc/strata.env.example
+  # Documented Splash placeholder; never a usable credential.
+  '''^replace-with-a-private-key-of-at-least-32-characters$''',
+  # Exact public tokenizer fingerprints and logical benchmark case IDs.
+  '''^mlx\-direct\-instruction\-short\-0$''',
+  '''^mlx\-direct\-instruction\-short\-1$''',
+  '''^mlx\-direct\-instruction\-short\-2$''',
+  '''^mlx\-direct\-instruction\-short\-3$''',
+  '''^5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836$''',
+  '''^ac82a3ef50a623a2cc41cb5094c6fee5bdc9068d88672885e745f66c0ad27760$''',
 ]

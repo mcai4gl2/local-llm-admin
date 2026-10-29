@@ -1,0 +1,99 @@
+{
+  "contract": "splash-overhead-design-2",
+  "status": "design_frozen_inputs_pending",
+  "cohort": "modified-4bit",
+  "backend": "mlx",
+  "scope": "Collector overhead only; no native speed gate or guaranteed precision.",
+  "previous_evidence_sha256": "2021f7d7e389e54bcd6b8b539031020a6211bceadab991bfef3faf4e8169a5cb",
+  "source_pins": {
+    "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+    "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67",
+    "collector_sha256": "00a81cf8769bc9b0e9af39cd9b8d119e380d62fdf467e6c6d086f25866809416"
+  },
+  "model_pins": {
+    "weights_sha256": "fe4b166f932a8215bb3be532d49c581396d2d91b6c0687106c5b255118d95e0d",
+    "tokenizer_sha256": "5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836",
+    "template_sha256": "b6e05e626073de17d62afe10ce1078e70cf16fcc2ffb521f2f6a2e05af6abf31"
+  },
+  "settings": {
+    "temperature": 0.0,
+    "seed": 0,
+    "reasoning": false,
+    "context_tokens": 32768,
+    "concurrency": 1,
+    "kv_precision": "bf16-kv-fp32-recurrent",
+    "gpu_sidecars": "stopped"
+  },
+  "fixed_schedule": {
+    "independent_windows": 4,
+    "launches_per_window": [
+      "original",
+      "instrumented",
+      "instrumented",
+      "original"
+    ],
+    "timing_pairs_per_window": [
+      [
+        0,
+        1
+      ],
+      [
+        3,
+        2
+      ]
+    ],
+    "categories": [
+      "short",
+      "2k",
+      "8k"
+    ],
+    "excluded_warmups_per_category_per_launch": 1,
+    "measured_repetitions_per_category_per_launch": 2,
+    "all_output_caps": 256,
+    "total_requests": 144,
+    "excluded_warmups": 48,
+    "paired_measured_requests": 48,
+    "pairs_per_category": 16
+  },
+  "budget_per_window": {
+    "request_deadlines_s": {
+      "short": 60,
+      "2k": 60,
+      "8k": 90
+    },
+    "requests": 36,
+    "request_budget_s": 2520,
+    "setup_s": 360,
+    "restore_s": 600,
+    "worst_case_s": 3480,
+    "independent_collection_cutoff_s": 6600,
+    "independent_restore_deadline_s": 7200
+  },
+  "analysis": {
+    "statistic": "Median instrumented/original wall ratio; overall and each category.",
+    "threshold": 1.05,
+    "requirement": "Observed median and upper 95% bound <=1.05 for overall and every category.",
+    "bootstrap_draws": 10000,
+    "seed": 0,
+    "interval_indices_zero_based": [
+      249,
+      9749
+    ],
+    "resampling": "Resample four complete ABBA windows, then two paired launch blocks within each selected window, categories and paired repetitions. Category-only intervals hold the category fixed.",
+    "stop_rule": "Collect the entire fixed schedule unless capture/guard failure requires restoration. No early eligibility stopping or extension until passing.",
+    "missing_failed_incompatible": "Retain every record; no dropping, repairing, pooling with the pilot, or eligible decision from incomplete inputs."
+  },
+  "required_before_execution": [
+    "Freeze fresh nonce/body/header ledgers and exact command/profile/runtime fingerprints.",
+    "Implement and test the expanded block-aware reviewer; the four-phase pilot comparator cannot analyze this schedule.",
+    "Verify every native input/final ID count and HTTP accounting; matching paired body/response/prompt hashes and zero reuse.",
+    "Run source/tokenizer/EOS audits before or after phases; keep stable observers throughout capture.",
+    "Refresh ownership, service, assets, jobs, resource baseline and independent deadline guard before each window.",
+    "Restore and independently verify original inference, configuration/intent/assets/sidecars after every window."
+  ],
+  "limitations": [
+    "Four independent windows improve replication but do not guarantee the 5% bound can be established.",
+    "Within-window observations are clustered and are not independent launches or independent task samples.",
+    "Existing inconclusive pilot and unresolved timeout remain visible."
+  ]
+}

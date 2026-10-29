@@ -8,7 +8,7 @@ are stored already resolved and stay unread until acknowledged.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .ingestion import IngestStore, error_hint
@@ -148,6 +148,7 @@ class Snapshot:
     pressure: str | None
     litellm_ok: bool | None  # None: not checked this tick
     suspended: str | None
+    backends: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 ENGINE_DOWN_S = 30.0
@@ -207,10 +208,14 @@ class Evaluator:
             "engine_conflict",
             conflict,
             "critical",
-            "MLX and ComfyUI are both running",
+            "Multiple engines are running",
             "Keep one engine.",
             w,
         )
+        if getattr(self, "_intent_seen", None) != s.intent:
+            self._since.pop("engine_down", None)
+            self._since.pop("engine_unhealthy", None)
+            self._intent_seen = s.intent
         self._engine_down(s)
         self._unhealthy(s)
         self._lock(s)
@@ -229,24 +234,68 @@ class Evaluator:
     def _engine_down(self, s: Snapshot) -> None:
         intent = s.intent or ""
         wanted = (
-            "mlx" if intent.startswith("mlx:") else intent if intent in ("comfyui", "strata") else None
+            "mlx"
+            if intent.startswith("mlx:")
+            else intent
+            if intent in ("comfyui", "strata")
+            else None
         )
+        registered = intent.partition(":")[0]
+        if registered in s.backends:
+            wanted = registered
         if s.engine == "unknown" and wanted:
+            self._held("engine_down", False, s.mono)
             return
-        mismatch = wanted is not None and s.engine not in (wanted, "conflict")
+        descriptor = s.backends.get(wanted or "", {})
+        profile_mismatch = (
+            ":" in intent
+            and descriptor.get("profile") is not None
+            and descriptor["profile"] != intent.partition(":")[2]
+        )
+        mismatch = wanted is not None and (
+            s.engine not in (wanted, "conflict")
+            or profile_mismatch
+            or descriptor.get("enabled") is False
+        )
         held = self._held("engine_down", mismatch and not s.job_running, s.mono)
         if not mismatch:
             self.store.resolve_condition("engine_down", s.wall)
         elif held > ENGINE_DOWN_S:
-            name = {"comfyui": "ComfyUI", "strata": "Strata"}.get(wanted or "", f"MLX ({intent[4:]})")
+            name = {"comfyui": "ComfyUI", "strata": "Strata"}.get(
+                wanted or "", f"MLX ({intent[4:]})"
+            )
+            name = descriptor.get("label", name)
             detail = f"Intended engine is {intent}; observed: {s.engine}."
             if wanted != "mlx":
                 detail += f" {name} is not restarted automatically."
-            self.store.raise_condition(
-                "engine_down", "critical", f"{name} is not running", detail, s.wall
+            title = (
+                f"Intended {name} is unavailable"
+                if descriptor.get("enabled") is False or profile_mismatch
+                else f"{name} is not running"
             )
+            self.store.raise_condition("engine_down", "critical", title, detail, s.wall)
 
     def _unhealthy(self, s: Snapshot) -> None:
+        wanted = (s.intent or "").partition(":")[0]
+        backend = s.backends.get(wanted, {})
+        if backend and wanted != "mlx":
+            relevant = s.engine == wanted and backend.get("enabled") is True and not s.job_running
+            ready = backend.get("ready")
+            if relevant and (ready is None or backend.get("state") == "unknown"):
+                self._held("engine_unhealthy", False, s.mono)
+                return
+            bad = relevant and ready is False
+            if self._held("engine_unhealthy", bad, s.mono) > UNHEALTHY_S:
+                self.store.raise_condition(
+                    "engine_unhealthy",
+                    "warning",
+                    f"{backend['label']} is running but not serving",
+                    f"Observed state: {backend.get('state', 'unknown')}. Recovery is runtime-owned; no automatic admin restart.",
+                    s.wall,
+                )
+            elif not bad:
+                self.store.resolve_condition("engine_unhealthy", s.wall)
+            return
         relevant = (s.intent or "").startswith("mlx:") and s.engine == "mlx"
         if relevant and s.mlx_serving is None:
             return

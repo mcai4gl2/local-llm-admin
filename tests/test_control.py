@@ -233,7 +233,7 @@ async def test_runner_conflict_at_submit_is_409(svc, monkeypatch):
     def raced(*a, **kw):
         raise JobConflict("other")
 
-    monkeypatch.setattr(svc.runner, "submit", raced)
+    monkeypatch.setattr(svc.runner, "submit_sequence", raced)
     with pytest.raises(ControlError) as exc:
         await svc.lifecycle("stop", None)
     assert exc.value.code == 409
@@ -420,3 +420,21 @@ def test_preflight_is_public(svc, fake_mlx):
     (fake_mlx.root / "run/mlx.lock").mkdir()
     with pytest.raises(ControlError):
         svc.preflight()
+
+
+async def test_direct_mlx_stop_refuses_unowned_listener(svc, monkeypatch):
+    from local_llm_admin.backend_types import EngineObservation
+    monkeypatch.setattr(svc.backends, "observe", lambda **kw: [
+        EngineObservation("mlx", state="unknown")])
+    with pytest.raises(ControlError, match="ownership"):
+        await svc.lifecycle("stop", None)
+    assert svc.runner.running() is None
+
+
+async def test_existing_owner_blocks_direct_start_at_execution(svc, fake_mlx):
+    _start_mlx(svc)
+    before = list(fake_mlx.calls())
+    job = _wait(svc, (await svc.lifecycle("start", "qwen"))["id"])
+    assert job["status"] == "failed"
+    assert [c for c in fake_mlx.calls() if c != "list"] == before
+    assert svc.observe()["engine"] == "mlx"

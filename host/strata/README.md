@@ -1,7 +1,7 @@
 # Strata engine (Qwen3.8-Flash-Next on Metal)
 
 A third GPU engine next to MLX and ComfyUI: Qwen3.8-Flash-Next (125B MoE) through
-[Strata](https://github.com/Niko1221/Strata)'s Metal build. Plan: `plans/20261015_strata-qwen38-flash-next.md`.
+[Strata](https://github.com/Niko1221/Strata)'s Metal build. Plan: `plans/archive/strata/20261015_strata-qwen38-flash-next.md`.
 
 | Path | What |
 |---|---|
@@ -49,3 +49,11 @@ curl -s http://127.0.0.1:8080/health   # "service": "strata"
 Before it stops the server, `stop` saves its last `/metrics?requests=all` to
 `run/metrics-final-<pid>.json` (best effort, 3 s at most, mode 600). The admin reads these
 files to count the requests that finished after its last poll, then deletes them.
+
+
+## Shared client endpoint
+
+For transparent engine switching with the same external URL and upstream model ID,
+use the [shared serving topology](../../docs/shared-inference.md). The optional private
+`etc/engine-ports.json` moves native MLX/Strata listeners to loopback internal ports;
+legacy behavior remains when this configuration is absent. Clients keep port 8080.

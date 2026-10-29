@@ -12,8 +12,19 @@
     <label>Model <select id="model"><option value="">All models</option></select></label>
     <span id="perf-source" class="muted"></span>
   </div>
+  <p id="splash-coverage" class="muted" hidden></p>
   <div id="perf-error" class="error" hidden></div>
   <div class="hero" id="perf-totals"></div>
+</section>
+
+<section class="card" id="native-telemetry">
+  <div class="card-head"><h2>Splash native telemetry</h2>
+    <label>Profile <select id="native-profile"><option value="">All profiles</option></select></label>
+  </div>
+  <p class="muted" id="native-coverage"></p>
+  <p class="muted">Cumulative native execution counters within each verified epoch. Do not add snapshots or compare these directly to billed tokens. Request history is unsupported.</p>
+  <div class="table-wrap"><table id="native-readings"><thead><tr><th>Observed</th><th>Profile / fingerprint</th><th>Epoch</th><th>Completed</th><th>Cancelled / failed</th><th>Prefill execution tokens</th><th>Decode execution tokens</th></tr></thead><tbody></tbody></table></div>
+  <p class="muted" id="native-availability"></p>
 </section>
 
 <section class="card">

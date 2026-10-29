@@ -1,0 +1,57 @@
+{
+  "contract": "splash-phase3-readiness-fix-1",
+  "status": "prepared; not applied; new approval required",
+  "prior_attempt": "stage-b-report.md",
+  "code_scope": {
+    "admin": [
+      "src/local_llm_admin/backends.py",
+      "src/local_llm_admin/splash.py",
+      "src/local_llm_admin/splash_profiles.py"
+    ],
+    "host": [
+      "bin/engine-guard.sh",
+      "splash/lib/control.py",
+      "splash/lib/profiles.py"
+    ]
+  },
+  "deployment": {
+    "paired_commands": [
+      "ops/deploy-host.sh --apply",
+      "ops/deploy-mac.sh"
+    ],
+    "schema": 16,
+    "schema_migration": false,
+    "splash_during_cutover": "disabled",
+    "runtime_asset_changes": false,
+    "backup": "matched current schema16/app/venv/Python/env/plist/whole host set",
+    "fallback": "restore matched prior code/env while retaining schema16 database and preserving post-attempt snapshot"
+  },
+  "window_s": 2700,
+  "restoration_reserve_s": 600,
+  "concurrency": 1,
+  "request_cap": 40,
+  "scheduled_requests": 30,
+  "reserved_requests": 10,
+  "request_deadline_s": 120,
+  "completion_caps": {
+    "original_route": 32,
+    "functional_stream": 2048,
+    "near_limit_context": 512
+  },
+  "schedule": {
+    "original_before_cutover": 1,
+    "original_after_cutover": 1,
+    "both_profile_functional_checks": 26,
+    "stock_restart_followup": 1,
+    "original_after_restoration": 1
+  },
+  "functional_checks": "same two-profile checks as qualification.json, with a fresh budget and fresh gateway test IDs/key; all failed/partial attempts retained",
+  "evidence_boundary": "new window timestamps and epochs; exclude prior aborted-window observations from the new availability denominator",
+  "default_after_window": "original MLX selection/services; Splash disabled; original public gateway route preserved",
+  "excluded": [
+    "forced native recovery/fault injection",
+    "admin compatibility/eval acceptance",
+    "frozen performance comparison",
+    "production adoption or default change"
+  ]
+}

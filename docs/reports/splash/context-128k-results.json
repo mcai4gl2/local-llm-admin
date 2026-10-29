@@ -1,0 +1,98 @@
+{
+  "status": "deployed_enabled_MLX_default",
+  "date": "2026-10-29",
+  "context_semantics": "131072 total prompt plus generated output tokens",
+  "profiles": {
+    "stock": {
+      "configured_context_tokens": 131072,
+      "extended_direct_prompt_tokens": 40252,
+      "near_limit_direct_prompt_tokens": 129964,
+      "near_limit_gateway_prompt_tokens": 129964,
+      "retrieval_reasoning_normal_stop_usage": "pass",
+      "native_memory_plan_valid": true,
+      "native_planned_capacity": 146937,
+      "allocation_budget_gib": 40
+    },
+    "modified": {
+      "configured_context_tokens": 131072,
+      "extended_direct_prompt_tokens": 40252,
+      "near_limit_direct_prompt_tokens": 129964,
+      "near_limit_gateway_prompt_tokens": 129964,
+      "retrieval_reasoning_normal_stop_usage": "pass",
+      "native_memory_plan_valid": true,
+      "native_planned_capacity": 262144,
+      "allocation_budget_gib": 40
+    }
+  },
+  "identities_assets_preserved": true,
+  "prior_32768_compatibility": true,
+  "precision": "BF16 KV / FP32 state",
+  "runtime_assets_unchanged": true,
+  "gateway_routes_key_scopes_unchanged": true,
+  "final_state": {
+    "original_mlx_healthy_selected": true,
+    "original_services_intents_restored": true,
+    "native_resources_absent": true,
+    "jobs_locks_clear": true,
+    "schema": 16,
+    "integrity": "ok",
+    "totals_at_final_audit": {
+      "engine_readings": 181,
+      "backend_availability": 190
+    }
+  },
+  "quality": {
+    "passed": 3423,
+    "skipped": 2,
+    "coverage_percent": 98.14,
+    "host_passed": 335,
+    "host_control_statement_branch_coverage_percent": 100,
+    "app_splash_and_profile_statement_branch_coverage_percent": 100,
+    "host_parser_coverage_percent": 99.29,
+    "ruff": "pass",
+    "strict_mypy_files": 60
+  },
+  "successful_window": {
+    "maximum_s": 2700,
+    "restore_reserve_s": 600,
+    "inference_cap": 12,
+    "actual_inference_requests": 8,
+    "automatic_request_retries": 0,
+    "direct_prefill_precedes_same_prompt_gateway": true,
+    "request_deadline_s": 900
+  },
+  "prior_attempts": [
+    {
+      "packet": 1,
+      "inference_requests": 3,
+      "passed": 3,
+      "outcome": "operator_audit_field_error_then_matched_32k_restore",
+      "remaining_conditions": "unassessed"
+    },
+    {
+      "packet": 2,
+      "inference_requests": 4,
+      "passed": 3,
+      "failed": 1,
+      "outcome": "near_limit_gateway_timeout_then_matched_32k_restore",
+      "timeout_capture": "retained_failed",
+      "remaining_conditions": "unassessed"
+    }
+  ],
+  "limits": [
+    "single deterministic retrieval input at one depth; broader 128K quality unassessed",
+    "gateway near-limit request follows direct use of the identical prompt; cold gateway latency unassessed",
+    "frozen performance comparison remains partial/inconclusive; MLX default and adoption policy unchanged",
+    "vision unsupported; no all-client billing or physical memory-reclamation claim"
+  ],
+  "evidence_sha256": {
+    "request-01.json": "7921e6093e956802a4a001062ca9b8eed3ce85134b0b7ae40f96ac0d19edced0",
+    "request-02.json": "11d69af838c7365e28189a8efcfab71130d18bc2c83598a5c0c267832d9aa8bd",
+    "request-03.json": "fc96065804fedba7dfc5bd6b4e5264a13a4fe5933834430457a8de2440986866",
+    "request-04.json": "d99fbfedd05bed77b146c48fc679439da45a18be0c4975efeaf8402570f53fe3",
+    "request-05.json": "d9acfa845f0230f7961021a7cadc1df7c6eb16e3dfbb8fd1a59cd3ce3e1c2a9c",
+    "request-06.json": "e5c358391294b4b2c5ce1fcb94867edec91e5ebe07a7b880aae41e19985fe09f",
+    "request-07.json": "004d357eba81cfee0e815dfeb66ad70f668ab351f414f3398666731cf54a198e",
+    "request-08.json": "88485a5bd259ee18a995574cde4651159db73a9a107487c8502a49220506297f"
+  }
+}

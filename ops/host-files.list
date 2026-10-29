@@ -20,3 +20,16 @@ code strata/bin/strata
 code strata/README.md
 code strata/etc/strata.env.example
 registry etc/models.conf
+# Splash profile contract only; private config, runtime and assets are never deployed.
+code splash/lib/profiles.py
+code splash/README.md
+code splash/etc/splash.env.example
+code splash/etc/profiles.example.json
+code splash/etc/receipt.example.json
+code bin/engine-guard.sh
+code splash/bin/splash
+code splash/lib/control.py
+code splash/etc/runtime.example.json
+
+code bin/engine-ports
+code etc/engine-ports.example.json

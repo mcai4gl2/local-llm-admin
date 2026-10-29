@@ -44,6 +44,8 @@ exec /bin/mv "$@"
 """
 
 CODE = [
+    "bin/engine-ports",
+    "etc/engine-ports.example.json",
     "bin/mlx-model",
     "bin/mlx-download",
     "bin/mlx-profile",
@@ -62,6 +64,15 @@ CODE = [
     "strata/bin/strata",
     "strata/README.md",
     "strata/etc/strata.env.example",
+    "splash/lib/profiles.py",
+    "splash/README.md",
+    "splash/etc/splash.env.example",
+    "splash/etc/profiles.example.json",
+    "splash/etc/receipt.example.json",
+    "bin/engine-guard.sh",
+    "splash/bin/splash",
+    "splash/lib/control.py",
+    "splash/etc/runtime.example.json",
 ]
 
 
@@ -372,6 +383,7 @@ def test_manifest_lists_every_versioned_host_file():
                 HOST / "tts/README.md",
                 HOST / "embed/README.md",
                 HOST / "strata/README.md",
+                HOST / "splash/README.md",
             )
         )
     }
@@ -478,3 +490,32 @@ def test_no_ops_script_carries_a_default_target():
     for script in MAC_SCRIPTS:
         text = (ROOT / "ops" / script).read_text()
         assert "${MAC_HOST:-" not in text and "${MAC_DEST:-" not in text, script
+
+
+def test_splash_contract_deploy_preserves_private_config_and_receipts(env: Env) -> None:
+    private = {
+        "splash/etc/splash.env": "SPLASH_API_KEY=" + "s" * 40,
+        "splash/etc/profiles.json": '{"private": true}',
+        "splash/etc/receipts/stock-8bit-32k.json": '{"audit": true}',
+    }
+    for name, text in private.items():
+        p = env.root / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+        p.chmod(0o600)
+    result = env.deploy("--apply", "splash/lib/profiles.py", "splash/etc/profiles.example.json")
+    assert result.returncode == 0, result.stdout + result.stderr
+    for name, text in private.items():
+        p = env.root / name
+        assert p.read_text() == text and p.stat().st_mode & 0o777 == 0o600
+    assert not (env.root / "splash/run").exists()
+
+
+def test_broken_splash_profile_helper_changes_nothing(env: Env) -> None:
+    rel = "splash/lib/profiles.py"
+    before = (env.root / "bin/serve-qwen.sh").read_text()
+    env.change(rel, "#!/usr/bin/python3\ndef broken(:\n")
+    result = env.deploy("--apply")
+    assert result.returncode != 0 and "syntax check failed:" in result.stdout + result.stderr
+    assert (env.root / "bin/serve-qwen.sh").read_text() == before
+    assert env.leftovers() == []

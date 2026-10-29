@@ -33,6 +33,7 @@ import psutil
 
 from . import compatibility
 from .alerts import AlertStore
+from .backend_types import EngineTarget, InferenceDescriptor
 from .chat import ACTIVE_MODEL_ID
 from .config import Settings
 from .control import ControlError, ControlService
@@ -106,7 +107,7 @@ class RunPlan:
     kind: str
     targets: list[str]
     dirs: dict[str, str]
-    original: dict[str, Any]  # {"engine": "mlx"|"none"|"strata", "name": str}
+    original: dict[str, Any]  # original backend ID (or none) and its existing model label
     deadline: float
     controlled: bool = True
     switched: bool = False
@@ -141,15 +142,6 @@ def eval_payload(
     if case.tools:
         payload["tools"] = case.tools
     return payload
-
-
-def health_context(health: Any, strata: bool) -> int | None:
-    """Context size from a /health body: ``max_context`` for Strata, ``loaded_context_size``
-    for MLX; None when absent or unusable."""
-    if not isinstance(health, dict):
-        return None
-    raw = health.get("max_context" if strata else "loaded_context_size")
-    return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0 else None
 
 
 def model_info(path: str | None) -> dict[str, Any]:
@@ -329,9 +321,10 @@ class QualityRunner:
             raise QualityError(409, f"invalid judge setting: {exc}") from None
         if target is None or target.mlx_name is None:
             return
-        if plan.original["engine"] == "strata":
+        if self._inference(plan.original["engine"]).current_only:
+            label = self.control.backends.get(plan.original["engine"]).spec.label
             raise QualityError(
-                409, "Strata is running and is never switched; use an external judge or none"
+                409, f"{label} is running and is never switched; use an external judge or none"
             )
         if target.mlx_name not in plan.dirs:
             raise QualityError(409, f"the judge model {target.mlx_name} is not registered")
@@ -363,8 +356,10 @@ class QualityRunner:
             raise QualityError(exc.code, exc.message) from None
         observed = await asyncio.to_thread(self.control.observe)
         engine = observed["engine"]
-        if engine == "strata":
-            return self._plan_strata(kind, scope)
+        if engine not in ("none", "unknown", "conflict"):
+            descriptor = self.control.backends.get(engine).inference()
+            if descriptor is not None and descriptor.current_only:
+                return self._plan_current_backend(kind, scope, engine)
         sidecar = await asyncio.to_thread(self.control.sidecar_running)
         if sidecar is not None:
             raise QualityError(
@@ -416,23 +411,33 @@ class QualityRunner:
         )
         return plan, warning
 
-    def _plan_strata(self, kind: str, scope: str) -> tuple[RunPlan, str]:
+    def _plan_current_backend(self, kind: str, scope: str, engine: str) -> tuple[RunPlan, str]:
         """Strata serves one model and is never switched by a run: only the compatibility
         cases or an eval of the running engine (Strata Phase 4, M10). Sidecars cannot run
         beside it."""
         if kind not in ("compatibility", "eval") or scope != "current":
             raise QualityError(
                 409,
-                "Strata is running; only compatibility checks and evals of the current engine"
+                f"{self.control.backends.get(engine).spec.label} is running; only compatibility checks and evals of the current engine"
                 " run on it",
             )
+        backend = self.control.backends.get(engine)
+        observation = backend.observe()
+        label = (
+            backend.intent(EngineTarget(engine, observation.reference))
+            if "profiles" in backend.spec.operations
+            else engine
+        )
+        original: dict[str, Any] = {"engine": engine, "name": label}
+        if label != engine:
+            original["reference"] = observation.reference
         plan = RunPlan(
             run_id=uuid.uuid4().hex[:12],
             job_id="",
             kind=kind,
-            targets=["strata"],
+            targets=[label],
             dirs={},
-            original={"engine": "strata", "name": "strata"},
+            original=original,
             deadline=self._deadline(kind),
         )
         return plan, EXTERNAL_WARNING
@@ -563,41 +568,46 @@ class QualityRunner:
                 return False
             await asyncio.sleep(0.5)
 
-    async def _owned(self, name: str, generation: Any) -> None:
+    async def _owned(self, name: str, generation: Any, engine: str = "mlx") -> None:
         obs = await self._observe()
-        if name == "strata":
-            if obs["engine"] != "strata" or obs["generation"] != generation:
-                raise InterventionRequired(
-                    f"the engine changed outside the run (expected Strata; observed {obs['engine']})"
-                )
-            return
-        if obs["engine"] != "mlx" or obs["mlx_name"] != name or obs["generation"] != generation:
+        expected = "mlx" if engine == "none" else engine
+        if (
+            obs["engine"] != expected
+            or obs["generation"] != generation
+            or (expected == "mlx" and obs["mlx_name"] != name)
+        ):
+            label = self.control.backends.get(expected).spec.label
             raise InterventionRequired(
-                f"the engine changed outside the run (expected MLX {name}; observed"
+                f"the engine changed outside the run (expected {label} {name}; observed"
                 f" {obs['engine']} {obs['mlx_name'] or '-'})"
             )
 
-    def _open(self, strata: bool) -> httpx.AsyncClient:
-        key = self.settings.strata_api_key.get_secret_value() if strata else ""
+    def _inference(self, engine: str) -> InferenceDescriptor:
+        descriptor = self.control.backends.get("mlx" if engine == "none" else engine).inference()
+        if descriptor is None:
+            raise QualityError(409, f"{engine} does not support quality inference")
+        return descriptor
+
+    def _open(self, engine: str) -> httpx.AsyncClient:
+        target = self._inference(engine).target
         return httpx.AsyncClient(
-            base_url=self.settings.strata_api_base if strata else self.settings.mlx_api_base,
+            base_url=target.base_url,
             timeout=REQUEST_TIMEOUT,
             transport=self.transport,
-            headers={"Authorization": f"Bearer {key}"} if key else None,
+            headers={"Authorization": f"Bearer {target.api_key}"} if target.api_key else None,
         )
 
     async def current_context(self, plan: RunPlan) -> int | None:
-        """The running engine's context size (for estimating a needle suite), or None."""
-        strata = plan.original["engine"] == "strata"
-        async with self._open(strata) as http:
-            return health_context(await self._get(http, "/health"), strata)
+        """The running adapter defines its health context field."""
+        descriptor = self._inference(plan.original["engine"])
+        async with self._open(plan.original["engine"]) as http:
+            return descriptor.context(await self._get(http, descriptor.health_path))
 
     # --- the run ---------------------------------------------------------------------
     async def _execute(self, plan: RunPlan) -> None:
         status, error = "failed", None
         shutdown = False
-        strata = plan.original["engine"] == "strata"
-        async with self._open(strata) as http:
+        async with self._open(plan.original["engine"]) as http:
             try:
                 version = await self._get(http, "/openapi.json")
                 if isinstance(version, dict):
@@ -726,17 +736,23 @@ class QualityRunner:
             raise ModelLoadFailed(f"{name} is not the serving model after {act}")
         return load_s, obs["generation"]
 
-    async def _strata_ready(self, http: httpx.AsyncClient) -> tuple[float | None, Any]:
-        doc = await self._get(http, "/health")
-        if not (isinstance(doc, dict) and doc.get("service") == "strata" and doc.get("loaded")):
-            raise ModelLoadFailed("Strata is not loaded")
-        return None, (await self._observe())["generation"]
+    async def _current_ready(
+        self, http: httpx.AsyncClient, engine: str
+    ) -> tuple[float | None, Any]:
+        backend = self.control.backends.get(engine)
+        doc = await self._get(http, self._inference(engine).health_path)
+        if not backend.inference_ready(doc):
+            raise ModelLoadFailed(f"{backend.spec.label} is not loaded")
+        observed = await self._observe()
+        if observed["engine"] != engine:
+            raise ModelLoadFailed(f"{backend.spec.label} no longer owns the engine")
+        return None, observed["generation"]
 
     async def _model(self, http: httpx.AsyncClient, plan: RunPlan, name: str, index: int) -> None:
         path = plan.dirs.get(name)
         try:
-            if plan.original["engine"] == "strata":
-                load_s, generation = await self._strata_ready(http)
+            if self._inference(plan.original["engine"]).current_only:
+                load_s, generation = await self._current_ready(http, plan.original["engine"])
             else:
                 load_s, generation = await self._serve(http, name)
         except ModelLoadFailed as exc:
@@ -762,6 +778,9 @@ class QualityRunner:
             return
         self._check(plan)
         info = await asyncio.to_thread(model_info, path)
+        descriptor = self._inference(plan.original["engine"])
+        if descriptor.current_only and descriptor.profile_fingerprint is not None:
+            info["fingerprint"] = descriptor.profile_fingerprint
         if plan.kind == "benchmark":
             await self._benchmark(http, plan, name, path, info, load_s, generation, index)
         elif plan.kind == "eval":
@@ -786,10 +805,13 @@ class QualityRunner:
             self.store.fail_case(case_id, "cancelled", "admin shut down")
             raise
 
-    def _profile_fingerprint(self) -> str | None:
+    def _profile_fingerprint(self, engine: str = "mlx") -> str | None:
         """Fingerprint of the launch flags mlx-model started the server with, as it
         recorded them in run/active.env; None for a server started before profiles."""
-        return self.control.mlx.active_env().get("MLX_PROFILE_FINGERPRINT")
+        descriptor = self._inference(engine)
+        return descriptor.profile_fingerprint or self.control.mlx.active_env().get(
+            "MLX_PROFILE_FINGERPRINT"
+        )
 
     async def _benchmark(
         self,
@@ -814,7 +836,7 @@ class QualityRunner:
         s_hash = settings_hash(EFFECTIVE_SETTINGS, fp, profile)
         for case in self.cases:
             self._check(plan)
-            await self._owned(name, generation)
+            await self._owned(name, generation, plan.original["engine"])
             case_id = self.store.add_case(
                 plan.run_id,
                 model=name,
@@ -871,7 +893,7 @@ class QualityRunner:
         interval = self.settings.quality_rss_interval_s
         for rep in range(WARMUP + REPEATS):
             self._check(plan)
-            await self._owned(name, generation)
+            await self._owned(name, generation, plan.original["engine"])
             self._progress(
                 plan, model=name, index=index, total=len(plan.targets), step=case.key, rep=rep
             )
@@ -923,22 +945,15 @@ class QualityRunner:
         generation: Any,
         index: int,
     ) -> None:
-        health = await self._get(http, "/health")
-        h: dict[str, Any] = health if isinstance(health, dict) else {}
-        if plan.original["engine"] == "strata":
-            # Strata parses tool calls itself and says whether it reads images
-            probe_info = {
-                "tool_parser": "strata",
-                "vision": h.get("images") is True,
-                "model_id": h.get("model"),
-                "engine": "strata",
-            }
-        else:
-            probe_info = {"tool_parser": h.get("loaded_tool_parser"), "vision": info["vision"]}
-        profile = self._profile_fingerprint()
+        health = await self._get(http, self._inference(plan.original["engine"]).health_path)
+        backend = self.control.backends.get(
+            "mlx" if plan.original["engine"] == "none" else plan.original["engine"]
+        )
+        probe_info = backend.compatibility_info(health, info)
+        profile = self._profile_fingerprint(plan.original["engine"])
         for key in self.compat_cases:
             self._check(plan)
-            await self._owned(name, generation)
+            await self._owned(name, generation, plan.original["engine"])
             self._progress(plan, model=name, index=index, total=len(plan.targets), step=key)
             case_id = self.store.add_case(
                 plan.run_id,
@@ -985,15 +1000,29 @@ class QualityRunner:
             plan.runtime_fingerprint = fp
             self.store.update_run(plan.run_id, runtime_fingerprint=fp)
         engine, fingerprint = "mlx", info["fingerprint"]
-        strata = plan.original["engine"] == "strata"
+        descriptor = self._inference(plan.original["engine"])
+        current_only = descriptor.current_only
         health: Any = None
-        if strata or suite.needle is not None:
-            health = await self._get(http, "/health")
-        if strata:  # no weights path: key it by the served id
-            served = health.get("model") if isinstance(health, dict) else None
+        if current_only or suite.needle is not None:
+            health = await self._get(http, descriptor.health_path)
+        if current_only:  # no weights path: key it by the served id
+            served = descriptor.served_model(health)
             if isinstance(served, str) and served:
                 engine = served
-                fingerprint = "strata-" + hashlib.sha256(served.encode()).hexdigest()[:16]
+                fingerprint = (
+                    plan.original["engine"]
+                    + "-"
+                    + hashlib.sha256(
+                        (
+                            served
+                            + (
+                                "\0" + descriptor.profile_fingerprint
+                                if descriptor.profile_fingerprint
+                                else ""
+                            )
+                        ).encode()
+                    ).hexdigest()[:16]
+                )
         thinking_max = self.settings.eval_thinking_max_tokens
         effective = {
             "temperature": 0,
@@ -1001,14 +1030,14 @@ class QualityRunner:
             "thinking": plan.thinking,
             "max_tokens_thinking": thinking_max if plan.thinking else None,
         }
-        profile = self._profile_fingerprint()
+        profile = self._profile_fingerprint(plan.original["engine"])
         s_hash = settings_hash(effective, fp, profile)
         suite_hash = suite.content_hash()
         # a needle suite skips lengths that do not fit the loaded context
-        context = health_context(health, strata)
+        context = self._inference(plan.original["engine"]).context(health)
         cases = await asyncio.to_thread(expand, suite, context)
         self._check(plan)
-        await self._owned(name, generation)
+        await self._owned(name, generation, plan.original["engine"])
         case_id = self.store.add_case(
             plan.run_id,
             model=name,
@@ -1028,7 +1057,7 @@ class QualityRunner:
             try:
                 for case in cases:
                     self._check(plan)
-                    await self._owned(name, generation)
+                    await self._owned(name, generation, plan.original["engine"])
                     self._progress(
                         plan,
                         model=name,
@@ -1057,6 +1086,7 @@ class QualityRunner:
                         thinking=int(plan.thinking),
                         **fields,
                     )
+                    await self._owned(name, generation, plan.original["engine"])
             except InterventionRequired:
                 # the answers so far stay as rows, but an intervened run never becomes latest
                 self._finalize_eval(plan, name, None, promote=False)
@@ -1166,7 +1196,9 @@ class QualityRunner:
             return
         assert self.evals is not None
         for name, case_id in plan.eval_cases.items():
-            failed = any(r["grade_state"] == "failed" for r in self.evals.results(plan.run_id, name))
+            failed = any(
+                r["grade_state"] == "failed" for r in self.evals.results(plan.run_id, name)
+            )
             self._finalize_eval(plan, name, case_id, promote=not failed)
 
     def _finalize_eval(
@@ -1247,8 +1279,9 @@ class QualityRunner:
         detail = ""
         try:
             obs = await self._observe()
-            if want["engine"] == "strata":  # never switched: only confirm it still runs
-                ok = obs["engine"] == "strata"
+            if self._inference(want["engine"]).current_only:
+                # A current-only run never switches or restarts its original backend.
+                ok = obs["engine"] == want["engine"]
                 return {
                     "outcome": "not_needed" if ok else "failed",
                     "detail": "" if ok else f"engine is {obs['engine']}",

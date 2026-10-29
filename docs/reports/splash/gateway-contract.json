@@ -1,0 +1,46 @@
+{
+  "status": "prepared_not_executed",
+  "approval": "new_packet_required",
+  "purpose": "functional qualification only after deployed readiness correction",
+  "code_deployment": false,
+  "runtime_installation": false,
+  "schema": 16,
+  "window_seconds": 2700,
+  "restoration_reserve_seconds": 600,
+  "maximum_requests": 40,
+  "scheduled_requests": 29,
+  "unused_retry_restoration_requests": 11,
+  "concurrency": 1,
+  "request_deadline_seconds": 120,
+  "output_caps": {
+    "original": 32,
+    "functional": 2048,
+    "context": 512
+  },
+  "response_identity": {
+    "direct": "configured primary",
+    "gateway": "exact reviewed public route name",
+    "arbitrary_names": false
+  },
+  "snapshot_contract": {
+    "api_from": "calendar date",
+    "scoped_readings": "observed epoch filter",
+    "scoped_availability": "read-only source and timestamp filtered rows",
+    "calendar_aggregates": "retain original scope"
+  },
+  "restoration": {
+    "already_off_states": [
+      "none",
+      "off"
+    ],
+    "required": "owned absence, original explicit MLX/services/intents, disabled env, original gateway inference, temporary route/key removal",
+    "database_restore": false
+  },
+  "exclusions": [
+    "code deploy",
+    "frozen comparison",
+    "forced failure injection",
+    "admin live acceptance",
+    "production adoption"
+  ]
+}

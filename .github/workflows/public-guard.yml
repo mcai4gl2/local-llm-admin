@@ -67,4 +67,12 @@ jobs:
         if: steps.secret.outputs.available == 'true'
         env:
           PUBLIC_DENYLIST: ${{ secrets.PUBLIC_DENYLIST }}
-        run: python3 scripts/check_public.py --patterns-env PUBLIC_DENYLIST --git . --commits HEAD
+          PUBLIC_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PUBLIC_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        # Scan the checked-out merged tree, plus both real branch histories.
+        # GitHub's temporary PR merge identity is not a submitted commit identity.
+        run: |
+          python3 scripts/check_public.py --patterns-env PUBLIC_DENYLIST --git . --commits "$PUBLIC_HEAD_SHA"
+          if [ "$PUBLIC_BASE_SHA" != "$PUBLIC_HEAD_SHA" ]; then
+            python3 scripts/check_public.py --patterns-env PUBLIC_DENYLIST --git . --commits "$PUBLIC_BASE_SHA"
+          fi

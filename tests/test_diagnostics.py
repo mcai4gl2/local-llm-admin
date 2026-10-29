@@ -304,3 +304,10 @@ async def test_embed_service_check(diag, fake_embed):
     _start_comfy(diag.control)
     check = _by_id(await diag.run())["embeddings"]
     assert check["status"] == "ok" and "ComfyUI" in check["evidence"]
+
+
+def test_engine_check_reports_unknown_ownership(diag, monkeypatch):
+    from local_llm_admin.backend_types import EngineObservation
+    monkeypatch.setattr(diag.control.backends, "observe", lambda **kw: [
+        EngineObservation("mlx", state="unknown")])
+    assert diag._conflict()["status"] == "unknown"

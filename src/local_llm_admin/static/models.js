@@ -124,7 +124,7 @@ async function loadModels() {
     el("td", { class: "actions" },
       el("button", { onclick: () => openProfile(m.name), text: "Settings", title: `profile ${m.profile_fingerprint}` }),
       el("button", { onclick: () => removeModel(m.name), text: "Remove", disabled: m.selected }),
-      el("button", { disabled: !m.dir_exists || !m.has_config || m.weights?.state !== "complete" || ["comfyui", "strata"].includes(lastStatus?.engine?.active), onclick: () => runAction("/api/models/switch", { name: m.name }, `Switch to ${m.name}?`), text: m.selected ? "Restart" : "Switch" }))));
+      el("button", { disabled: !m.dir_exists || !m.has_config || m.weights?.state !== "complete" || !EngineUI.canUseModelActions(lastStatus), onclick: () => runAction("/api/models/switch", { name: m.name }, `Switch to ${m.name}?`), text: m.selected ? "Restart" : "Switch" }))));
   document.querySelector("#models-table tbody").replaceChildren(...(rows.length ? rows :
     [el("tr", {}, el("td", { colspan: 6, class: "muted", text: "No models (is the drive mounted?)" }))]));
 }
@@ -202,54 +202,47 @@ let lastStatus = null;
 let engineModels = [];
 let userPicked = false;  // keep the dropdown choice only if the user made one
 
-function engineLabel(st) {
-  const a = st.engine?.active;
-  return a === "mlx" ? `MLX · ${st.selected}` : a === "comfyui" ? "ComfyUI" : a === "strata" ? `Strata${st.engine?.strata?.pack ? ` · ${st.engine.strata.pack}` : ""}`
-    : a === "conflict" ? "Conflict" : "Off";
-}
+function engineLabel(st) { return EngineUI.label(st); }
 
-// 131072 → "128K": contexts are set in powers of two
-const contextK = (n) => (n % 1024 === 0 ? `${n / 1024}K` : fmt.compact(n));
-
-// one entry per installed pack (its run config), e.g. "Strata · IQ3_XXS · 128K context"
-function strataOptions(s) {
-  const packs = s?.packs || [];
-  if (!packs.length) return [el("option", { value: "strata", text: "Strata · Qwen3.8-Flash-Next" })];
-  return packs.map((p) => el("option", {
-    value: `strata:${p.pack}`,
-    text: `Strata · ${p.pack}${p.max_context ? ` · ${contextK(p.max_context)} context` : ""}${s.running && s.pack === p.pack ? " (running)" : ""}`,
-  }));
-}
+// 131072 → 128K; effective contexts are presented only when reported.
+const contextK = (n) => EngineUI.context(n);
 
 function renderEngineOptions() {
   const sel = document.getElementById("engine-target");
   const current = userPicked ? sel.value : null;
-  const opts = engineModels.map((m) => el("option", { value: `mlx:${m.name}`, text: `MLX · ${m.name}${m.selected ? " (last used)" : ""}` }));
-  opts.push(el("option", { value: "comfyui", text: "ComfyUI" }));
-  if (lastStatus?.engine?.strata_enabled) opts.push(...strataOptions(lastStatus.engine.strata));
-  opts.push(el("option", { value: "off", text: "Off" }));
-  sel.replaceChildren(...opts);
-  const def = ["comfyui", "strata"].includes(lastStatus?.engine?.active) ? `mlx:${(engineModels.find((m) => m.selected) || engineModels[0] || {}).name}` : "comfyui";
-  sel.value = current && [...sel.options].some((o) => o.value === current) ? current : def;
+  const options = EngineUI.options(lastStatus, engineModels);
+  sel.replaceChildren(...options.map(t => el("option", {value: t.value, text: t.label})));
+  sel.value = current && options.some(t => t.value === current)
+    ? current : EngineUI.defaultTarget(lastStatus, engineModels);
 }
 
 async function applyEngine() {
   const target = document.getElementById("engine-target").value;
-  const st = lastStatus || {};
-  const leaving = { comfyui: "ComfyUI", strata: "Strata" }[st.engine?.active];
-  const [title, body] = target === "comfyui"
-    ? ["Switch to ComfyUI?", "LiteLLM local-qwen will be unavailable until you switch back. In-flight LLM requests will fail."]
-    : target === "strata" || target.startsWith("strata:")
-      ? [st.engine?.active === "strata" ? `Switch Strata to ${target.slice(7)}?` : `Switch to Strata${target.length > 7 ? ` · ${target.slice(7)}` : ""}?`, "Strata answers LiteLLM local-qwen on the same address once it has loaded (seconds to about a minute). The sidecars and the embedding service stop until you switch back. In-flight LLM requests will fail."]
-      : target === "off" ? ["Stop the running engine?", "Nothing will use the GPU until you start an engine again."]
-        : [`Run ${target.slice(4)} on MLX?`, leaving && leaving !== target ? `${leaving} will be stopped first.` : DEFAULT_CONFIRM];
-  if (!(await confirmAction(title, body))) return;
+  const prompt = EngineUI.prompt(lastStatus, target);
+  if (!(await confirmAction(prompt.title, prompt.body))) return;
   try {
     const job = await setEngineWithForce(target, confirmAction);
     if (job) { showJob(job); pollJob(job.id); }
-  } catch (e) {
-    alert(e.message);
-  }
+  } catch (e) { alert(e.message); }
+}
+
+function renderBackendCards(st) {
+  const container = document.getElementById("backend-cards");
+  const cards = Object.values(st.engine?.backends || {}).filter(b => b.enabled
+    && b.operations.includes("profiles") && !document.getElementById(b.id + "-card"));
+  container.replaceChildren(...cards.map(b => {
+    const status = st.engine?.[b.id] || {};
+    const target = b.targets.find(t => t.value === b.id + ":" + b.reference) || {};
+    const facts = [["Profile", b.reference || "—"], ["Model", status.model || "—"],
+      ["Checkpoint", target.cohort || "—"],
+      ["Context", EngineUI.context(status.max_context || target.max_context) || "—"],
+      ["Reasoning", target.reasoning ? "On by default" : "—"], ["Usage", "unavailable"]];
+    return el("section", {class: "card"},
+      el("div", {class: "card-head"}, el("h2", {text: b.label}),
+        el("span", {class: "badge", "data-state": b.id + "-" + b.state, text: EngineUI.badge(st.engine.active === b.id ? st : {engine: {active: b.id, backends: st.engine.backends}})})),
+      el("p", {class: "muted", text: b.note || ""}),
+      el("dl", {class: "facts"}, ...facts.map(([key, value]) => el("div", {}, el("dt", {text: key}), el("dd", {text: value})))));
+  }));
 }
 
 // Strata card: from /api/status; a field Strata does not report shows "—"
@@ -405,6 +398,8 @@ document.getElementById("q-interrupt").addEventListener("click", async () => {
 onStatus((st) => {
   const engineChanged = lastStatus?.engine?.active !== st.engine?.active;
   lastStatus = st;
+  renderEngineOptions();
+  renderBackendCards(st);
   if (engineChanged) {  // redraw what depends on the engine: buttons, default target, card
     renderEngineOptions();
     loadModels().catch(() => {});

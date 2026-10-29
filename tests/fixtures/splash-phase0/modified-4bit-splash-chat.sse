@@ -1,0 +1,200 @@
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "#"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Incident"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Response"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Field"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Guide"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ":"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Local"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " In"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "ference"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Server"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "\n"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "**"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "Target"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Audience"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ":**"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Small"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Engineering"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "/O"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "ps"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Teams"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " ("}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "1"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "–"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "5"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " people"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ")"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "\n"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "**"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "Scope"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ":**"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Self"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "-host"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "ed"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " L"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "LM"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "/"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "ML"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " inference"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " servers"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " ("}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "e"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ".g"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ".,"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " v"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "LL"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "M"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ","}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " T"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "GI"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ","}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " O"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "ll"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "ama"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ","}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Trit"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "on"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ","}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Fast"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "API"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " +"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Py"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "T"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "orch"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ")"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "\n"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "**"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "Goal"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ":**"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Rapid"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " tri"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "age"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ","}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " stabilization"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ","}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " and"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " verification"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " of"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " service"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " health"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "."}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "\n\n"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "---"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "\n\n"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "##"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " "}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "1"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "."}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Core"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Philosophy"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": ":"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " The"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " \""}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "T"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "riage"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": " Triangle"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {"content": "\""}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [{"index": 0, "delta": {}, "finish_reason": "length"}], "timings": {"prompt_n": 108, "prompt_ms": 320.495, "prompt_per_second": 336.97873601772255, "predicted_n": 96, "predicted_ms": 2005.211, "predicted_per_second": 47.37656037195088, "cache_n": 0, "draft_n": 179, "draft_n_accepted": 69}}
+
+data: {"id": "chatcmpl-example", "object": "chat.completion.chunk", "created": 0, "model": "local-qwen", "choices": [], "usage": {"prompt_tokens": 108, "completion_tokens": 96, "total_tokens": 204, "prompt_tokens_details": {"cached_tokens": 0}, "completion_tokens_details": {"reasoning_tokens": 0}}, "metrics": {"prefill": {"tokens": 108}, "decode": {"tokens": 95}, "request_latency": {"start_to_first_token_ms": 320.495, "first_token_to_done_ms": 2005.211, "wall_ms": 2326.013, "ttft_ms": 320.8019999999999, "queue_to_start_ms": 0.3069999999999027, "stream_tokens_per_second": 47.37656037195088}, "cache": {"status": "miss", "matched_tokens": 0, "deduplicated_tokens": 0, "lane": 0}, "speculation": {"drafted_tokens": 179, "accepted_draft_tokens": 69, "cycles": 27}}}
+
+data: [DONE]
+

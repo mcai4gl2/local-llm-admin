@@ -384,7 +384,10 @@ async def test_logs_follow_streams_appended_lines(client, fake_mlx):
 # --- chat -------------------------------------------------------------------
 
 
-async def test_chat_streams(client, mlx_health, fake_llm):
+async def test_chat_streams(client, mlx_health, fake_llm, fake_comfy):
+    started = await client.post("/api/models/start", json={"name": "qwen"})
+    job = await _wait_job(client, started.json()["id"])
+    assert job["status"] == "succeeded"
     r = await client.post("/api/chat", json={"messages": [{"role": "user", "content": "hello"}]})
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
     events = [json.loads(ln[6:]) for ln in r.text.splitlines() if ln.startswith("data: ")]

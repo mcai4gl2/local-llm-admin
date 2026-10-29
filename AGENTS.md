@@ -55,7 +55,26 @@ Always pass `-u vscode`; without it files end up owned by root.
 
 ## Plans and devlogs
 
-- Plans: `plans/YYYYMMDD_<name>.md`, written public-safe.
+Follow the plan lifecycle in `plans/README.md` automatically when starting, updating or
+finishing planned work:
+
+- Keep one public-safe plan per coherent change in `plans/active/YYYYMMDD_<name>.md`.
+  Update that plan as work progresses; do not create a new plan for each checkpoint,
+  test run or push. Small routine edits do not need a separate plan.
+- Put proposed or deferred work in `plans/backlog/`, grouped by component when useful,
+  with its status and next decision explicit. Move a scoped plan into `plans/active/`
+  when implementation begins.
+- When implementation is complete, move its plan into `plans/archive/<component>/`.
+  Record the outcome and leave only a concise follow-up in backlog for deferred scope;
+  do not leave completed implementation plans in active while PR checks finish.
+- Update the active, backlog and relevant archive indexes, and fix links whenever a
+  plan moves. Keep `plans/README.md` as the navigation entry point.
+- Preserve original failed, partial or inconclusive investigation outcomes. Archiving
+  does not imply qualification passed. Put current behavior and operating instructions
+  in `docs/` and host operating guides; track delivery and CI status in the PR checks.
+
+- Reusable deployment tools live in `ops/`; experiment bundles live in `experiments/`.
+  Sanitized rollout evidence lives under `docs/reports/`; do not rewrite frozen JSON outcomes.
 - After every change, append to `devlogs/YYYY-MM-DD.md` (append-only):
 
 ```markdown

@@ -1,0 +1,261 @@
+{
+  "purpose": "Scrubbed functional projections, not benchmark samples",
+  "captures": {
+    "stock-8bit-mlx": {
+      "health_body": {
+        "status": "healthy"
+      },
+      "models_body": {
+        "object": "list",
+        "data": [
+          {
+            "object": "model",
+            "loaded": true,
+            "id": "local-qwen",
+            "created": 0
+          }
+        ]
+      },
+      "stream": {
+        "prompt_tokens": 108,
+        "completion_tokens": 96,
+        "cached_tokens": 0,
+        "finish_reason": "length",
+        "error": null
+      },
+      "schema": {
+        "status": 200,
+        "valid": true
+      },
+      "tool": {
+        "status": 200,
+        "valid": true
+      },
+      "cancellation": {
+        "released": true
+      },
+      "reasoning": {
+        "has_reasoning": true,
+        "answer_correct": true
+      },
+      "metrics_projection": {
+        "loaded_context_size": 262144,
+        "configured_context_limit": 32768,
+        "effective_context_limit": 32768
+      },
+      "private_source_byte_sha256": {
+        "health.txt": "5c86747b1b062464de1bd0b16c7681a5d35ee376bf69b367df0f81b799ef2d2a",
+        "v1-models.txt": "442480500d39d18b48007039a0e37a513de5c8c7f6c100e59314828b87c0efcf",
+        "stream.sse": "ffee916da640df0e71bdd28dc69050fe1cfedcdeec8d9ccafb98b8393692da97",
+        "qualification.json": "619802fa8eb0df8b535b4e23b70c7b2d7c7f31dc4cb6098ba02d709e38f6a658",
+        "reasoning-smoke.json": "1388aa52290e08fbe035bc8bbcab7ee8f1450585b19eba3f482fd7e0139ef14c",
+        "after-cancel-status.json": "6d344a1459a6970e877480c03efac5510aeb94ba76af4f7c5cb83ab259052d8a",
+        "ready.txt": "37ec4665a8102d115ffd1ac20dae94c98b4dac64b0c1a68228aa2a531caeb35d",
+        "status.txt": "37ec4665a8102d115ffd1ac20dae94c98b4dac64b0c1a68228aa2a531caeb35d",
+        "metrics.txt": "51510ac8533659cd6042b2911f03efeb442102082db8d10baf0997b8ca8d6378"
+      }
+    },
+    "stock-8bit-splash": {
+      "health_body": {
+        "status": "ok"
+      },
+      "models_body": {
+        "object": "list",
+        "data": [
+          {
+            "object": "model",
+            "max_model_len": 32768,
+            "context_length": 32768,
+            "vision": true,
+            "input_modalities": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "id": "local-qwen",
+            "created": 0
+          }
+        ]
+      },
+      "stream": {
+        "prompt_tokens": 108,
+        "completion_tokens": 96,
+        "cached_tokens": 0,
+        "finish_reason": "length",
+        "error": null
+      },
+      "schema": {
+        "status": 200,
+        "valid": true
+      },
+      "tool": {
+        "status": 200,
+        "valid": true
+      },
+      "cancellation": {
+        "released": true
+      },
+      "reasoning": {
+        "has_reasoning": true,
+        "answer_correct": true
+      },
+      "ready_body": {
+        "status": "ready"
+      },
+      "status_projection": {
+        "ready": true,
+        "maximum_context_tokens": 32768,
+        "memory_pressure": "normal",
+        "thermal_state": "nominal",
+        "metal": {
+          "healthy": true
+        },
+        "kv": {
+          "format": "bf16",
+          "quantization": "none"
+        },
+        "state_format": "fp32",
+        "memory_limit_bytes": 42949672960
+      },
+      "private_source_byte_sha256": {
+        "health.txt": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+        "v1-models.txt": "4c43ba315811c9ffd9b007fd30a4b47dae8e07e572e0bca0bc58606f1483484c",
+        "stream.sse": "453b7d648c219f6c3d110b944ff0f746f2a7de5c97229ceae38548943dbf6541",
+        "qualification.json": "be2a4871a1f5e0bdf7bf310119c5624601ef70d5f0c525d5837e4debed6f398c",
+        "reasoning-smoke.json": "b5d9685c6f35eeeed6249a1a4f0f77505431673bcdc97f31e88c6f4ca48f6bd0",
+        "after-cancel-status.json": "426db9ec2df8a02674c0561e7338b30a559db0a12b2f11a4569f0970175021f0",
+        "ready.txt": "31bf75f4c0a97cc1f7b60df824fa390b3be9ba014f29b63c87c698ba63d9a9fd",
+        "status.txt": "a864b44a3bd8655b7dc353066644102c7f723c3c8573749b600080583a1bd326",
+        "metrics.txt": "51b6472abfb47e2c475becf531263f659122f8b19ab1ba2d7c841423a08cf4cd"
+      }
+    },
+    "modified-4bit-mlx": {
+      "health_body": {
+        "status": "healthy"
+      },
+      "models_body": {
+        "object": "list",
+        "data": [
+          {
+            "object": "model",
+            "loaded": true,
+            "id": "local-qwen",
+            "created": 0
+          }
+        ]
+      },
+      "stream": {
+        "prompt_tokens": 108,
+        "completion_tokens": 96,
+        "cached_tokens": 0,
+        "finish_reason": "length",
+        "error": null
+      },
+      "schema": {
+        "status": 200,
+        "valid": true
+      },
+      "tool": {
+        "status": 200,
+        "valid": true
+      },
+      "cancellation": {
+        "released": true
+      },
+      "reasoning": {
+        "has_reasoning": true,
+        "answer_correct": true
+      },
+      "metrics_projection": {
+        "loaded_context_size": 262144,
+        "configured_context_limit": 32768,
+        "effective_context_limit": 32768
+      },
+      "private_source_byte_sha256": {
+        "health.txt": "693991b8d26fadfcc6f81265be058f10074c316cedf9518a3424c9e984631f7e",
+        "v1-models.txt": "59a62723f44897c85e5a422f5b6aa4c05a0ef3502c84bda1f9e22d12d0c96bf9",
+        "stream.sse": "e8b3bc0e0f07e84d6c84a84d2ef92480309f9999a0761a538c01a75b979eafd9",
+        "qualification.json": "63faba0f62040e2584694f4cbfa39ab0093f3376538f2b050b3220f6d6261934",
+        "reasoning-smoke.json": "9e97d5e1d0e806e4524c0fd327257a8461f9b43e6b59e2338afa6a5b07d8a359",
+        "after-cancel-status.json": "7adc1c6a7f36c7afe3d7766f988135e37927efe56f177ac973f758a2cbf526ba",
+        "ready.txt": "37ec4665a8102d115ffd1ac20dae94c98b4dac64b0c1a68228aa2a531caeb35d",
+        "status.txt": "37ec4665a8102d115ffd1ac20dae94c98b4dac64b0c1a68228aa2a531caeb35d",
+        "metrics.txt": "56826938ce74ba958b3017ac9aff671ff182f549223cf60b02da2fb87eb8a060"
+      }
+    },
+    "modified-4bit-splash": {
+      "health_body": {
+        "status": "ok"
+      },
+      "models_body": {
+        "object": "list",
+        "data": [
+          {
+            "object": "model",
+            "max_model_len": 32768,
+            "context_length": 32768,
+            "vision": true,
+            "input_modalities": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "id": "local-qwen",
+            "created": 0
+          }
+        ]
+      },
+      "stream": {
+        "prompt_tokens": 108,
+        "completion_tokens": 96,
+        "cached_tokens": 0,
+        "finish_reason": "length",
+        "error": null
+      },
+      "schema": {
+        "status": 200,
+        "valid": true
+      },
+      "tool": {
+        "status": 200,
+        "valid": true
+      },
+      "cancellation": {
+        "released": true
+      },
+      "reasoning": {
+        "has_reasoning": true,
+        "answer_correct": true
+      },
+      "ready_body": {
+        "status": "ready"
+      },
+      "status_projection": {
+        "ready": true,
+        "maximum_context_tokens": 32768,
+        "memory_pressure": "normal",
+        "thermal_state": "fair",
+        "metal": {
+          "healthy": true
+        },
+        "kv": {
+          "format": "bf16",
+          "quantization": "none"
+        },
+        "state_format": "fp32",
+        "memory_limit_bytes": 42949672960
+      },
+      "private_source_byte_sha256": {
+        "health.txt": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+        "v1-models.txt": "7354dea9499f56620daa6de8aaa3aa57ce41e486ac9b746bd059d8e6dfc40e6a",
+        "stream.sse": "31fda7e11365c2c3eb094f86cdf727e4e665a9d0882801f04f815e3281291eaa",
+        "qualification.json": "f94c56fbcda02318df7c97c56a4f0840306d77439fa1ec7a25ba2d5b46975f97",
+        "reasoning-smoke.json": "44586a8b0da8f19e597e976c54af6255a5972fe0679b94a0b8cbb0383070307a",
+        "after-cancel-status.json": "28fc15e959dab4d6f0b037dccd5234e173e0b6254323c9dae4478226883d2dee",
+        "ready.txt": "31bf75f4c0a97cc1f7b60df824fa390b3be9ba014f29b63c87c698ba63d9a9fd",
+        "status.txt": "4ed4708abcbf513bc89ed5a9565f6b61c8507b03769db5033af96362a2c0f56f",
+        "metrics.txt": "7dd72114faa39726b08ab16f8f77c3adf83f60ba94cb6a61ca0d6e7f659a60b1"
+      }
+    }
+  }
+}

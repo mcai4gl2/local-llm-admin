@@ -59,6 +59,7 @@ class WatchInput:
     now_wall: float = 0.0
     grace_s: float = 30.0
     window_s: float = 1800.0
+    recovery_eligible: bool = True
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,7 @@ def decide(i: WatchInput) -> Decision:
         return Decision("none", f"engine state is {i.engine}")
     if not i.intent or i.intent == UNKNOWN:
         return Decision("none", "intended engine unknown")
-    if not i.intent.startswith("mlx:"):
+    if not i.intent.startswith("mlx:") or not i.recovery_eligible:
         return Decision("none", "only MLX is restarted automatically")
     if i.engine != "none":
         return Decision("none", f"{i.engine} is running")
@@ -130,6 +131,7 @@ class Supervisor:
         *,
         clock: Callable[[], float] = time.time,
         mono: Callable[[], float] = time.monotonic,
+        backend_health: Callable[[dict[str, Any] | None], dict[str, dict[str, Any]]] | None = None,
         connect: Callable[..., Any] = socket.create_connection,
     ) -> None:
         self.settings = settings
@@ -144,6 +146,7 @@ class Supervisor:
         self.clock = clock
         self.mono = mono
         self.connect = connect
+        self.backend_health = backend_health or (lambda observed: {})
         self.evaluator = Evaluator(alerts, events)
         self._startup_until = mono() + settings.watchdog_grace_s
         self._outage_since: float | None = None
@@ -206,6 +209,7 @@ class Supervisor:
             pressure=self.sampler.current().get("pressure"),
             litellm_ok=await self._litellm(mono),
             suspended=self.control.recovery_blocked(),
+            backends=self.backend_health(observed),
         )
         self._finish_pending(snap)
         await self._watch(snap, observed, polled, lock)
@@ -320,6 +324,7 @@ class Supervisor:
             self._outage_since = None
         inp = WatchInput(
             enabled=self.settings.watchdog_enabled,
+            recovery_eligible=self.control.backends.recovery_eligible(snap.intent or ""),
             intent=snap.intent,
             engine=snap.engine,
             drive_ok=snap.drive_mounted,

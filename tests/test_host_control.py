@@ -81,6 +81,8 @@ def test_rejected_start_leaves_no_lock(host):
 
 
 def test_failing_stop_leaves_no_lock(host):
+    # Simulate a port remaining occupied after its initial listener exits.
+    (host.state / "listen_sticky_8080").touch()
     s = host.sleeper()
     (host.state / "listen_8080").write_text(str(s.pid))
     r = host.run("stop")

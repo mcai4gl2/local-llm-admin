@@ -1,0 +1,168 @@
+{
+  "contract": "splash-reasoning-lifecycle-1",
+  "campaign_sha256": "0321945ee62006ec8650c7b4af87be0200ffe771377e8c9a742e2dfb22e6ff19",
+  "context_tokens": 32768,
+  "concurrency": 1,
+  "temperature": 0,
+  "seed": 0,
+  "native_collectors": "disabled",
+  "disk_cache": "disabled",
+  "gpu_sidecars": "stopped",
+  "reasoning": {
+    "windows": 4,
+    "cases_per_condition": 8,
+    "measured_requests": 64,
+    "excluded_warmups": 8,
+    "completion_cap": 2048,
+    "deadline_s": 240,
+    "suite": [
+      {
+        "id": "inventory",
+        "prompt": "A shop buys 17 boxes of 12 items for 4 credits per item. It sells exactly three quarters of all items for 7 credits each. Unsold items have no credited value. What is revenue minus the cost of all purchased items?",
+        "expected": 255
+      },
+      {
+        "id": "schedule",
+        "prompt": "Tasks run as soon as possible with unlimited workers. A takes 4 hours. B takes 3 hours and starts after A. C takes 5 hours and starts after A. D takes 2 hours and starts after both B and C. Starting A at time zero, when does D finish?",
+        "expected": 11
+      },
+      {
+        "id": "trace",
+        "prompt": "Execute this Python: total=0; then for x in [2,5,1,4], add 2*x to total if x is even, otherwise subtract x. What is final total?",
+        "expected": 6
+      },
+      {
+        "id": "ordering",
+        "prompt": "Alex, Blair and Casey each occupy one distinct day numbered 1,2,3. Alex is before Blair. Casey is not on day 3. Blair is not on day 2. Which day does Blair occupy?",
+        "expected": 3
+      },
+      {
+        "id": "probability",
+        "prompt": "A bag has 3 red and 2 blue balls. Draw 2 uniformly without replacement. What is the probability of exactly one red? Give value as a reduced fraction string a/b.",
+        "expected": "3/5"
+      },
+      {
+        "id": "allocation",
+        "prompt": "Choose a subset of four indivisible items, at most one each: (weight,value)=(3,5),(4,7),(5,9),(6,10). Capacity is 9. What is the maximum total value?",
+        "expected": 16
+      },
+      {
+        "id": "nulls",
+        "prompt": "SQL column v contains rows 2,NULL,2,5. COUNT(*) counts rows, COUNT(v) counts non-null values, COUNT(DISTINCT v) counts distinct non-null values, SUM(v) ignores NULL. Give [COUNT(*),COUNT(v),COUNT(DISTINCT v),SUM(v)] as value.",
+        "expected": [
+          4,
+          3,
+          2,
+          9
+        ]
+      },
+      {
+        "id": "calendar",
+        "prompt": "Day 0 is Monday. Days advance Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday and repeat. What weekday is day 100? Give the English weekday name as value.",
+        "expected": "Wednesday"
+      }
+    ],
+    "latency": "descriptive; first event and first answer reported separately; missing first answer remains missing"
+  },
+  "lifecycle": {
+    "windows": 2,
+    "backends": [
+      "mlx",
+      "splash"
+    ],
+    "cohorts": [
+      "stock-8bit",
+      "modified-4bit"
+    ],
+    "launches_per_backend_cohort": 4,
+    "restart_cycles": 3,
+    "inference_requests": 20,
+    "startup_deadline_s": 120,
+    "request_deadline_s": 90,
+    "release_deadline_s": 90,
+    "stop_reclaim_deadline_s": 90,
+    "splash_idle_release_s": 20,
+    "mlx_idle_observation_s": 25,
+    "mlx_resume_kind": "manual_unload; automatic_idle_unsupported",
+    "release_fraction_min": 0.5,
+    "host_reclaim_tolerance": "max(2GiB, 10% of paused-service baseline)",
+    "host_reclaim_samples": 3,
+    "host_reclaim_span_s": 4,
+    "cold_scope": "model process; OS/filesystem caches uncontrolled"
+  },
+  "windows": [
+    {
+      "label": "reasoning-stock-8bit-off-1",
+      "kind": "reasoning",
+      "cohort": "stock-8bit",
+      "mode": false,
+      "order": [
+        "mlx",
+        "splash"
+      ],
+      "budget_s": 5040
+    },
+    {
+      "label": "reasoning-stock-8bit-on-1",
+      "kind": "reasoning",
+      "cohort": "stock-8bit",
+      "mode": true,
+      "order": [
+        "splash",
+        "mlx"
+      ],
+      "budget_s": 5040
+    },
+    {
+      "label": "reasoning-modified-4bit-off-1",
+      "kind": "reasoning",
+      "cohort": "modified-4bit",
+      "mode": false,
+      "order": [
+        "mlx",
+        "splash"
+      ],
+      "budget_s": 5040
+    },
+    {
+      "label": "reasoning-modified-4bit-on-1",
+      "kind": "reasoning",
+      "cohort": "modified-4bit",
+      "mode": true,
+      "order": [
+        "splash",
+        "mlx"
+      ],
+      "budget_s": 5040
+    },
+    {
+      "label": "lifecycle-stock-8bit-1",
+      "kind": "lifecycle",
+      "cohort": "stock-8bit",
+      "mode": false,
+      "order": [
+        "mlx",
+        "splash"
+      ],
+      "budget_s": 4080
+    },
+    {
+      "label": "lifecycle-modified-4bit-1",
+      "kind": "lifecycle",
+      "cohort": "modified-4bit",
+      "mode": false,
+      "order": [
+        "splash",
+        "mlx"
+      ],
+      "budget_s": 4080
+    }
+  ],
+  "interpretation": {
+    "reasoning_gate": "all fixed answers correct, natural stop, requested mode takes effect, complete valid accounting",
+    "lifecycle_gate": "four complete owned generations, readiness and inference, idle/manual resume and release, stop and reclamation; MLX automatic idle unsupported",
+    "infrastructure_failure": "stop campaign and restore; no retries",
+    "incorrect_or_truncated_answer": "retain in full fixed reasoning series; scoped failure",
+    "adoption_decision": "inconclusive until every parent gate is satisfied"
+  }
+}

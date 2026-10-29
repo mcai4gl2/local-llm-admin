@@ -25,9 +25,9 @@ from urllib.parse import urlsplit
 
 import psutil
 
+from .backend_types import resolve_observations
 from .config import Settings
 from .control import UNKNOWN, ControlService
-from .engines import resolve_active
 from .ingestion import IngestStore, error_hint
 from .mlx import MlxClient
 from .sidecars import SidecarSpec, read_intent, read_service_intent
@@ -197,6 +197,7 @@ class Diagnostics:
         probes: ProbeRunner,
         *,
         watchdog_state: Callable[[], dict[str, Any]],
+        backend_health: Callable[[], dict[str, dict[str, Any]]] | None = None,
         connect: Callable[..., Any] = socket.create_connection,
     ) -> None:
         self.settings = settings
@@ -207,6 +208,7 @@ class Diagnostics:
         self.probes = probes
         self.watchdog_state = watchdog_state
         self.connect = connect
+        self.backend_health = backend_health or (lambda: {})
 
     async def _probe(
         self, cid: str, title: str, fn: Callable[[], dict[str, Any]]
@@ -279,12 +281,17 @@ class Diagnostics:
         )
 
     def _conflict(self) -> dict[str, Any]:
-        up = {
-            "MLX": self.mlx.engine_running(),
-            "ComfyUI": self.control.comfy.running().running,
-            "Strata": self.control.strata.running().running,
-        }
-        active = resolve_active(*up.values())
+        observations = self.control.backends.observe(include_disabled=True)
+        up = {self.control.backends.get(o.backend).spec.label: o.running for o in observations}
+        active = resolve_observations(observations)
+        if active == "unknown":
+            return _check(
+                "engine_conflict",
+                "Engines",
+                "unknown",
+                "engine ownership is unknown",
+                "Inspect the owning PID files and shared-port listener.",
+            )
         if active == "conflict":
             return _check(
                 "engine_conflict",
@@ -324,7 +331,7 @@ class Diagnostics:
         if meant and not st.running:
             engine = self.control.exclusive_running() if spec.kind == "service" else None
             if engine is not None:
-                label = "ComfyUI" if engine == "comfyui" else "Strata"
+                label = self.control.backends.get(engine).spec.label
                 return _check(
                     cid, title, "ok", f"stopped while {label} runs; restored when you switch back"
                 )
@@ -419,6 +426,27 @@ class Diagnostics:
             " ".join(hints) or "See the mlx-server log.",
         )
 
+    def _serving_backend(self) -> dict[str, Any]:
+        intent = self.control.intent() or {}
+        wanted = str(intent.get("value", "")).partition(":")[0]
+        descriptor = self.backend_health().get(wanted, {})
+        label = descriptor.get("label", wanted)
+        if descriptor.get("enabled") is False:
+            return _check(
+                "engine_readiness", f"{label} serving", "fail", "Intended backend is disabled."
+            )
+        state = descriptor.get("state", "unknown")
+        status = (
+            "ok" if descriptor.get("ready") is True else "unknown" if state == "unknown" else "warn"
+        )
+        return _check(
+            "engine_readiness",
+            f"{label} serving",
+            status,
+            f"Intended {intent.get('value')}; observed {state}. Telemetry freshness is separate.",
+            "Recovery remains runtime-owned; no automatic admin restart.",
+        )
+
     async def run(self) -> list[dict[str, Any]]:
         drive, access, net, lock, conflict = await asyncio.gather(
             self._probe("drive", "Model drive", self._drive),
@@ -433,6 +461,13 @@ class Diagnostics:
             self._probe("request_errors", "Request errors (1 h)", self._request_errors),
         )
         extra = []
+        wanted = str((self.control.intent() or {}).get("value", "")).partition(":")[0]
+        if any(
+            b.spec.id == wanted and "profiles" in b.spec.operations for b in self.control.backends
+        ):
+            extra.append(
+                await self._probe("engine_readiness", "Serving backend", self._serving_backend)
+            )
         specs = self.control.sidecars.specs()
         for spec in [*specs, *self.control.sidecars.services()]:
 

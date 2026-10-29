@@ -1,0 +1,10 @@
+Splash integration runtime pin (2026-10-27; inventory only, not an installation receipt)
+repo: https://github.com/incoai/splash
+version: 1.4.0
+asset: splash-1.4.0-arm64-macos26.tar.gz
+archive-sha256: 4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d
+layout: splash/runtime/python/bin/python3; splash/runtime/engine/splash
+source: original standalone release, no instrumentation or source patches
+platform: macOS 26 arm64 (verify against the intended host before installation)
+profile: context 32768; BF16 KV; FP32 state; reasoning on; disk cache 0; idle release off
+installation: not performed by Phase 2 repository work

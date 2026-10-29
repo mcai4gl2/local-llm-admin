@@ -1,0 +1,287 @@
+{
+  "status": "supported_functionality_deployed_enabled_MLX_default",
+  "source_scope": "Four Python files plus versioned host guide/example files; full paired app/host manifests pinned; inference runtimes/assets unchanged",
+  "endpoint_isolation": {
+    "legacy_default_retained": true,
+    "deployment_native_port_separate": true,
+    "ownership_record_binds_port": true,
+    "old_record_port_semantics_preserved": true,
+    "admin_mismatch_refused": true,
+    "native_start_still_excludes_other_gpu_engines": true
+  },
+  "profiles": {
+    "stock": {
+      "profile": "stock-8bit-32k",
+      "direct_stream": "pass",
+      "gateway_stream": "pass",
+      "direct_context_tokens": 31873,
+      "gateway_context_tokens": 31873,
+      "context_retrieval_reasoning_usage": "pass",
+      "gateway_disconnect_capture": "emission_only_retained",
+      "gateway_cancellation_runtime_assessment": "pass",
+      "followup": "pass",
+      "same_native_generation_after_cancel": true,
+      "native_recovery": "pass",
+      "native_recovery_same_controller": true,
+      "new_native_generation": true,
+      "recovery_epoch_count": 2,
+      "telemetry_attribution": "pass",
+      "idle_deduplication": "pass",
+      "admin_chat": "pass",
+      "compatibility": {
+        "plain": "pass",
+        "stream": "pass",
+        "tools": "pass",
+        "json": "pass",
+        "thinking": "pass",
+        "reasoning_effort_low": "pass",
+        "reasoning_effort_high": "pass",
+        "vision": "unsupported"
+      },
+      "current_profile_eval_history": "pass",
+      "admin_cancel": "pass",
+      "logs": "pass",
+      "owned_off_after_recovery": "pass",
+      "inactive_gateway_status": 500
+    },
+    "modified": {
+      "profile": "modified-4bit-32k",
+      "direct_stream": "pass",
+      "gateway_stream": "pass",
+      "direct_context_tokens": 31873,
+      "gateway_context_tokens": 31873,
+      "context_retrieval_reasoning_usage": "pass",
+      "gateway_disconnect_capture": "emission_only_retained",
+      "gateway_cancellation_runtime_assessment": "pass",
+      "followup": "pass",
+      "same_native_generation_after_cancel": true,
+      "native_recovery": "pass",
+      "native_recovery_same_controller": true,
+      "new_native_generation": true,
+      "recovery_epoch_count": 2,
+      "telemetry_attribution": "pass",
+      "idle_deduplication": "pass",
+      "admin_chat": "pass",
+      "compatibility": {
+        "plain": "pass",
+        "stream": "pass",
+        "tools": "pass",
+        "json": "pass",
+        "thinking": "pass",
+        "reasoning_effort_low": "pass",
+        "reasoning_effort_high": "pass",
+        "vision": "unsupported"
+      },
+      "current_profile_eval_history": "pass",
+      "admin_cancel": "pass",
+      "logs": "pass",
+      "owned_off_after_recovery": "pass",
+      "inactive_gateway_status": 500
+    }
+  },
+  "gateway": {
+    "persistent_database_routes": 2,
+    "new_key_models": 2,
+    "key_expiry": null,
+    "configured_max_parallel_requests": 1,
+    "configured_rpm_limit": 20,
+    "original_route_projection": "unchanged",
+    "existing_key_scopes": "untouched",
+    "original_model_key_scope_refusal": 403,
+    "inactive_routes": [
+      500,
+      500
+    ],
+    "same_original_generation_across_inactive_checks": true,
+    "original_gateway_checks_passed": 3
+  },
+  "acceptance": {
+    "normal_cycles": 4,
+    "directed_engine_pairs": 12,
+    "native_admin_profiles": 2,
+    "commissioning_http_attempts": 18,
+    "commissioning_request_cap": 20,
+    "complete_or_expected_refusal_records": 16,
+    "emission_only_cancel_records": 2,
+    "separate_native_cancel_assessments_passed": 2,
+    "window_cap_s": 2700,
+    "restoration_reserve_s": 600,
+    "original_check_latest_completion_bound_s": 374.19,
+    "current_window_failed_owning_jobs": 0
+  },
+  "final_state": {
+    "splash_enabled": true,
+    "active_default": "mlx",
+    "original_selected_model_and_semantic_intents": "preserved",
+    "actual_services_and_sidecars": "original",
+    "pending_jobs": 0,
+    "native_receipt": false,
+    "native_members": 0,
+    "native_listener": false,
+    "locks_clear": true,
+    "schema": 16,
+    "integrity": "ok",
+    "database_totals": {
+      "engine_readings": 85,
+      "backend_availability": 109
+    }
+  },
+  "validation": {
+    "pytest_passed": 3408,
+    "pytest_skipped": 2,
+    "coverage_percent": 98.14,
+    "host_control_statement_branch_percent": 100,
+    "app_owned_profile_statement_branch_percent": 100,
+    "ruff": "pass",
+    "mypy_app_script_files": 58,
+    "mypy_host_files": 2,
+    "browser_dom_prior_unchanged_ui_checks": 34,
+    "public_scan_patterns": 23,
+    "public_scan_hits_at_local_gate": 0
+  },
+  "historical_outcomes": {
+    "mac_stop_race": "fixed_and_deployed",
+    "original_shutdown_failures": "retained",
+    "stock_frozen_comparison": "partial_reserve_refusal",
+    "modified_frozen_comparison": "partial_gateway_key_setup_rejection",
+    "first_endpoint_full_suite": "three_expired_fixture_test_failures_retained",
+    "first_final_preflight": "refused_read_only_before_any_window_or_mutation",
+    "performance_adoption": "inconclusive_MLX_default_retained"
+  },
+  "limits": [
+    "Cumulative execution snapshots do not provide all-client per-request/billed usage",
+    "Cancelled streams may have no final usage; initial emission-only records remain partial",
+    "No final-stop counter guarantee or physical host-memory reclamation claim",
+    "Vision unsupported; reasoning-off quality remains unqualified",
+    "One full GPU engine/profile at a time",
+    "Frozen comparison remains partial; final dedicated endpoint performance is unassessed"
+  ],
+  "raw_artifacts": [
+    {
+      "artifact": "request-01.json",
+      "sha256": "9e1462c9608aa4bba7d9b49a2dc0167813b1125a8fc5e8b661e91b3a2f286045",
+      "case": "original-before",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-02.json",
+      "sha256": "30ed4bd6b0980e55d7e1f30a7a7269bc00358f2172ab3d0efd2ce8d1e56fbaea",
+      "case": "direct-stream",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-03.json",
+      "sha256": "f398ff17de14e404a16ceb2552a67051c5727c93d64a285aed3661746732f81e",
+      "case": "gateway-stream",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-04.json",
+      "sha256": "90c4afff8b33a1356240c9d27c18b1bfb7034f29b19a387b38c8c5806fbffc4c",
+      "case": "direct-context",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-05.json",
+      "sha256": "3ca7ba05cd5e26bb3b307a5ca24169bc04e7ef3ba97c98695ded6c96819e1521",
+      "case": "gateway-context",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-06.json",
+      "sha256": "9a1e4a693677e1c8029e99e3ab85a43436823b8282eb7b48707dccfcf4b8ae06",
+      "case": "gateway-cancel",
+      "profile": "stock-8bit-32k",
+      "status": "inconclusive"
+    },
+    {
+      "artifact": "request-07.json",
+      "sha256": "7782950a060b85746e45ed6607078f91d39e1a082b0eba87e9a4a09e84700941",
+      "case": "gateway-followup",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-08.json",
+      "sha256": "c6db4d038eb99cb0743257c0849b7e8bb9cc43b2cad63b662d1bbcd64b63d79a",
+      "case": "direct-stream",
+      "profile": "modified-4bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-09.json",
+      "sha256": "09b5e0e82b45844b286296fe37d609c0dcbce787b59a4b5a08aa60cee715b5c5",
+      "case": "gateway-stream",
+      "profile": "modified-4bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-10.json",
+      "sha256": "0d9c6c3c72702ae849bb5c2e6cd836cc9d7e23cec59a97ca996563a85c6323f3",
+      "case": "direct-context",
+      "profile": "modified-4bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-11.json",
+      "sha256": "acc12358ed0cf78b8edbe26adc89f4255f967e283e1cfe39c8e5baedcaa03659",
+      "case": "gateway-context",
+      "profile": "modified-4bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-12.json",
+      "sha256": "fbac50621d8a795dee779c6534ef7f1bf1281a83a0b2dc0b01682429e60ce8f7",
+      "case": "gateway-cancel",
+      "profile": "modified-4bit-32k",
+      "status": "inconclusive"
+    },
+    {
+      "artifact": "request-13.json",
+      "sha256": "912ce5246243ab088c3183ccd92fe22ffbc0865867c835a7b8a4bb0a99e7203b",
+      "case": "gateway-followup",
+      "profile": "modified-4bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-14.json",
+      "sha256": "eb49ef8501d65184f0f300b0c3c959aa7938346a0542fbd969b23d7d042d8730",
+      "case": "original-intermediate",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-15.json",
+      "sha256": "4c17b849eb92ed53c42e72669a72ea2ae04050b2ef85ceddec5b876de3d139d6",
+      "case": "gateway-inactive",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-16.json",
+      "sha256": "7bdd0eb6f034ce0e18d9a756f7c4d8b9b26bf5ec95d04b3616220fb4ff7bc35a",
+      "case": "gateway-inactive",
+      "profile": "modified-4bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-17.json",
+      "sha256": "1f288939366c3c2c3a55b11a48410dbfb5a3d98ea858728bd416502c624c9479",
+      "case": "gateway-scope-refusal",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    },
+    {
+      "artifact": "request-18.json",
+      "sha256": "882eac6ebaa56d99f05413c5aa30d0e047f77982203164872bdc32004cc4d459",
+      "case": "original-after",
+      "profile": "stock-8bit-32k",
+      "status": "pass"
+    }
+  ]
+}

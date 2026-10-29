@@ -1,0 +1,47 @@
+#!/usr/bin/python3
+"""Private native ports behind the shared OpenAI endpoint. Standard library only."""
+from __future__ import annotations
+
+import json
+import stat
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate engine port")
+        result[key] = value
+    return result
+
+
+def load(path: Path) -> dict[str, int]:
+    if not path.exists() and not path.is_symlink():
+        return {"mlx": 8080, "strata": 8080, "splash": 8080}
+    if path.is_symlink() or not path.is_file() or stat.S_IMODE(path.stat().st_mode) != 0o600 or path.stat().st_size > 1024:
+        raise ValueError("invalid native port configuration")
+    document = json.loads(path.read_text(), object_pairs_hook=_unique)
+    if not isinstance(document, dict) or set(document) != {"mlx", "strata", "splash"}:
+        raise ValueError("invalid native port configuration")
+    if any(type(value) is not int or not 1 <= value <= 65535 or value in {8080, 7860, 8188, 8081, 8082, 8083, 8084, 8090} for value in document.values()) or len(set(document.values())) != 3:
+        raise ValueError("invalid native port configuration")
+    return document
+
+
+def main() -> int:
+    if len(sys.argv) not in {2, 3} or len(sys.argv) == 3 and sys.argv[2] not in {"mlx", "strata", "splash"}:
+        return 2
+    try:
+        ports = load(Path(sys.argv[1]))
+        print(ports[sys.argv[2]] if len(sys.argv) == 3 else json.dumps(ports))
+        return 0
+    except (OSError, ValueError):
+        print("Cannot verify native engine ports.", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

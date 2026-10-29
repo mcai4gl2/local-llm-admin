@@ -54,3 +54,14 @@ No setup script exists yet; everything was installed by hand. The recorded versi
 - **Python:** uv 0.12.19 (Homebrew) with `UV_PYTHON_INSTALL_DIR=/Volumes/Models/python` → CPython 3.12.14.
 - **MLX venv:** `uv venv /Volumes/Models/venvs/mlx --python 3.12`, then `uv pip install -r environment/mlx-venv.freeze.txt`.
 - **ComfyUI:** clone the repo at the recorded commit into `/Volumes/Models/comfyui/app`, then `uv venv /Volumes/Models/comfyui/venv --python 3.12` and `uv pip install -r environment/comfyui-venv.freeze.txt`. Needs Homebrew `ffmpeg`.
+
+
+## Optional Splash integration
+
+[The Splash guide](splash/README.md) records the pinned standalone runtime, private
+profile/env/audit receipts, explicit 32K profiles, ownership and Phase 3 rollout worksheet.
+The shared `bin/engine-guard.sh` and all corresponding owning-wrapper changes must be
+deployed together in an approved window. `splash start <profile>` and `splash stop`
+share the existing owner-bearing lifecycle reservation; status remains read-only.
+Deploying the versioned wrapper/helpers/examples does not install assets, overwrite private
+configuration, enable the admin feature or start a service. MLX remains the default.

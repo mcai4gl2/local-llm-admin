@@ -1,0 +1,81 @@
+{
+  "contract": "splash-stock-reclamation-1",
+  "campaign_sha256": "33710b033b628f456b67a1bbcd372c662d82e73f2cddacde6ddbb6333b246399",
+  "windows": [
+    {
+      "label": "reclaim-stock-w1",
+      "order": [
+        "default",
+        "gpu-only"
+      ],
+      "cohort": "stock-8bit",
+      "budget_s": 2820
+    },
+    {
+      "label": "reclaim-stock-w2",
+      "order": [
+        "gpu-only",
+        "default"
+      ],
+      "cohort": "stock-8bit",
+      "budget_s": 2820
+    }
+  ],
+  "launches": 4,
+  "inference_requests": 8,
+  "host_snapshots": 56,
+  "variants": [
+    "default",
+    "gpu-only"
+  ],
+  "variant_difference": "process-local --disable-ane only; original isolated sources for both",
+  "settings": {
+    "context_tokens": 32768,
+    "concurrency": 1,
+    "temperature": 0,
+    "seed": 0,
+    "reasoning": false,
+    "kv_format": "bf16",
+    "state_format": "fp32",
+    "metal_guideline_gib": 40,
+    "disk_cache": "disabled",
+    "gpu_sidecars": "stopped",
+    "idle_release_s": 20
+  },
+  "baseline_offsets_s": [
+    0,
+    10,
+    30
+  ],
+  "post_stop_offsets_s": [
+    2,
+    10,
+    30,
+    60,
+    75,
+    88,
+    180,
+    300
+  ],
+  "primary_baseline": "final fixed prelaunch sample",
+  "reclamation_tolerance": "max(2GiB, 10% baseline available)",
+  "baseline_drift_limit_bytes": 1073741824,
+  "qualification_deadline_s": 90,
+  "qualification_samples": 3,
+  "qualification_min_span_s": 4,
+  "extended_observation_s": 300,
+  "extended_recovery": "diagnostic only; cannot pass 90s gate retroactively",
+  "psutil_vm_source_sha256": "5bb36a56fc0eb9053491be8793bf60a03d0b9d7a1f91efcdbdbb451918434804",
+  "interpretation": [
+    "Owned process/listener cleanup is separate from system available-memory accounting.",
+    "File-backed/anonymous overlap active/inactive; compressor stored/occupied have different meanings.",
+    "Missing RSS/USS readings are unknown. Raw process identifiers and names remain private.",
+    "Only repeated paired mode associations are measured; these do not identify a kernel allocation owner.",
+    "No cache purge, pressure injection, source patch, deployment or commit.",
+    "Prior inconclusive evidence remains frozen; no pooling, retries or post-result extension."
+  ],
+  "native_gpu_only_flag": [
+    "--ane",
+    "off"
+  ]
+}

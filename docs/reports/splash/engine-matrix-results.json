@@ -1,0 +1,118 @@
+{
+  "status": "all_directed_engine_pairs_pass_restoration_verified",
+  "transition_count": 12,
+  "engines": [
+    "mlx",
+    "splash",
+    "strata",
+    "comfyui"
+  ],
+  "pairs": [
+    {
+      "from": "mlx",
+      "to": "splash",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "splash",
+      "to": "strata",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "strata",
+      "to": "splash",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "splash",
+      "to": "comfyui",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "comfyui",
+      "to": "mlx",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "mlx",
+      "to": "strata",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "strata",
+      "to": "comfyui",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "comfyui",
+      "to": "strata",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "strata",
+      "to": "mlx",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "mlx",
+      "to": "comfyui",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "comfyui",
+      "to": "splash",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    },
+    {
+      "from": "splash",
+      "to": "mlx",
+      "owning_job": "succeeded",
+      "exclusive_ready_target": true,
+      "prior_pids_absent": true
+    }
+  ],
+  "splash_profiles": [
+    "stock-8bit-32k",
+    "modified-4bit-32k"
+  ],
+  "inference_attempts": 2,
+  "inference_scope": "original gateway only",
+  "image_generations": 0,
+  "restored_original_mlx_services_intents": true,
+  "splash_enabled": false,
+  "original_gateway_inference": "pass",
+  "original_gateway_route": "unchanged",
+  "schema": 16,
+  "integrity": "ok",
+  "database_totals": {
+    "engine_readings": 32,
+    "backend_availability": 55
+  },
+  "pending_jobs": 0,
+  "active_splash_receipt_member_listener_absent": true,
+  "locks_released": true,
+  "elapsed_s": 198.98,
+  "operator_tests": 9
+}

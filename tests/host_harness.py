@@ -36,10 +36,13 @@ for a in "$@"; do
 done
 f="$FAKE_HOST_STATE/listen_$port"
 [ -f "$f" ] || exit 1
+pid=$(cat "$f")
+# Both terse and ordinary queries must stop reporting an exited listener.
+if [[ "$pid" =~ ^[0-9]+$ && ( "$terse" == 1 || ! -f "$FAKE_HOST_STATE/listen_sticky_$port" ) ]]; then
+  case "$(ps -o stat= -p "$pid" 2>/dev/null)" in ""|Z*) exit 1 ;; esac
+fi
 if [ "$terse" = 1 ]; then
-  pid=$(cat "$f")
-  # a killed test process stays a zombie until the test reaps it
-  case "$(ps -o stat= -p "$pid" 2>/dev/null)" in ""|Z*) ;; *) echo "$pid" ;; esac
+  echo "$pid"
 fi
 exit 0
 """
@@ -130,7 +133,9 @@ class Host:
     def strata_server(self) -> subprocess.Popen[str]:
         """A process whose command line is Strata's server (``serve/server.py --engine strata``)."""
         argv = ["bash", "-c", "while :; do sleep 0.2; done"]
-        p = subprocess.Popen([*argv, f"{self.root}/strata/app/serve/server.py", "--engine", "strata"])
+        p = subprocess.Popen(
+            [*argv, f"{self.root}/strata/app/serve/server.py", "--engine", "strata"]
+        )
         self.procs.append(p)
         return p
 
@@ -181,5 +186,6 @@ def make_host(tmp_path: Path) -> Host:
         "FAKE_HOST_STATE": str(state),
     }
     host = Host(root, state, env)
+    redirect(HOST / "bin/engine-guard.sh", root / "bin/engine-guard.sh", root)
     host.install_cli(HOST / "bin/mlx-model")
     return host

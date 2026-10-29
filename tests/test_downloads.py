@@ -298,8 +298,8 @@ def test_one_download_at_a_time(host, hf):
     assert r.returncode == 0
     st = _json(host.run("download-status", "r00000000002"))
     assert st["state"] == "failed" and st["error_kind"] == "busy"
-    assert _json(host.run("download-status", RUN))["state"] == "running"
-    host.run("download-cancel", RUN)
+    # The original can finish while the second process is rejected as busy.
+    assert _wait(host)["state"] == "published"
 
 
 def test_a_dead_downloader_shows_as_interrupted(host):

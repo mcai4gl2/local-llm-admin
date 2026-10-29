@@ -1,0 +1,156 @@
+{
+  "contract": "splash-replay-public-design-1",
+  "date": "2026-10-27",
+  "scope": "Fixed synthetic replay correctness and reported shared-prefix reuse, with descriptive client latency only.",
+  "cohorts": {
+    "stock-8bit": {
+      "model_pins": {
+        "weights_sha256": "b5d511fe911490ff389642abb1b9671a3c75736c8faa990dfaf9dd113b646711",
+        "tokenizer_sha256": "ac82a3ef50a623a2cc41cb5094c6fee5bdc9068d88672885e745f66c0ad27760",
+        "template_sha256": "cd13b5b6d2a8c4eeab703d83ded6d1d4d92df3ab0cd23b11a8620219a38720c6"
+      },
+      "runtime_pins": {
+        "mlx": {
+          "version": "mlx-vlm-0.7.3-mlx-0.32.2",
+          "sha256": "9c65e7603fc136cec2801abb606a222a25e860406894339bc6826ec56167dd6e"
+        },
+        "splash": {
+          "version": "1.4.0",
+          "sha256": "4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d"
+        }
+      },
+      "sources": {
+        "mlx": {
+          "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+          "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67"
+        },
+        "splash": {
+          "source_sha256": "0ce85023177d4029942e9505a4b0f8c67dddb29a7fef37ac9c0fd15ce1b0bcd6",
+          "adapter_sha256": "635904e4052151e5533be770caa0b83ec0e40b6471333959e29ca6b5d7c98311"
+        }
+      }
+    },
+    "modified-4bit": {
+      "model_pins": {
+        "weights_sha256": "fe4b166f932a8215bb3be532d49c581396d2d91b6c0687106c5b255118d95e0d",
+        "tokenizer_sha256": "5fa46bcb0df38761bf1ba9a572b31dd220f7e862968765633712776bd188b836",
+        "template_sha256": "b6e05e626073de17d62afe10ce1078e70cf16fcc2ffb521f2f6a2e05af6abf31"
+      },
+      "runtime_pins": {
+        "mlx": {
+          "version": "mlx-vlm-0.7.3-mlx-0.32.2",
+          "sha256": "9c65e7603fc136cec2801abb606a222a25e860406894339bc6826ec56167dd6e"
+        },
+        "splash": {
+          "version": "1.4.0",
+          "sha256": "4c0f032a5392a6c559f081a0052278fbc0ea5abee2d16b820a015cc9b1826a2d"
+        }
+      },
+      "sources": {
+        "mlx": {
+          "source_sha256": "6c0b663d7adafbc686c6049649953fd78bea1572d2a6280532fc063dda511b77",
+          "adapter_sha256": "5e1c8f6665fc19f6e8240ce91bb074bf212e23332c4f46c70e829cb22dd20c67"
+        },
+        "splash": {
+          "source_sha256": "0ce85023177d4029942e9505a4b0f8c67dddb29a7fef37ac9c0fd15ce1b0bcd6",
+          "adapter_sha256": "635904e4052151e5533be770caa0b83ec0e40b6471333959e29ca6b5d7c98311"
+        }
+      }
+    }
+  },
+  "code_sha256": {
+    "bench.py": "361dd318aaf2f239bee33abeea3ca03e1fe52a894a85e09bb8b797c1aacaaa56",
+    "context_inputs.py": "312f0f4731ecbbb99199b099ed6a926c9e4dfafafc8ffbffb69496c9a71db030",
+    "context_validation.py": "50ae400f3f9a428b79811fc0d645032ed514a0c35f86319e993a7aa3690a05ca",
+    "replay_validation.py": "124eb3c139bf6f99c042c09909253559a23bc24b8e5c815589b69eac177687a1"
+  },
+  "schedule": {
+    "windows": 4,
+    "conditions": [
+      "stock-8bit/8k",
+      "modified-4bit/8k",
+      "stock-8bit/32k",
+      "modified-4bit/32k"
+    ],
+    "orders": [
+      "mlx-first",
+      "splash-first",
+      "mlx-first",
+      "splash-first"
+    ],
+    "positions": [
+      10,
+      50,
+      90
+    ],
+    "seed": 0,
+    "steps": [
+      "prime",
+      "repeat",
+      "extend"
+    ],
+    "long_requests": 72,
+    "excluded_short_warmups": 8,
+    "total_requests": 80,
+    "output_cap": 128,
+    "warmup_output_cap": 32,
+    "canonical_assistant_history": "Predeclared expected JSON, identical between engines; generated answers never become the next paired input."
+  },
+  "settings": {
+    "context_tokens": 32768,
+    "temperature": 0,
+    "seed": 0,
+    "reasoning": false,
+    "concurrency": 1,
+    "kv_precision": "bf16-kv-fp32-recurrent",
+    "gpu_sidecars": "stopped",
+    "metal_allocation_guideline_gib": 40,
+    "disk_persistence": false,
+    "mlx_apc": {
+      "enabled": true,
+      "memory_max_gib": 4,
+      "memory_reserve_gib": 6,
+      "checkpoint_entries": 2,
+      "checkpoint_interval_tokens": 2048
+    },
+    "splash_cache": "Native RAM prefix reuse with a stable salt per trajectory; max-cache-disk 0."
+  },
+  "requirements": {
+    "8k_prompt_band": [
+      7936,
+      8192
+    ],
+    "32k_prompt_band": [
+      31744,
+      32000
+    ],
+    "cold_cached_tokens": 0,
+    "minimum_shared_prefix_reuse_fraction": 0.8,
+    "correctness": "Natural stop and exactly the expected JSON value; no duplicate keys or extra content.",
+    "missing_failure_policy": "Retain every attempt; stop and restore after the first capture/accounting/correctness failure. Do not retry or extend the fixed series."
+  },
+  "budgets": {
+    "long_deadline_s": {
+      "8k": 150,
+      "32k": 300
+    },
+    "warmup_deadline_s": 30,
+    "setup_s": 540,
+    "restoration_s": 600,
+    "largest_window_s": 6600,
+    "collection_cutoff_s": 6600,
+    "restore_deadline_s": 7200
+  },
+  "provenance": {
+    "tokenization_receipt_sha256": "5d1a080b5a167b20d8d9214422aa664da135200e05b927395eb34148b66baafd",
+    "private_mlx_source_inventory_sha256": "7a70846e2c59cf7e49dfe2024cd20905c6577ad61425c0b027ca1a4c1ff0bbfb",
+    "installed_mlx_python_source_files": 1476,
+    "native_rendering_proofs": 4,
+    "prior_publication_files": 53
+  },
+  "limitations": [
+    "Small related synthetic trajectories do not establish p95 latency, broad quality or independent-session confidence bounds.",
+    "Client TTFT/completion and reported cache counts do not qualify native decode/GPU compute.",
+    "No original reports are pooled or rewritten, and overall adoption remains separately gated."
+  ]
+}

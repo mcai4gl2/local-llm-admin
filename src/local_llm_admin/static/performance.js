@@ -32,7 +32,10 @@ async function loadSummary() {
   sel.replaceChildren(el("option", { value: "", text: "All models" }), ...s.models.map((m) => el("option", { value: m, text: m })));
   sel.value = s.models.includes(cur) ? cur : "";
   const t = s.totals;
-  $("perf-source").textContent = `Source: ${s.source.parser} · last read ${s.source.last_ingest ? fmt.time(s.source.last_ingest) : "never"}`;
+  const splash = s.coverage?.splash;
+  $("splash-coverage").hidden = !splash?.enabled;
+  $("splash-coverage").textContent = splash?.reason || "";
+  $("perf-source").textContent = `MLX log source: ${s.source.parser} · last read ${s.source.last_ingest ? fmt.time(s.source.last_ingest) : "never"}`;
   $("perf-totals").replaceChildren(
     tile("Requests", fmt.num(t.requests), `${fmt.num(t.errors)} errors · ${fmt.num(t.cancelled)} cancelled · ${fmt.num(t.incomplete)} incomplete`),
     tile("TTFT median / p90", `${secs(t.ttft_p50)} / ${secs(t.ttft_p90)}`, `${fmt.num(t.slow)} slow (≥ ${s.slow_ttft_s} s)`),
@@ -139,8 +142,28 @@ async function showContext(id) {
   box.textContent = c.available ? c.lines.join("\n") : c.reason;
 }
 
+async function loadNative() {
+  const profile = $("native-profile").value;
+  const query = params().replace(/&model=[^&]*/, "") + (profile ? `&profile=${encodeURIComponent(profile)}` : "");
+  const [data, availability] = await Promise.all([api(`/api/performance/engines?${query}`), api(`/api/availability?source=splash&${query}`)]);
+  const c = data.coverage;
+  $("native-telemetry").hidden = !c.enabled && !data.readings.length;
+  $("native-coverage").textContent = `${c.coverage} · last successful poll ${c.last_poll ? fmt.time(c.last_poll) : "never"} · last new data ${c.last_new_data ? fmt.time(c.last_new_data) : "never"}${c.stale ? " · stale" : ""}${c.error ? " · " + c.error : ""} · reset/population qualification: ${c.counter_qualification || "unverified"}`;
+  const options = [...new Set(data.readings.map(r => r.profile))];
+  if (!profile) $("native-profile").replaceChildren(el("option", {value: "", text: "All profiles"}), ...options.map(p => el("option", {value: p, text: p})));
+  $("native-readings").querySelector("tbody").replaceChildren(...(data.readings.length ? data.readings.map(r => el("tr", {},
+    el("td", {text: fmt.time(r.observed)}), el("td", {text: `${r.profile} · ${r.fingerprint.slice(0, 12)}`}),
+    el("td", {text: r.epoch.slice(0, 12), title: JSON.stringify(r.identity)}),
+    el("td", {text: fmt.num(r.counters.completed)}), el("td", {text: `${fmt.num(r.counters.cancelled)} / ${fmt.num(r.counters.failed)}`}),
+    el("td", {text: fmt.num(r.counters.prefill_input_tokens)}), el("td", {text: fmt.num(r.counters.decode_output_tokens)})))
+    : [el("tr", {}, el("td", {colspan: 7, text: "No attributed native snapshots in this range."}))]));
+  const a = availability.totals;
+  $("native-availability").textContent = `Splash loaded availability: ${pctOrDash(a.availability)} · observed ${pctOrDash(a.coverage)}. Released/recovering are not serving; maintenance excluded.${availability.truncated ? " Sample history truncated." : ""} `
+    + (c.gaps?.length ? `Known gaps: ${c.gaps.map(g => g.reason).join(", ")}. Shutdown has no qualified final capture.` : "No historical observations are backfilled.");
+}
+
 async function reload() {
-  try { showError(null); $("req-context").hidden = true; await Promise.all([loadSummary(), loadTokens(), loadRequests()]); }
+  try { showError(null); $("req-context").hidden = true; await Promise.all([loadSummary(), loadTokens(), loadRequests(), loadNative()]); }
   catch (e) { showError(e); }
 }
 
@@ -153,6 +176,7 @@ $("model").addEventListener("change", reload);
 $("origin-filter").addEventListener("change", () => loadTokens().catch(showError));
 $("state-filter").addEventListener("change", () => loadRequests().catch(showError));
 $("slow-filter").addEventListener("change", () => loadRequests().catch(showError));
+$("native-profile").addEventListener("change", () => loadNative().catch(showError));
 $("more").addEventListener("click", () => loadRequests(true).catch(showError));
 window.addEventListener("resize", () => { if (lastSummary) loadSummary().catch(showError); drawTokens(); });
 api("/api/maintenance/log-rotation").then((r) => {

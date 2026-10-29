@@ -11,3 +11,6 @@ logs/
 .smoke/
 # private deploy target (copy ops/deploy.env.example)
 ops/deploy.env
+
+# Private local scanner patterns; persisted across devcontainer rebuilds.
+/.private/
