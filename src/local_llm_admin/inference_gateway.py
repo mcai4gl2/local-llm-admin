@@ -35,6 +35,33 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
     )
 
 
+async def _upstream_refusal(response: httpx.Response) -> JSONResponse:
+    message = "Selected engine refused the request"
+    if response.status_code == 400:
+        body = bytearray()
+        try:
+            async for chunk in response.aiter_bytes():
+                if len(body) + len(chunk) > 8192:
+                    break
+                body.extend(chunk)
+            else:
+                document = json.loads(body)
+                error = document.get("error") if isinstance(document, dict) else None
+                reason = error.get("message") if isinstance(error, dict) else None
+                if (
+                    isinstance(reason, str)
+                    and reason.startswith("this server was started without the vision encoder")
+                    and reason.endswith("so it cannot read images")
+                ):
+                    message = (
+                        "The selected engine was started without a vision encoder and cannot "
+                        "process images. Send text-only input or select an engine with vision support."
+                    )
+        except (httpx.HTTPError, ValueError):
+            pass
+    return _error(response.status_code, "upstream_error", message)
+
+
 def _frame(frame: bytes, model: str) -> bytes:
     lines = frame.splitlines()
     data = b"\n".join(line[5:].lstrip(b" ") for line in lines if line.startswith(b"data:"))
@@ -200,9 +227,7 @@ def create_inference_app(
                 client.build_request("POST", upstream_path, json=payload), stream=True
             )
             if response.status_code != 200:
-                return _error(
-                    response.status_code, "upstream_error", "Selected engine refused the request"
-                )
+                return await _upstream_refusal(response)
             if payload.get("stream", False):
                 if "text/event-stream" not in response.headers.get("content-type", ""):
                     return _error(

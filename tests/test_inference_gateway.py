@@ -282,6 +282,77 @@ async def test_upstream_errors_are_sanitized_and_keep_status(status: int) -> Non
         assert "private" not in r.text
 
 
+async def test_missing_vision_encoder_has_an_actionable_public_error() -> None:
+    native = (
+        "this server was started without the vision encoder "
+        "(run setup again and choose 'vision'), so it cannot read images"
+    )
+    app, _ = setup_gateway(
+        lambda r: httpx.Response(
+            400,
+            json={
+                "error": {"type": "invalid_request_error", "message": native},
+                "private": "private-upstream-key /private/weights",
+            },
+        )
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://shared.test"
+    ) as client:
+        r = await client.post("/chat/completions", headers=AUTH, json={"model": "local-model"})
+    assert r.status_code == 400
+    error = r.json()["error"]
+    assert "vision encoder" in error["message"]
+    assert "text-only" in error["message"]
+    assert error["code"] == "upstream_error"
+    assert "private" not in r.text and "setup" not in r.text
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        [],
+        {"error": "private"},
+        {"error": {"message": None}},
+        {"error": {"message": "private-upstream-key /private/weights"}},
+        {"error": {"message": "this server was started without the vision encoder private"}},
+    ],
+)
+async def test_unrecognized_error_documents_stay_generic(document: Any) -> None:
+    app, _ = setup_gateway(lambda r: httpx.Response(400, json=document))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://shared.test"
+    ) as client:
+        r = await client.post("/chat/completions", headers=AUTH, json={"model": "local-model"})
+    assert r.status_code == 400
+    assert r.json()["error"]["message"] == "Selected engine refused the request"
+    assert "private" not in r.text
+
+
+@pytest.mark.parametrize("broken", [False, True])
+async def test_error_body_read_is_bounded_and_closed(broken: bool) -> None:
+    class ErrorBody(httpx.AsyncByteStream):
+        closed = False
+
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            if broken:
+                raise httpx.ReadError("private transport failure")
+            yield b"x" * 8193
+            pytest.fail("read beyond the error limit")
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    stream = ErrorBody()
+    app, _ = setup_gateway(lambda r: httpx.Response(400, stream=stream))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://shared.test"
+    ) as client:
+        r = await client.post("/chat/completions", headers=AUTH, json={"model": "local-model"})
+    assert r.status_code == 400 and stream.closed
+    assert r.json()["error"]["message"] == "Selected engine refused the request"
+
+
 async def test_connect_failure_is_not_retried() -> None:
     calls = []
 

@@ -96,3 +96,40 @@ listeners/owners and restoring the matched source/configuration and original nat
 before restarting the original engine. Do not bind the shared listener and a native
 engine on 8080 simultaneously. The historical rollout reports do not qualify this new
 entry point live.
+
+
+## Verified deployment record
+
+The [incident and deployment verification](reports/shared-inference-20261029.md) records
+activation of the paired shared listener, the prior foreign-model unload failure, and
+bounded functional checks across MLX, Strata and both Splash profiles. Use the configuration
+and migration instructions above for current operations; the dated report is evidence for
+its pinned revision, not a substitute for a later deployment preflight.
+
+
+## Strata request troubleshooting
+
+A successful switch and healthy listener confirm loading; they do not guarantee that
+all request types are supported. A Strata installation without its vision encoder
+rejects image input with HTTP 400. The frontend translates that recognized rejection
+into a fixed explanation without forwarding arbitrary upstream error text. Enabling
+vision is a separate native installation/configuration step.
+
+Strata can also spend minutes reasoning while later requests wait for its decode slot.
+Without an output cap, its native default can permit most of the remaining context as
+output. Automatic client retries can repeat that work after the frontend read timeout.
+Use a bounded text-only smoke test to distinguish loading/routing from generation policy:
+
+```json
+{
+  "model": "/Volumes/Models/models/active",
+  "messages": [{"role": "user", "content": "Reply with OK."}],
+  "max_tokens": 32,
+  "chat_template_kwargs": {"enable_thinking": false}
+}
+```
+
+For a reasoning request, choose an explicit output limit and, when appropriate,
+`reasoning_budget_tokens` to reserve room for an answer. A five-token reasoning test can
+finish without answer text. Neither the frontend nor this troubleshooting guidance
+silently changes the caller's generation settings or installs model components.
