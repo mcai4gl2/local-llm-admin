@@ -400,7 +400,7 @@ curl -s http://mac-mini.local:8082/v1/rerank -H 'Content-Type: application/json'
   -d '{"model": "qwen3-rerank", "query": "capital of france", "documents": ["Bread needs yeast.", "Paris is the capital of France."]}'
 ```
 
-**Correctness check:** `python -m local_llm_admin.embed_check --base http://mac-mini.local:8082 --reference tests/fixtures/embed/reference.json` compares live vectors and rankings with CPU references from the model cards' own code (`ops/embed-reference.py`). It must print `PASS`.
+**Correctness check:** `python -m local_llm_admin.embed_check --base http://mac-mini.local:8082 --reference tests/fixtures/embed/reference.json` compares live vectors and rankings with CPU references from the model cards' own code (`experiments/embed/reference.py`). It must print `PASS`.
 
 ### Roll back M8 (schema 13 → 12)
 
@@ -409,3 +409,9 @@ curl -s http://mac-mini.local:8082/v1/rerank -H 'Content-Type: application/json'
 3. `sqlite3 ~/local-llm-admin/data/admin.sqlite 'PRAGMA user_version = 12'`
 4. Run `ops/rollback-mac.sh`, and restore `~/.config/local-llm-admin/env.bak-pre-m8`. The M7 app ignores `embed_requests` and `embed_intent`.
 5. Remove the `qwen3-embed` and `qwen3-rerank` routes from `~/litellm/config.yaml` (backup `config.yaml.bak-20261010-204828`) and restart LiteLLM.
+
+
+## Repository navigation
+
+[Operations](ops/README.md) · [Experiments](experiments/README.md) · [Plans](plans/README.md) ·
+[Splash rollout evidence](docs/reports/splash/INDEX.md) · [Shared LiteLLM endpoint](docs/shared-inference.md).

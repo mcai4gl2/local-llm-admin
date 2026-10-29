@@ -407,3 +407,34 @@ def test_stop_drops_a_reading_that_is_not_json(st):
     assert st.run("start").returncode == 0
     assert st.run("stop").returncode == 0
     assert _finals(st) == [] and not list((st.root / "run").glob("*.tmp"))
+
+
+def test_internal_strata_port_keeps_public_gateway_alive(st: Strata) -> None:
+    import json
+
+    h = st.host
+    redirect(HOST / "bin/engine-ports", h.root / "bin/engine-ports", h.root)
+    config = h.root / "etc/engine-ports.json"
+    config.write_text(json.dumps({"mlx": 8086, "strata": 8087, "splash": 8085}))
+    config.chmod(0o600)
+    proxy = h.sleeper()
+    (h.state / "listen_8080").write_text(str(proxy.pid))
+    result = st.run("start", "Q2_0")
+    assert result.returncode == 0, result.stderr
+    args = (h.state / "strata_args").read_text().splitlines()
+    assert args[args.index("--port") + 1] == "8087"
+    assert st.run("stop").returncode == 0
+    assert proxy.poll() is None
+
+
+def test_comfyui_refuses_strata_on_its_internal_port(host: Host) -> None:
+    import json
+
+    redirect(HOST / "bin/engine-ports", host.root / "bin/engine-ports", host.root)
+    config = host.root / "etc/engine-ports.json"
+    config.write_text(json.dumps({"mlx": 8086, "strata": 8087, "splash": 8085}))
+    config.chmod(0o600)
+    child = host.strata_server()
+    (host.state / "listen_8087").write_text(str(child.pid))
+    result = host.run("start", cli=_comfy(host))
+    assert result.returncode != 0 and "Strata" in result.stderr

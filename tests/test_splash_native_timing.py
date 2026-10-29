@@ -11,10 +11,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "ops/splash-phase0"))
+sys.path.insert(0, str(ROOT / "experiments/splash"))
 try:
     SPEC = importlib.util.spec_from_file_location(
-        "splash_native", ROOT / "ops/splash-phase0/native_timing.py"
+        "splash_native", ROOT / "experiments/splash/native_timing.py"
     )
     assert SPEC and SPEC.loader
     native = importlib.util.module_from_spec(SPEC)

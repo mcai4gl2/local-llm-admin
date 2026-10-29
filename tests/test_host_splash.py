@@ -124,7 +124,11 @@ class SplashHost:
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(sys.executable, path)
             # Standalone/uv Python discovers its stdlib relative to the copied executable.
-            library = path.parent.parent / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}"
+            library = (
+                path.parent.parent
+                / "lib"
+                / f"python{sys.version_info.major}.{sys.version_info.minor}"
+            )
             library.parent.mkdir(parents=True, exist_ok=True)
             library.symlink_to(Path(sysconfig.get_path("stdlib")), target_is_directory=True)
         server = self.root / "runtime/server"
@@ -391,10 +395,10 @@ def test_shared_reservation_covers_work_without_holding_maintenance(
     release = h.root / "run/guarded-work-release"
     script.write_text(
         'source "' + str(h.host.root / "bin/engine-guard.sh") + '"\n'
-        'guarded_work() {\n'
+        "guarded_work() {\n"
         f'  touch "{entered}"\n'
         f'  while [[ ! -f "{release}" ]]; do sleep 0.02; done\n'
-        '}\nengine_run guarded_work\n'
+        "}\nengine_run guarded_work\n"
     )
     held = h.host.spawn(cli=script)
     try:
@@ -1165,3 +1169,28 @@ def test_fake_runtime_python_has_an_explicit_standard_library(
         )
         assert result.returncode == 0, result.stderr
         assert json.loads(result.stdout) == {"ready": True}
+
+
+@pytest.mark.parametrize("mlx_busy", [False, True])
+def test_shared_gateway_listener_is_not_a_native_owner(
+    splash_host: SplashHost, mlx_busy: bool
+) -> None:
+    h = splash_host
+    redirect(HOST / "bin/engine-ports", h.host.root / "bin/engine-ports", h.host.root)
+    config = h.host.root / "etc/engine-ports.json"
+    config.write_text(json.dumps({"mlx": 8086, "strata": 8087, "splash": 8085}))
+    config.chmod(0o600)
+    env = h.root / "etc/splash.env"
+    env.write_text(env.read_text() + "SPLASH_PORT=8085\n")
+    proxy = h.host.sleeper()
+    (h.host.state / "listen_8080").write_text(str(proxy.pid))
+    if mlx_busy:
+        (h.host.state / "listen_8086").write_text(str(h.host.sleeper().pid))
+    result = h.run("start", "stock-8bit-32k")
+    if mlx_busy:
+        assert result.returncode != 0 and not h.record.exists()
+    else:
+        assert result.returncode == 0, result.stderr
+        assert json.loads(h.record.read_text())["port"] == 8085
+        assert h.run("stop").returncode == 0
+    assert proxy.poll() is None

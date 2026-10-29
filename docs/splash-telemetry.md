@@ -2,7 +2,7 @@
 
 Phase 3 evidence audit, 2026-10-28. Revision 1 preceded ingestion; revision 2 documents the implemented snapshot collector.
 The bounded live evidence below is partial; it establishes no adoption result. See the
-[implementation plan](../plans/20261028_splash-phase3-telemetry-qualification-and-rollout.md).
+[implementation plan](../plans/archive/splash/20261028_splash-phase3-telemetry-qualification-and-rollout.md).
 
 ## Sources and coverage
 
@@ -70,7 +70,7 @@ without evidence of the same fields/population. Schema 16 adds independent engin
 request rows and daily folding remain unchanged; execution snapshots never enter
 billed token totals. Profiles/fingerprints/epochs remain distinct in retention and
 queries, avoiding the existing model-only rollup boundary. The
-[operating runbook](../ops/splash-phase3/README.md) specifies matching database/app
+[operating runbook](reports/splash/README.md) specifies matching database/app
 rollback and tested WAL-consistent backup/offline restore tooling.
 
 ## Provenance and remaining captures
@@ -150,7 +150,7 @@ bundles while preserving legacy primary-process metrics. No token-path DB work,
 extra per-token copies, response collection or request-body logging was added.
 
 Stage A installed the revision-pinned runtime/profiles and schema16 admin. The subsequent
-[corrective window](../ops/splash-phase3/readiness-fix-report.md) verified actual stock
+[corrective window](reports/splash/readiness-fix-report.md) verified actual stock
 controller/native ownership, loaded readiness and direct complete streaming. Three stock
 cumulative readings share one verified epoch; unchanged idle counters retained the same
 reading IDs over57 seconds. Complete process RSS summation and a primed CPU sample were
@@ -183,7 +183,7 @@ profiles become unknown intervals rather than extending a prior profile through 
 
 ## Approved functional capture — 2026-10-28
 
-The [endpoint-contract window](../ops/splash-phase3/gateway-contract-report.md) now supplies
+The [endpoint-contract window](reports/splash/gateway-contract-report.md) now supplies
 both-profile reasoning-on direct/gateway complete streams, four exact near-limit retrieval
 checks and four disconnect observations. All29 scheduled HTTP attempts pass with separate
 runtime cancellation evidence. Eighteen new cumulative snapshots span stock, restarted
@@ -201,7 +201,7 @@ private operator identities and source snapshots remain ignored.
 
 ## Shutdown correction attempt — 2026-10-28
 
-The [host correction execution](../ops/splash-phase3/shutdown-fix-report.md) added two stock
+The [host correction execution](reports/splash/shutdown-fix-report.md) added two stock
 epochs with four fresh readings, correct attribution and unchanged idle reading IDs.
 The first normal off passed; the second failed and retained a dead receipt despite both
 processes and listener exiting. Modified cycles were not attempted. No corrected lifecycle,
@@ -216,7 +216,7 @@ No database restore or observation loss occurred; the original failed stop remai
 
 ## Proven Mac exit correction — 2026-10-28
 
-The [new correction](../ops/splash-phase3/macos-exit-fix.md) captured the actual ?E/P_WEXIT
+The [new correction](reports/splash/macos-exit-fix.md) captured the actual ?E/P_WEXIT
 teardown exception, reproduced it in seven failing tests and waits for independent ESRCH
 before treating that exiting PID as absent. Four normal stock/modified lifecycle cycles
 passed after deployment. Six fresh readings span four distinct correctly attributed epochs;
@@ -229,7 +229,7 @@ adds no all-client usage, final-counter, reset or physical reclamation guarantee
 
 ## Native recovery and admin acceptance — 2026-10-29
 
-Both profiles passed [native/admin acceptance](../ops/splash-phase3/integration-acceptance.md).
+Both profiles passed [native/admin acceptance](reports/splash/integration-acceptance.md).
 Each observed ready invalidation and one runtime-owned native restart under an unchanged
 controller/instance, with complete followup and successful normal off. Nine new readings
 span four epochs, preserving old/new native identity, profile/fingerprint and restart
@@ -264,13 +264,13 @@ idle snapshots deduplicate and current two-member bundles replace old child gene
 
 Final schema16 integrity is `ok`:85native readings/109availability rows retained. Feature
 support deployment is complete; performance adoption remains inconclusive. The prior
-[frozen comparison](../ops/splash-phase3/integrated-comparison-report.md) is partial and is
+[frozen comparison](reports/splash/integrated-comparison-report.md) is partial and is
 not rescored from commissioning traffic. Final dedicated-endpoint performance is unassessed.
 Vision remains unsupported and reasoning-off quality unqualified. See the
-[rollout report](../ops/splash-phase3/rollout-report.md) for exact supported scopes and rollback.
+[rollout report](reports/splash/rollout-report.md) for exact supported scopes and rollback.
 
 
-The subsequent [128K context rollout](../ops/splash-phase3/context-128k-report.md) preserves
+The subsequent [128K context rollout](reports/splash/context-128k-report.md) preserves
 profile IDs while changing their limits and fingerprints. Keep prior 32K epochs and
 measurements attributed to their original fingerprints. This change adds no all-client
 usage ledger and does not complete the frozen performance/adoption comparison.

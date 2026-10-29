@@ -9,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 # The guard is sent with its preflight helper to the isolated directory.
-sys.path.insert(0, str(ROOT / "ops/splash-phase0"))
+sys.path.insert(0, str(ROOT / "experiments/splash"))
 try:
     import window_guard as guard
 finally:

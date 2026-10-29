@@ -13,10 +13,10 @@ import pytest
 from tests.test_splash_phase0 import manifest_data as manifest_data
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "ops/splash-phase0"))
+sys.path.insert(0, str(ROOT / "experiments/splash"))
 try:
     spec = importlib.util.spec_from_file_location(
-        "splash_replay_validation", ROOT / "ops/splash-phase0/replay_validation.py"
+        "splash_replay_validation", ROOT / "experiments/splash/replay_validation.py"
     )
     assert spec and spec.loader
     replay = importlib.util.module_from_spec(spec)

@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ops/splash-phase0"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments/splash"))
 import reclamation as r  # noqa: E402
 
 RAW = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n" + "\n".join(

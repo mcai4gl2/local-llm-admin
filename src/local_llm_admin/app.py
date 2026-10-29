@@ -78,6 +78,7 @@ from .eval_suites import (
     messages_for,
     parse_jsonl,
 )
+from .inference_gateway import create_inference_app
 from .ingestion import HostLogs, IngestStore
 from .inventory import InventoryStore, build_inventory
 from .jobs import JobRunner, JobStore, ops_tz
@@ -560,6 +561,15 @@ def create_app(
     app.state.follow_interval_s = 1.0
     app.state.follow_max_s = 1800.0
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+
+    inference = create_inference_app(
+        settings,
+        control.backends,
+        transport=chat_transport,
+        busy=lambda: runner.running() is not None,
+    )
+    app.state.inference = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.inference.mount("/v1", inference)
 
     @app.middleware("http")
     async def require_session(

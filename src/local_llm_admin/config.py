@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     splash_poll_interval_s: Annotated[float, Field(ge=5, le=300)] = 15.0
     splash_stop_timeout_s: Annotated[float, Field(gt=0, le=120)] = 45.0
 
+    # Stable OpenAI entry point at the admin service /v1; empty key disables it.
+    inference_api_key: SecretStr = SecretStr("")
+    inference_host: str = "0.0.0.0"
+    inference_port: Annotated[int, Field(ge=1, le=65535)] = 8080
+    inference_model_id: Annotated[str, Field(min_length=1, max_length=512)] = "local-model"
+
     # Admin
     admin_password_hash: SecretStr = SecretStr("")
     admin_session_secret: SecretStr = SecretStr("")

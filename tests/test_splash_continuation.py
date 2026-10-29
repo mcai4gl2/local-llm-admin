@@ -15,7 +15,7 @@ from tests.test_splash_phase0 import manifest_data as manifest_data
 
 SPEC = importlib.util.spec_from_file_location(
     "splash_continuation",
-    Path(__file__).resolve().parents[1] / "ops/splash-phase0/continuation.py",
+    Path(__file__).resolve().parents[1] / "experiments/splash/continuation.py",
 )
 assert SPEC and SPEC.loader
 continuation = importlib.util.module_from_spec(SPEC)

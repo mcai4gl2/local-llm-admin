@@ -38,8 +38,10 @@ HOST_PY="/usr/bin/python3"
 DOWNLOAD_HELPER="$MODELS_ROOT/bin/mlx-download"
 PROFILE_HELPER="$MODELS_ROOT/bin/mlx-profile"
 DOWNLOADS_DIR="$MODELS_ROOT/downloads"
-PORT=8080
+PORT="$(engine_native_port mlx)"
+STRATA_PORT="$(engine_native_port strata)"
 HOST="0.0.0.0"
+[[ "$PORT" == 8080 ]] || HOST="127.0.0.1"
 export PYTHONUNBUFFERED=1
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 
@@ -140,7 +142,7 @@ strata_pid() {
       return 0
     fi
   fi
-  for pid in $(lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null); do
+  for pid in $(lsof -nP -tiTCP:"$STRATA_PORT" -sTCP:LISTEN 2>/dev/null); do
     if is_strata "$pid"; then
       echo "$pid"
       return 0
@@ -151,7 +153,7 @@ strata_pid() {
 
 listeners() {
   local pid
-  for pid in $(lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null); do
+  for pid in $(lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null); do
     is_strata "$pid" || echo "$pid"
   done
   lsof -nP -tiTCP:7860 -sTCP:LISTEN 2>/dev/null || true
@@ -191,8 +193,8 @@ stop_server() {
     sleep 1
   fi
   rm -f "$PID_FILE"
-  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 && ! strata_pid >/dev/null; then
-    echo "Port 8080 is still in use." >&2
+  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1 && ! strata_pid >/dev/null; then
+    echo "Port $PORT is still in use." >&2
     exit 1
   fi
 }
@@ -263,7 +265,7 @@ start_server() {
   local name="$1" model_dir
   model_dir="$(lookup "$name")"
   strata_guard
-  if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:7860 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:8188 -sTCP:LISTEN >/dev/null 2>&1; then
+  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:7860 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:8188 -sTCP:LISTEN >/dev/null 2>&1; then
     echo "An MLX or ComfyUI process is already running. Use switch or stop first (ComfyUI: /Volumes/Models/comfyui/bin/comfyui stop)." >&2
     exit 1
   fi

@@ -12,7 +12,7 @@ import pytest
 
 from tests.test_splash_phase0 import manifest_data as manifest_data
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ops/splash-phase0"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments/splash"))
 try:
     import bench
     import context_inputs as inputs

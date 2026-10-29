@@ -371,6 +371,15 @@ def rotate_log(root: Path) -> None:
         old.unlink()
 
 
+def native_ports(root: Path) -> dict[str, int]:
+    config = root.parent / "etc/engine-ports.json"
+    if not config.exists() and not config.is_symlink():
+        return {"mlx": PORT, "strata": PORT}
+    helper = root.parent / "bin/engine-ports"
+    ports: dict[str, int] = json.loads(_run([sys.executable, "-I", str(helper), str(config)]))
+    return ports
+
+
 def start(root: Path, name: str) -> None:
     if observe(root)["state"] != "absent":
         raise HostError("Splash already owns resources or ownership is unknown.")
@@ -392,7 +401,10 @@ def start(root: Path, name: str) -> None:
             or not path.resolve().is_relative_to((root / "runtime").resolve())
         ):
             raise HostError("Missing or untrusted runtime executable.")
-    for port in (PORT, env.port, 7860, 8188, 8081, 8083, 8084):
+    ports = native_ports(root)
+    if "splash" in ports and ports["splash"] != env.port:
+        raise HostError("Splash native port configuration differs from its environment.")
+    for port in (ports["mlx"], ports["strata"], env.port, 7860, 8188, 8081, 8083, 8084):
         if listeners(port):
             raise HostError("An engine or GPU service still owns resources.")
     for path in [

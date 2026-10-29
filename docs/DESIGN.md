@@ -78,7 +78,7 @@ Consequences:
 
 Strata 0.1.44.1-metal, pack Q2_0, context 32768, MTP on, `--mmap-experts`, in a sandbox on the
 models volume with its own `HOME`; MLX, ComfyUI, the sidecars and the embedding service
-stopped. Bench: `ops/strata-phase0/bench.py`, streamed chat completions.
+stopped. Bench: `experiments/strata/bench.py`, streamed chat completions.
 
 | Check | Result |
 |---|---|
@@ -112,7 +112,7 @@ in memory, so experts stream from disk):
 | 29K prompt | Prompt 533 tok/s, decode 29.0 tok/s. |
 | 98.8K-token prompt, thinking on | TTFT 177–187 s (prompt 529–557 tok/s), decode 27–29 tok/s; the code found at 10%, 50% and 90% depth. |
 
-Decision gate (`plans/20261015_strata-qwen38-flash-next.md`): IQ3_XXS fails it. Memory and
+Decision gate (`plans/archive/strata/20261015_strata-qwen38-flash-next.md`): IQ3_XXS fails it. Memory and
 cold starts pass, but decode is 26–32 tok/s, below 60% of Q2_0's (about 35 tok/s), and a 4K
 prompt reads at 427 tok/s, below 500. Q2_0 ships, at a 262144 context. Its decode is 57–66 tok/s, inside the 50–70 tok/s estimate. Engine-side request
 statistics go to `app/strata-<pack>.log`, apart from the server log the wrapper keeps; the
@@ -257,7 +257,7 @@ Rules:
 
 ### 5.7 Task-quality evals (M10)
 
-Plan: `plans/20261017_task-quality-evals.md`. Summary of what was built.
+Plan: `plans/archive/platform/20261017_task-quality-evals.md`. Summary of what was built.
 
 - **Run kind.** `kind="eval"` in `quality_runner.py`, with `suite` and `thinking`; same held job slot, model switching, cancellation and restoration as other quality runs. Its deadline is `EVAL_RUN_DEADLINE_S` (12 h). The request timeout is `max(QUALITY_REQUEST_TIMEOUT_S, max_tokens / 5)` seconds (a 5 tok/s floor), clamped by the run deadline, because an 8192-token thinking answer outlasts 300 s.
 - **Suites** (`eval_suites.py`, `evals/*.json`): versioned, content-hashed; `core-v1`, `writing-v1`, generated `needle-v1`. Custom JSONL import is bounded (size, case count, regex length, duplicate ids) and walks each regex's parse tree (`re._parser`): a repeat may not contain an alternation, a repeat inside a repeat needs the outer one bounded at 100 or less, and that bounded body may hold only single characters and their repeats, each sharing no character with what can follow it (so it splits one way). Polynomial patterns outside repeated groups are not caught; the Regex grader matches with the `regex` package under a 1 s per-match timeout (score 0 on timeout) with the GIL released (stdlib `re` holds it, so a thread alone would not keep the loop responsive), and the runner grades in a worker thread. Generated suites cannot be exported (400).
@@ -404,7 +404,7 @@ local-llm-admin/
 | D4 | Install folder | Proposed: `/Users/you/local-llm-admin` |
 | D5 | Usage data source | **Decided 2026-09-28, revised 2026-09-29:** LiteLLM API with a dedicated `proxy_admin_viewer` key (no model access). Both views come from `/spend/logs/v2`, bucketed in the ops timezone by the admin (§3a explains why not the UTC daily rollups). The earlier the LiteLLM host agent running SQL and `session-report.sh` is dropped. |
 | D6 | Chat routing | Proposed: direct to `:8080` (a pure model test; not counted in LiteLLM usage). The alternative is through LiteLLM with a separate chat-capable key, so test chats are counted. |
-| D7 | Strata engine (Qwen3.8-Flash-Next) | **Implemented 2026-10-15** (`plans/20261015_strata-qwen38-flash-next.md`): a third exclusive engine (`EngineKind` `strata`), driven only through `strata/bin/strata` and its HTTP API on the MLX server's `0.0.0.0:8080` (2026-10-16: LiteLLM's one route reaches whichever engine runs; host scripts tell Strata apart by its command line, the admin by its pid file and `/health` `service: "strata"`). One Engine entry per installed pack (`strata:<pack>`, from the `app/strata-<pack>.json` run configs; the running pack from `/health`'s model id): picking another pack while Strata runs restarts it, and rollback brings the old pack back. `bin/strata start <pack>` keeps the choice in `run/strata.pack`, so a plain start (the watchdog's) runs it again; the intent stays `strata`. Switching to it stops MLX or ComfyUI, the sidecar and every always-on service; leaving it restores the services meant to run. Off unless `STRATA_ENABLED=true`. Test chat and the compatibility cases follow it (benchmarks and model sweeps stay MLX-only). |
+| D7 | Strata engine (Qwen3.8-Flash-Next) | **Implemented 2026-10-15** (`plans/archive/strata/20261015_strata-qwen38-flash-next.md`): a third exclusive engine (`EngineKind` `strata`), driven only through `strata/bin/strata` and its HTTP API on the MLX server's `0.0.0.0:8080` (2026-10-16: LiteLLM's one route reaches whichever engine runs; host scripts tell Strata apart by its command line, the admin by its pid file and `/health` `service: "strata"`). One Engine entry per installed pack (`strata:<pack>`, from the `app/strata-<pack>.json` run configs; the running pack from `/health`'s model id): picking another pack while Strata runs restarts it, and rollback brings the old pack back. `bin/strata start <pack>` keeps the choice in `run/strata.pack`, so a plain start (the watchdog's) runs it again; the intent stays `strata`. Switching to it stops MLX or ComfyUI, the sidecar and every always-on service; leaving it restores the services meant to run. Off unless `STRATA_ENABLED=true`. Test chat and the compatibility cases follow it (benchmarks and model sweeps stay MLX-only). |
 
 ## 12. Implementation notes (2026-09-29)
 
@@ -424,7 +424,7 @@ Decisions made during implementation (each is cheap to reverse):
 
 ## 13. Shared backend contract (2026-10-27)
 
-Phase 1 of the [Splash integration plan](../plans/20261027_splash-phase1-backend-contract.md)
+Phase 1 of the [Splash integration plan](../plans/archive/splash/20261027_splash-phase1-backend-contract.md)
 introduces one static registry per ControlService/application. The registry wraps the
 existing injected MLX, ComfyUI and Strata clients and reads the current Settings on each
 lookup. MLX remains the default; Strata remains opt-in. There is no plugin discovery,
@@ -517,7 +517,7 @@ run against Splash. Allowlisted wrapper/native output uses the existing rotating
 MLX throughput is not displayed as Splash throughput; no new usage source or availability
 denominator is introduced here.
 
-See the [Phase 2 plan](../plans/20261027_splash-phase2-adapter-and-host-integration.md)
+See the [Phase 2 plan](../plans/archive/splash/20261027_splash-phase2-adapter-and-host-integration.md)
 for validation status and the [host guide](../host/splash/README.md) for settings,
 private preparation, failure handling and the Phase 3 installation/rollback worksheet.
 Pinned Splash aliases cannot be absolute MLX paths. The deployed support preserves the
@@ -526,12 +526,12 @@ profile routes on a dedicated endpoint. The legacy8080 default remains compatibl
 private `SPLASH_PORT`/`SPLASH_API_BASE` configuration isolates persistent routes from MLX's
 model-loading API. Ownership records bind their port; old records retain8080 semantics.
 Probes/cleanup follow recorded ownership and admin mismatch refuses readiness. All GPU
-engine exclusions remain mandatory. See the [verified rollout](../ops/splash-phase3/rollout-report.md).
+engine exclusions remain mandatory. See the [verified rollout](reports/splash/rollout-report.md).
 Earlier Phase0failed/inconclusive/unassessed results remain unchanged.
 
 ### Splash Phase 3 telemetry boundary
 
-The [Phase 3 plan](../plans/20261028_splash-phase3-telemetry-qualification-and-rollout.md)
+The [Phase 3 plan](../plans/archive/splash/20261028_splash-phase3-telemetry-qualification-and-rollout.md)
 starts with the [pinned telemetry contract](splash-telemetry.md). Response usage and
 request wall intervals normalize separately from native aggregate execution counters.
 Missing values stay null; partial/error/cancelled outcomes are never promoted by the
@@ -554,12 +554,40 @@ All-client population/billing reconciliation, final-counter capture and physical
 remain unqualified. The frozen integrated comparison is partial/inconclusive; its stock
 short TTFT finding is70ms/+10.4% with overlapping ranges and asymmetric guard calls, so no
 causal ingestion-only bound or new performance-adoption pass is claimed. MLX stays default
-with Splash explicitly selectable. See the [operating and rollback guide](../ops/splash-phase3/README.md)
-and [partial measurement evidence](../ops/splash-phase3/integrated-comparison-report.md).
+with Splash explicitly selectable. See the [operating and rollback guide](reports/splash/README.md)
+and [partial measurement evidence](reports/splash/integrated-comparison-report.md).
 
 
-The [128K context update](../ops/splash-phase3/context-128k-report.md) raises both deployed
+The [128K context update](reports/splash/context-128k-report.md) raises both deployed
 profile limits to 131072 while retaining profile/model/route identities and asset receipts.
 The owning launcher forwards the validated profile value. Loaded native status and served
 model lists must match it exactly; a context change produces a new profile fingerprint.
 The completed direct/gateway near-limit checks preserve MLX as the selected default.
+
+
+## Shared inference entry point
+
+The admin serves one authenticated OpenAI-compatible `/v1` entry point for the selected
+verified LLM backend. LiteLLM keeps one API base and public model ID; request model IDs
+translate to the selected backend and response IDs translate back. Native endpoints and
+credentials remain backend settings. Unknown/conflicting ownership and inactive model IDs
+refuse without dispatch or fallback. Streaming remains incremental and disconnect closes
+the upstream response. See [configuration, bounds and migration](shared-inference.md).
+
+Historical benchmark code is under `experiments/`; reusable deployment tools remain in
+`ops/`. Current plans, backlog and archived notes are indexed in [plans](../plans/README.md).
+
+
+## Shared inference entry point
+
+An authenticated OpenAI entry point on the existing 8080 client port follows the selected
+verified LLM engine. LiteLLM retains both its API base and upstream model ID. Native
+MLX/Strata/Splash ports move behind it using private `etc/engine-ports.json` and matching
+admin settings; requests and response model IDs translate at the boundary. Unknown or
+conflicting ownership, inactive model IDs and active engine operations refuse without
+fallback. Streaming remains incremental; disconnect closes upstream. See
+[configuration, native-port migration and rollback](shared-inference.md).
+
+Reusable deployment tools remain in [ops](../ops/README.md); experiment bundles live in
+[experiments](../experiments/README.md). Active work, backlog and historical plans are
+indexed in [plans](../plans/README.md).

@@ -100,3 +100,15 @@ trap '(( ZSH_SUBSHELL )) || engine_release' ZERR
 # Re-raise termination after releasing only this process's reservation.
 TRAPTERM() { engine_signal TERM; }
 TRAPINT() { engine_signal INT; }
+
+
+# Optional private topology: missing configuration retains legacy native :8080.
+engine_native_port() {
+  local config="/Volumes/Models/etc/engine-ports.json" helper="/Volumes/Models/bin/engine-ports"
+  if [[ ! -e "$config" && ! -L "$config" ]]; then
+    print -r -- 8080
+    return 0
+  fi
+  [[ -f "$helper" ]] || { echo "Missing native port helper." >&2; return 1; }
+  /usr/bin/python3 "$helper" "$config" "$1"
+}

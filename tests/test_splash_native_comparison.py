@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ops/splash-phase0"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments/splash"))
 try:
     import bench
     import native_comparison as compare

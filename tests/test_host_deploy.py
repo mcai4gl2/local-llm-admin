@@ -44,6 +44,8 @@ exec /bin/mv "$@"
 """
 
 CODE = [
+    "bin/engine-ports",
+    "etc/engine-ports.example.json",
     "bin/mlx-model",
     "bin/mlx-download",
     "bin/mlx-profile",

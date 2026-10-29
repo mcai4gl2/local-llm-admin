@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("splash_bench", ROOT / "ops/splash-phase0/bench.py")
+SPEC = importlib.util.spec_from_file_location("splash_bench", ROOT / "experiments/splash/bench.py")
 assert SPEC and SPEC.loader
 bench = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = bench
@@ -514,7 +514,7 @@ def test_restoration_verifier_requires_same_intent_configs_and_ready_original():
 
 def preflight_module():
     spec = importlib.util.spec_from_file_location(
-        "splash_preflight", ROOT / "ops/splash-phase0/preflight.py"
+        "splash_preflight", ROOT / "experiments/splash/preflight.py"
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -611,7 +611,7 @@ def test_preflight_shell_uses_environment_target_and_private_artifact(tmp_path):
         "SSH_ARGS": str(tmp_path / "args"),
     }
     result = subprocess.run(
-        ["bash", str(ROOT / "ops/splash-phase0/preflight.sh"), str(output)],
+        ["bash", str(ROOT / "experiments/splash/preflight.sh"), str(output)],
         env=env,
         capture_output=True,
         text=True,
@@ -624,7 +624,7 @@ def test_preflight_shell_uses_environment_target_and_private_artifact(tmp_path):
     assert output.parent.stat().st_mode & 0o777 == 0o700
     assert "env-target" not in result.stdout
     result = subprocess.run(
-        ["bash", str(ROOT / "ops/splash-phase0/preflight.sh"), str(output)],
+        ["bash", str(ROOT / "experiments/splash/preflight.sh"), str(output)],
         env=env,
         capture_output=True,
         text=True,
@@ -715,10 +715,10 @@ async def test_missing_credentials_and_wrong_model_fail_before_inference(
 
 
 def test_checked_in_schema_and_example_match_the_executable_contract():
-    schema = json.loads((ROOT / "ops/splash-phase0/manifest.schema.json").read_text())
+    schema = json.loads((ROOT / "experiments/splash/manifest.schema.json").read_text())
     assert schema == bench.Manifest.model_json_schema()
     example = bench.Manifest.model_validate_json(
-        (ROOT / "ops/splash-phase0/manifest.example.json").read_text()
+        (ROOT / "experiments/splash/manifest.example.json").read_text()
     )
     assert example.model.weights_sha256 == "0" * 64  # deliberately unfinished, never evidence
 
@@ -729,7 +729,7 @@ def test_sandbox_redirects_writable_paths_and_drops_ambient_environment(tmp_path
 
     root = tmp_path / "spike with spaces"
     root.mkdir()
-    script = ROOT / "ops/splash-phase0/sandbox.sh"
+    script = ROOT / "experiments/splash/sandbox.sh"
     result = subprocess.run(
         [
             "bash",
@@ -1011,7 +1011,7 @@ def test_sandbox_omits_unset_optional_api_key(tmp_path, monkeypatch):
     result = subprocess.run(
         [
             "bash",
-            str(ROOT / "ops/splash-phase0/sandbox.sh"),
+            str(ROOT / "experiments/splash/sandbox.sh"),
             str(tmp_path),
             sys.executable,
             "-c",

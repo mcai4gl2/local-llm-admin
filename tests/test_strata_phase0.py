@@ -1,4 +1,4 @@
-"""ops/strata-phase0/capture.sh: scrubbing and request headers, with a fake curl."""
+"""experiments/strata/capture.sh: scrubbing and request headers, with a fake curl."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CAPTURE = ROOT / "ops/strata-phase0/capture.sh"
+CAPTURE = ROOT / "experiments/strata/capture.sh"
 
 # prints its argv (one per line, as JSON) plus a body with an address and a version string
 FAKE_CURL = r"""#!/bin/bash
@@ -48,7 +48,7 @@ def test_capture_sends_accept_and_auth_as_separate_header_arguments(tmp_path):
 def _bench():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("strata_bench", ROOT / "ops/strata-phase0/bench.py")
+    spec = importlib.util.spec_from_file_location("strata_bench", ROOT / "experiments/strata/bench.py")
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

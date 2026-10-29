@@ -5,7 +5,7 @@ default. Current example profiles use 128K context (131072 total tokens), reason
 no disk cache and idle release off. GPU sidecars and other engines must be stopped.
 
 Use the original pinned 1.4.0 standalone runtime; see
-[inventory](../environment/splash.txt) and [Phase 2 plan](../../plans/20261027_splash-phase2-adapter-and-host-integration.md).
+[inventory](../environment/splash.txt) and [Phase 2 plan](../../plans/archive/splash/20261027_splash-phase2-adapter-and-host-integration.md).
 Do not use instrumented Phase 0 packages or silently substitute checkpoints.
 After independently verifying the release archive checksum and unpacked original runtime,
 copy `etc/runtime.example.json` to private mode-600 `etc/runtime.json`. This records that
@@ -30,7 +30,7 @@ Keep the reviewed memory budget; a larger configured window still needs a valid 
 memory plan and actual long-context inference verification on the target host.
 
 Prepare each model separately with the pinned runtime's public `install.local.prepare_local_model`
-interface as described in the [Phase 0 notes](../../ops/splash-phase0/README.md). Keep source
+interface as described in the [Phase 0 notes](../../experiments/splash/README.md). Keep source
 assets read-only. Its output layout is opaque; do not construct it manually. Place an
 operator-managed link named `prepared/<profile-id>` to that prepared directory within the
 managed `prepared` tree. Its `tokenizer` directory must exist. Prepared data needs the
@@ -172,8 +172,10 @@ Prepare a private worksheet before requesting a live window:
 3. Audit the pinned archive and each asset, prepare separate outputs, and create the private
    receipts above. Deploying versioned files does not install these inputs or enable Splash.
 4. Review the exact private gateway upstream URL, model string, Host and auth headers.
-   An absolute MLX model path requires an explicit route alias change. Never add a proxy or
-   silently rewrite that string. Use the supported named alias and dedicated runtime key.
+   The shared entry point preserves the existing MLX model path for clients and translates
+   it to a supported native alias. Native runtime keys remain private backend credentials.
+   Use the [shared migration guide](../../docs/shared-inference.md); no LiteLLM URL/model
+   change is required.
 5. After approval, apply the reviewed host/admin diff and opt in. Start one explicit profile,
    verify the complete process bundle and all three readiness endpoints, and run a direct
    authenticated inference. Then run the exact existing client request through the actual
@@ -207,11 +209,11 @@ reports disabled/not-collected/aggregate-snapshot coverage, with separate last-s
 last-new-data and stale/error/gaps. Existing MLX/Strata request totals exclude Splash
 execution counters. The independent bounded monitor stores profile/epoch-bound native
 snapshots in schema 16, with separately scoped availability. No request ledger or final
-stop guarantee is invented. See the [operating/rollback runbook](../../ops/splash-phase3/README.md);
+stop guarantee is invented. See the [operating/rollback runbook](../../docs/reports/splash/README.md);
 the old app needs its matching pre-migration database backup. Native reset/population
 qualification and actual Mac/gateway validation remain open.
 
-## Dedicated gateway endpoint
+## Native endpoint and the shared client URL
 
 Private `etc/splash.env` accepts `SPLASH_PORT` (1–65535); omission retains 8080.
 Configure the admin's `SPLASH_PORT` and `SPLASH_API_BASE` to match. New ownership
@@ -221,10 +223,17 @@ The admin refuses a mismatched configured/recorded port. Stop the owner before e
 configuration. A custom port continues to exclude MLX on 8080 and all GPU services;
 a closed shared port never proves Splash absent.
 
-Persistent profile-specific gateway routes should use a dedicated, verified unused
-Splash port. On the shared endpoint, the pinned MLX runtime can unload its selected
-model before attempting to load a requested Splash alias. Separate ports make an
-inactive Splash route fail without reaching MLX. Keep the original model route and
+Native Splash can keep a dedicated, verified unused port. New LiteLLM routes should use
+the [shared inference entry point](../../docs/shared-inference.md), which follows the
+selected engine with one URL and stable model ID. Direct native profile routes remain
+revision-specific historical configuration. On the shared endpoint, the pinned MLX runtime can unload its selected
+model before attempting to load a requested Splash alias. The shared entry point refuses inactive model IDs before dispatch; separate native ports
+also keep direct inactive Splash requests from reaching MLX. Keep the original model route and
 credential scopes, and verify both active streams and inactive refusal with the
 original MLX generation/inference intact. Dedicated routing does not permit simultaneous
 full engines or infer model identity from a listening port.
+
+
+With private `etc/engine-ports.json`, startup excludes the configured MLX and Strata
+native ports rather than treating the shared 8080 listener as a GPU owner. Splash
+refuses a mismatch between that topology and its own private serving port.

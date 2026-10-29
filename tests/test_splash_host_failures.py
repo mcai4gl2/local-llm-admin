@@ -262,6 +262,7 @@ def test_missing_profile_helper_refuses_import(
         "timeout",
         "ready",
         "late-native",
+        "native-mismatch",
     ],
 )
 def test_start_validates_before_fork_and_bounds_owned_cleanup(
@@ -307,6 +308,10 @@ def test_start_validates_before_fork_and_bounds_owned_cleanup(
         ),
     )
     monkeypatch.setattr(host_control, "process", lambda pid: None if mode == "stale-pid" else {})
+    if mode == "native-mismatch":
+        monkeypatch.setattr(
+            host_control, "native_ports", lambda root: {"mlx": 8086, "strata": 8087, "splash": 8085}
+        )
     child = SimpleNamespace(pid=100, poll=lambda: 3 if mode in ("capture-dead", "crash") else None)
     launches = []
 
@@ -324,7 +329,12 @@ def test_start_validates_before_fork_and_bounds_owned_cleanup(
     monkeypatch.setattr(
         host_control, "_member", lambda *args: None if mode.startswith("capture-") else member
     )
-    native = {**member, "pid": 101, "role": "native", "executable": str(root / "runtime/engine/splash")}
+    native = {
+        **member,
+        "pid": 101,
+        "role": "native",
+        "executable": str(root / "runtime/engine/splash"),
+    }
     monkeypatch.setattr(host_control, "members", lambda *args: [member])
     persisted_native = []
     monkeypatch.setattr(
@@ -719,6 +729,34 @@ def test_recorded_child_exiting_after_candidate_scan_is_absent(
     native = {"pid": 101, "role": "native"}
     record = {"controller": parent, "native": [native], "prepared": "prepared"}
     monkeypatch.setattr(host_control, "possible_pids", lambda root: {100, 101})
-    monkeypatch.setattr(host_control, "_same", lambda root, record, p: parent if p == parent else None)
+    monkeypatch.setattr(
+        host_control, "_same", lambda root, record, p: parent if p == parent else None
+    )
     monkeypatch.setattr(host_control, "_run", lambda argv: "")
     assert host_control.members(tmp_path, record) == [parent]
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_native_port_topology_is_read_by_the_private_helper(
+    host_control: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: bool
+) -> None:
+    root = tmp_path / "splash"
+    config = tmp_path / "etc/engine-ports.json"
+    config.parent.mkdir()
+    config.touch()
+    expected = {"mlx": 8086, "strata": 8087, "splash": 8085}
+
+    def run(argv: list[str]) -> str:
+        assert argv[-2:] == [str(tmp_path / "bin/engine-ports"), str(config)]
+        if failure:
+            raise host_control.HostError("unverifiable")
+        import json
+
+        return json.dumps(expected)
+
+    monkeypatch.setattr(host_control, "_run", run)
+    if failure:
+        with pytest.raises(host_control.HostError):
+            host_control.native_ports(root)
+    else:
+        assert host_control.native_ports(root) == expected

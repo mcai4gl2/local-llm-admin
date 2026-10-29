@@ -30,3 +30,6 @@ code bin/engine-guard.sh
 code splash/bin/splash
 code splash/lib/control.py
 code splash/etc/runtime.example.json
+
+code bin/engine-ports
+code etc/engine-ports.example.json

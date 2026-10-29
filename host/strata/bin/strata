@@ -28,7 +28,9 @@ PACKS='^(Q2_0|IQ2_XS|IQ3_XXS|IQ3_S)$'
 MLX_LOCK="$VOLUME/run/mlx.lock"
 GATE="$VOLUME/run/maintenance.lock"
 HOST="0.0.0.0"
-PORT=8080
+PORT="$(engine_native_port strata)"
+MLX_PORT="$(engine_native_port mlx)"
+[[ "$PORT" == 8080 ]] || HOST="127.0.0.1"
 STOP_TRIES=240  # x 0.25 s: Strata unmaps a 40+ GB model before it exits
 LOG_ROTATE_MAX=52428800  # 50 MiB; rotated only by start, while the engine is stopped
 LOG_ROTATE_KEEP=8
@@ -188,7 +190,7 @@ rotate_log() {
 }
 
 refuse_if_busy() {
-  if port_listening 8080 || port_listening 7860; then
+  if port_listening "$MLX_PORT" || port_listening 7860; then
     echo "The MLX server is running. Stop it first: $VOLUME/bin/mlx-model stop" >&2
     exit 1
   fi

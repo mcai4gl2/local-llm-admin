@@ -55,7 +55,11 @@ Always pass `-u vscode`; without it files end up owned by root.
 
 ## Plans and devlogs
 
-- Plans: `plans/YYYYMMDD_<name>.md`, written public-safe.
+- Plans: `plans/active/YYYYMMDD_<name>.md`, written public-safe. Keep the active index current;
+  archive completed work under `plans/archive/<component>/` and proposals under `plans/backlog/`.
+  Historical partial/inconclusive outcomes stay explicit. See `plans/README.md`.
+- Reusable deployment tools live in `ops/`; experiment bundles live in `experiments/`.
+  Sanitized rollout evidence lives under `docs/reports/`; do not rewrite frozen JSON outcomes.
 - After every change, append to `devlogs/YYYY-MM-DD.md` (append-only):
 
 ```markdown

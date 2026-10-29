@@ -123,7 +123,7 @@ strata_running() {
     pid="${pid//$'\n'/}"
     [[ "$pid" == <-> ]] && is_strata "$pid" && return 0
   fi
-  for pid in $(lsof -nP -tiTCP:8080 -sTCP:LISTEN 2>/dev/null); do
+  for pid in $(lsof -nP -tiTCP:"$(engine_native_port strata)" -sTCP:LISTEN 2>/dev/null); do
     is_strata "$pid" && return 0
   done
   return 1

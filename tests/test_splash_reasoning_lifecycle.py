@@ -10,13 +10,13 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "ops/splash-phase0"))
+sys.path.insert(0, str(ROOT / "experiments/splash"))
 import bench  # noqa: E402
 import reasoning_lifecycle as review  # noqa: E402
 
 
 def profile(mode: bool = True) -> bench.Manifest:
-    data = json.loads((ROOT / "ops/splash-phase0/manifest.example.json").read_text())
+    data = json.loads((ROOT / "experiments/splash/manifest.example.json").read_text())
     data.update(
         id="reason-test",
         backend="mlx",

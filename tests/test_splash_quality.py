@@ -16,10 +16,10 @@ import pytest
 from tests.test_splash_phase0 import manifest_data as manifest_data
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "ops/splash-phase0"))
+sys.path.insert(0, str(ROOT / "experiments/splash"))
 try:
     SPEC = importlib.util.spec_from_file_location(
-        "splash_quality", ROOT / "ops/splash-phase0/quality.py"
+        "splash_quality", ROOT / "experiments/splash/quality.py"
     )
     assert SPEC and SPEC.loader
     quality = importlib.util.module_from_spec(SPEC)
@@ -331,7 +331,7 @@ async def test_required_case_failure_cannot_be_hidden_by_net_quality_gain(tmp_pa
 
 
 def test_checked_in_pilot_has_coding_tools_and_only_deterministic_cases():
-    d = json.loads((ROOT / "ops/splash-phase0/quality-suite.json").read_text())
+    d = json.loads((ROOT / "experiments/splash/quality-suite.json").read_text())
     suite = quality.parse_suite(d)
     assert len(suite.cases) >= 35
     assert len({c.id for c in suite.cases}) == len(suite.cases)
