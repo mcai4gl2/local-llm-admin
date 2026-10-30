@@ -12,6 +12,8 @@ regexes = [
   '''replace-with-32-to-256-chars-of-A-Za-z0-9_-''',  # host/strata/etc/strata.env.example
   # Documented Splash placeholder; never a usable credential.
   '''^replace-with-a-private-key-of-at-least-32-characters$''',
+  # Exact public PaddleOCR model snapshot (Hugging Face revision, not a credential).
+  '''^c5630abae1d940eafe0697512a0325494b02ab42$''',
   # Exact public tokenizer fingerprints and logical benchmark case IDs.
   '''^mlx\-direct\-instruction\-short\-0$''',
   '''^mlx\-direct\-instruction\-short\-1$''',
