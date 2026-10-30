@@ -723,3 +723,15 @@ is presentation still mixing MLX-centric assumptions, legacy target IDs and sepa
 bolted-on native diagnostics. Fix identity/action trust first, then integrate Performance
 with truthful source boundaries and compact advanced diagnostics, then apply those shared
 patterns to Dashboard, services, Chat, Quality and the surrounding workflows.
+
+
+## Authorized deployment outcome — 2026-10-30
+
+After local implementation was complete, the user explicitly requested a commit and live
+deployment. Revision `0302459` was committed and deployed with the standard admin workflow.
+All 98 application payload hashes and 23 authenticated read-only checks passed; native MLX
+process identity, selected model, saved intents and six private configuration fingerprints
+were preserved. Database integrity is `ok`, schema remains 16, and fresh Strata availability
+observations are being recorded. No inference generation or engine-switching qualification
+was performed. The original review and local-only checkpoints above retain their historical
+scope. See the [deployment record](../../../docs/reports/admin-ui-deployment-20261030.md).

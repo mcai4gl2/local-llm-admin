@@ -656,3 +656,5 @@ independent rolling 30-day range. Shared navigation has a mobile disclosure, pag
 a skip link, labeled controls and keyboard-operable Usage tabs. Fixture browser tests cover
 light/dark contrast, mobile layouts, zoom and operational transitions; these checks do not
 qualify live engines or authorize deployment.
+
+The admin consistency implementation is deployed; see the [rollout record](reports/admin-ui-deployment-20261030.md) for installed payload and preservation checks.
