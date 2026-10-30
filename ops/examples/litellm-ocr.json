@@ -1,0 +1,19 @@
+{
+  "model_name": "local-ocr",
+  "litellm_params": {
+    "model": "openai/local-ocr",
+    "api_base": "http://mac-mini.local:8082/v1",
+    "api_key": "os.environ/SIDECAR_GATEWAY_API_KEY",
+    "timeout": 300,
+    "num_retries": 0,
+    "max_retries": 0
+  },
+  "model_info": {
+    "mode": "chat",
+    "supports_vision": true,
+    "supports_pdf_input": true,
+    "supports_streaming": false,
+    "input_cost_per_token": 0,
+    "output_cost_per_token": 0
+  }
+}

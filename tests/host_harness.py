@@ -187,5 +187,6 @@ def make_host(tmp_path: Path) -> Host:
     }
     host = Host(root, state, env)
     redirect(HOST / "bin/engine-guard.sh", root / "bin/engine-guard.sh", root)
+    redirect(HOST / "bin/resident-services", root / "bin/resident-services", root)
     host.install_cli(HOST / "bin/mlx-model")
     return host

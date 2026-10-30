@@ -25,3 +25,14 @@ revision/window, not instructions to rerun those windows or evidence for later c
 Append-only historical devlogs may cite the old `ops/*-phase0/` or root `plans/` paths.
 Use the experiment and plan indexes above to find the moved bundle; old JSON source
 labels intentionally retain the original capture locations.
+## OCR release preparation
+
+The [resident OCR runbook](../host/ocr/README.md) describes isolated provisioning, paired
+private configuration, per-route rollback and native qualification. Generate a reviewable
+private release archive with `uv run python -m local_llm_admin.ocr_release`; preview the
+LiteLLM route with `uv run python -m local_llm_admin.ocr_route`. Both run locally in the
+devcontainer; route preview makes management reads only. Code deployment, native package
+installation/model downloads, configuration changes, service starts/stops and route writes
+belong to a separately approved live window. Use configured `MAC_HOST`/`MAC_DEST` targets.
+The host allow-list includes the OCR code and both hashed environment locks. Keep deployment
+backup manifests, provisioning receipts and route snapshots private for rollback.

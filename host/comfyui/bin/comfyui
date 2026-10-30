@@ -176,6 +176,7 @@ cmd_status() {
 
 cmd_start() {
   engine_splash_guard
+  engine_resident_guard exclusive
   require_volume
   local pid=""
   if pid="$(current_pid)"; then
@@ -197,10 +198,6 @@ cmd_start() {
   fi
   if tts_running; then
     echo "The TTS sidecar is running. Stop it first: /Volumes/Models/tts/bin/qwen-tts stop" >&2
-    exit 1
-  fi
-  if embed_running; then
-    echo "The embedding service is running. Stop it first: /Volumes/Models/embed/bin/qwen-embed stop" >&2
     exit 1
   fi
   if [[ ! -x /opt/homebrew/bin/ffmpeg ]]; then

@@ -248,3 +248,7 @@ details pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .card { grid-template-columns: minmax(0, 1fr); }
 .toolbar select { min-width: 0; width: 100%; }
+
+.resident-service + .resident-service { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 1rem; }
+.ocr-page pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+#ocr-document { max-width: 100%; }

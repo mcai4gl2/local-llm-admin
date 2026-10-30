@@ -21,7 +21,7 @@
       {% endfor %}
       <details class="secondary-nav"><summary>Services and records</summary>
         <div class="secondary-links">
-          {% for href, name, label in [("/outputs", "outputs", "ComfyUI Outputs"), ("/decision", "decision", "Decision"), ("/tts", "tts", "TTS"), ("/embed", "embed", "Embeddings"), ("/logs", "logs", "Logs"), ("/usage", "usage", "LiteLLM Usage"), ("/alerts", "alerts", "Alerts")] if (name != "decision" or decision_enabled) and (name != "tts" or tts_enabled) and (name != "embed" or embed_enabled) %}
+          {% for href, name, label in [("/outputs", "outputs", "ComfyUI Outputs"), ("/decision", "decision", "Decision"), ("/tts", "tts", "TTS"), ("/embed", "embed", "Embeddings"), ("/ocr", "ocr", "OCR"), ("/logs", "logs", "Logs"), ("/usage", "usage", "LiteLLM Usage"), ("/alerts", "alerts", "Alerts")] if (name != "decision" or decision_enabled) and (name != "tts" or tts_enabled) and (name != "embed" or embed_enabled) and (name != "ocr" or ocr_enabled) %}
           <a href="{{ href }}" {% if page == name %}aria-current="page"{% endif %}>{{ label }}{% if name == "alerts" %} <span id="nav-alerts" class="count" hidden></span>{% endif %}</a>
           {% endfor %}
         </div>

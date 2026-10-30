@@ -100,9 +100,9 @@ async def test_disabled_hides_everything(client, fake_embed):
     assert (await client.get("/api/services")).json()["services"] == []
 
 
-async def test_models_page_has_embed_card(client):
+async def test_models_page_has_resident_cards(client):
     html = (await client.get("/models")).text
-    assert 'id="embed-card"' in html
+    assert 'id="resident-cards"' in html
 
 
 async def test_nav_page_and_usage_section(client):
@@ -128,3 +128,17 @@ async def test_service_pause_owner_is_shared_with_test_page(client: Any, monkeyp
     assert not service["availability"]["available"]
     page_status = (await client.get("/api/embed")).json()
     assert page_status["availability"] == service["availability"]
+
+
+async def test_service_view_uses_registered_models(client, monkeypatch):
+    from dataclasses import replace
+
+    from local_llm_admin.sidecars import ServiceModel, embed_spec
+    def third(settings):
+        return replace(embed_spec(settings), name="third", port=8099, intent_key="third_intent",
+                       models=(ServiceModel("third-model", "classification"),), ui_path="/third")
+    monkeypatch.setattr(sidecars_mod, "SERVICE_BUILDERS", [embed_spec, third])
+    views = (await client.get("/api/services")).json()["services"]
+    assert views[1]["models"] == ["third-model"]
+    assert views[1]["capabilities"] == ["classification"]
+    assert views[1]["ui_path"] == "/third"

@@ -314,6 +314,7 @@ async def test_every_page_renders_with_the_sidecar_enabled_and_disabled(api, fak
                 (page == "decision" and not enabled)
                 or (page == "tts" and not fake_decision.settings.tts_enabled)
                 or (page == "embed" and not fake_decision.settings.embed_enabled)
+                or (page == "ocr" and not fake_decision.settings.ocr_enabled)
             )
             expected = 404 if off else 200
             assert r.status_code == expected, (route, enabled, r.text[:200])

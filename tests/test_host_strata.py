@@ -218,7 +218,7 @@ def test_start_fails_cleanly_when_the_server_exits(st):
         (8188, "ComfyUI"),
         (8081, "sidecar"),
         (8083, "sidecar"),
-        (8084, "embedding"),
+        (8084, "qwen-embed"),
     ],
 )
 def test_start_refuses_when_another_engine_or_port_is_busy(st, port, words):

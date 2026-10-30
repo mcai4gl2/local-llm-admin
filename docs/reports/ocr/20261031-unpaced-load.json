@@ -1,0 +1,88 @@
+{
+  "load": {
+    "passed": false,
+    "ratios": {
+      "chat_p95_ms": 1.3260478241256513,
+      "chat_tokens_s": 0.8716152215735726,
+      "embed_p95_ms": 0.9932496904238225
+    }
+  },
+  "memory": {
+    "passed": false,
+    "reason": "Native memory/pressure evidence pending."
+  },
+  "passed": false,
+  "schema_version": 1,
+  "tasks": {
+    "blank": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "columns": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "english": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "formula": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "numeric": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "rotated": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "scanned-pdf": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "simplified": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "table": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "traditional": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    }
+  }
+}

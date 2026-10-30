@@ -33,3 +33,23 @@ code splash/etc/runtime.example.json
 
 code bin/engine-ports
 code etc/engine-ports.example.json
+
+code bin/resident-services
+
+# Isolated OCR candidate runtime; private state is never deployed by this manifest.
+code ocr/README.md
+code ocr/app/config.py
+code ocr/app/lifecycle.py
+code ocr/app/owned.py
+code ocr/app/pipeline.py
+code ocr/app/provision.py
+code ocr/app/runtime.py
+code ocr/app/server.py
+code ocr/app/worker.py
+code ocr/bin/paddleocr-vl
+code ocr/bin/provision-ocr
+code ocr/etc/requirements.in
+code ocr/etc/runtime.example.json
+code ocr/etc/vlm-requirements.in
+code environment/ocr-app.txt
+code environment/ocr-vlm.txt

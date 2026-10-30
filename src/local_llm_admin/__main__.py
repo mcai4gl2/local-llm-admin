@@ -40,7 +40,8 @@ def main() -> None:
     env_file = args.env_file if args.env_file.is_file() else None
     settings = Settings(_env_file=env_file)  # type: ignore[call-arg]
     inference_enabled = bool(settings.inference_api_key.get_secret_value())
-    sidecars_enabled = settings.decision_enabled or settings.tts_enabled or settings.embed_enabled
+    sidecars_enabled = (settings.decision_enabled or settings.tts_enabled
+                        or settings.embed_enabled or settings.ocr_enabled)
     if inference_enabled:
         native_ports = (settings.mlx_port, settings.strata_port, settings.splash_port)
         if settings.inference_port in native_ports or len(set(native_ports)) != 3:
@@ -112,6 +113,9 @@ def main() -> None:
             embed=app.state.embed if settings.embed_enabled else None,
             embed_history=app.state.embed_history,
             embed_reason=app.state.embed_reason,
+            ocr=app.state.ocr if settings.ocr_enabled else None,
+            ocr_reason=app.state.ocr_reason if settings.ocr_enabled else None,
+            service_history=app.state.service_history,
         )
         servers.append(
             uvicorn.Server(

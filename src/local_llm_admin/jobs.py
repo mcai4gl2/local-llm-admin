@@ -71,6 +71,9 @@ class Step:
     call: Callable[[], None] | None = None
     timeout_s: float = 30.0
     optional: bool = False  # a failure is logged and the sequence continues
+    steps: tuple[Step, ...] = ()  # one failure stops this group
+    cleanup: tuple[Step, ...] = ()
+    cleanup_after: int = 0  # a refused preflight must not stop an existing owner
 
 
 class JobConflict(Exception):
@@ -493,7 +496,14 @@ class JobRunner:
         status: str
         rc: int | None = None
         try:
-            if step.argv is not None:
+            if step.steps:
+                status, rc, failed_at = self._run_steps(job_id, list(step.steps))
+                if status != "succeeded" and step.cleanup and failed_at >= step.cleanup_after:
+                    cleanup_status, _, _ = self._run_steps(job_id, list(step.cleanup))
+                    if cleanup_status != "succeeded":
+                        # Continuing after failed cleanup could admit another GPU owner.
+                        status = "cleanup_failed"
+            elif step.argv is not None:
                 status, rc = self._run_process(job_id, step.argv, step.timeout_s)
             elif step.wait is not None:
                 deadline = time.monotonic() + step.timeout_s
@@ -522,6 +532,8 @@ class JobRunner:
             status, rc = self._run_step(job_id, step)
             if step.argv is not None:
                 last_rc = rc
+            if status == "cleanup_failed":
+                return "failed", last_rc, i
             if status != "succeeded" and not step.optional:
                 return status, last_rc, i
         return "succeeded", last_rc, len(steps)

@@ -207,6 +207,28 @@ class Settings(BaseSettings):
     # 500 ms still cost 67%, 1500 ms 37% (D5, 2026-10-10)
     embed_min_interval_ms: Annotated[int, Field(ge=0, le=60_000)] = 1500  # live: 58 tok/s chat under load
 
+    # OCR is isolated and opt-in. Ports and peak reservation come from local qualification.
+    ocr_enabled: bool = False
+    ocr_root: Path = Path("/Volumes/Models/ocr")
+    ocr_bin: Path | None = None
+    ocr_port: Annotated[int, Field(ge=0, le=65535)] = 0
+    ocr_vlm_port: Annotated[int, Field(ge=0, le=65535)] = 0
+    ocr_ready_timeout_s: Annotated[float, Field(gt=0.0, le=900.0)] = 240.0
+    ocr_footprint_gb: Annotated[float, Field(ge=0.0, le=256.0)] = 0.0
+    ocr_allowed_mlx: str = ""
+    ocr_model_id: str = "local-ocr"
+    # Candidate snapshot; Apple Silicon runtime/precision qualification remains required.
+    ocr_model_revision: str = "c5630abae1d940eafe0697512a0325494b02ab42"
+    ocr_precision: str = "bf16"
+
+    @property
+    def ocr_path(self) -> Path:
+        return self.ocr_bin or self.ocr_root / "bin/paddleocr-vl"
+
+    @property
+    def ocr_api_base(self) -> str:
+        return f"http://127.0.0.1:{self.ocr_port}"
+
     # Metrics
     metrics_interval_s: float = 5.0
     metrics_history_points: int = 720

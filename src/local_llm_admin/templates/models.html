@@ -3,7 +3,7 @@
 {% block content %}
 <section class="card" id="engine-card">
   <div class="card-head"><h2>Engine</h2><span class="badge" id="engine-current" data-state="unknown">…</span></div>
-  <p class="muted">Engine switching follows the selected backend’s GPU policy. Exclusive engines pause GPU sidecars and embeddings; supported MLX combinations can share the GPU.</p>
+  <p class="muted">Engine switching follows the selected backend’s GPU policy. Exclusive engines pause GPU sidecars and resident services; supported MLX combinations can share the GPU.</p>
   <div class="toolbar">
     <label>Run <select id="engine-target"></select></label>
     <button id="engine-apply" class="primary" disabled>Apply</button>
@@ -22,7 +22,7 @@
 <details class="card" id="strata-card" hidden>
 <summary>Strata pack details</summary>
   <div class="card-head"><h2>Strata</h2><span class="badge" id="strata-state" data-state="unknown">…</span></div>
-  <p class="muted">Qwen3.8-Flash-Next on Metal, one request at a time. Sidecars and the embedding service stay stopped while it runs.</p>
+  <p class="muted">Qwen3.8-Flash-Next on Metal, one request at a time. Sidecars and resident services stay stopped while it runs.</p>
   <dl class="facts" id="strata-facts"></dl>
 </details>
 <details class="card" id="comfy-card">
@@ -67,21 +67,11 @@
   </div>
 </section>
 {% endif %}
-{% if embed_enabled %}
-<section class="card" id="embed-card">
-  <div class="card-head"><h2>Embeddings</h2>
-    <a class="button" href="/embed">Open test page</a>
-  </div>
-  <p class="muted">The embedding and reranking service can coexist with supported MLX models and sidecars. Exclusive engines pause it. Restoration follows saved intent and target compatibility; current availability and refusal reasons appear below.</p>
-  <dl class="facts" id="embed-facts"></dl>
-  <ul class="muted" id="embed-budget"></ul>
-  <div class="error" id="embed-refusal" hidden></div>
-  <div class="actions">
-    <button id="embed-start" data-requires-fresh disabled class="primary">Start</button>
-    <button id="embed-stop" data-requires-fresh disabled>Stop</button>
-  </div>
+<section class="card" id="resident-services">
+  <div class="card-head"><h2>Resident services</h2></div>
+  <p class="muted">These services keep their own running intent and can coexist with compatible MLX models. Exclusive engines suspend them; restoration checks compatibility and the combined memory reservation.</p>
+  <div id="resident-cards"></div>
 </section>
-{% endif %}
 <section class="card" id="library-card">
   <div class="card-head">
     <h2>MLX model library</h2>

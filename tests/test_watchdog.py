@@ -183,8 +183,11 @@ def _crash(pid):
             os.kill(pid, 0)
         except ProcessLookupError:
             return
-        if open(f"/proc/{pid}/stat").read().split()[2] == "Z":
-            return
+        try:
+            if open(f"/proc/{pid}/stat").read().split()[2] == "Z":
+                return
+        except (FileNotFoundError, ProcessLookupError):
+            return  # the owned process exited between kill(0) and the procfs read
         time.sleep(0.02)
 
 

@@ -658,3 +658,38 @@ light/dark contrast, mobile layouts, zoom and operational transitions; these che
 qualify live engines or authorize deployment.
 
 The admin consistency implementation is deployed; see the [rollout record](reports/admin-ui-deployment-20261030.md) for installed payload and preservation checks.
+## Generic resident services and OCR
+
+The existing `SidecarRegistry` owns typed resident descriptors: public model/capability
+metadata, independent intents, dependencies, CLI/process/readiness policy, memory
+reservations, log sources and UI links. Embeddings keeps `qwen-embed`, `embed_intent` and
+its existing APIs/history; OCR is `paddleocr-vl`. The one-at-a-time decision/TTS slot is
+separate. Shared discovery, cards, diagnostics, budgets and host metadata iterate descriptors.
+
+Admission counts all active owners, the requested target and pending restores exactly once.
+Unknown process identity/memory and abnormal pressure refuse admission. Disabled but live
+owners remain in inventory. Exclusive engines suspend residents; compatible target restores
+recheck admission per service and stop failed dependencies before considering another start.
+The host wrappers consume a hashed normalized catalog rather than listing resident names.
+OCR generation records include command, process group and start time; stale PID reuse never
+authorizes a signal. Catalog drift blocks admission while explicit stops remain possible.
+
+OCR runs a persistent full PaddleOCR layout/pipeline worker and a separate MLX-VLM backend
+in isolated locked environments. The loopback API supervises killable document execution;
+the admin has only HTTP/schema code. One shared admission client serves the admin upload,
+native gateway and OCR-only chat route. A bounded internal region proxy prevents native
+retries after ambiguous/truncated output from launching more GPU work. Cancellation retains
+admission until owned work is confirmed stopped; uncertain cleanup loses readiness.
+
+SQLite v17 adds generic metadata-only service requests. Old embedding history remains
+in place behind a compatibility reader. Native output is request-scoped, never a stored
+document library, and unknown LLM usage is omitted. The [OCR guide](ocr.md) defines contracts,
+limits, authentication, current candidate constraints and the separate live qualification
+boundary. [Reports](reports/ocr/INDEX.md) distinguish SDK forwarding, fixture tests and actual
+native/proxy evidence.
+
+The [native OCR rollout](reports/ocr/20261031-native-rollout.md) qualifies one measured
+chat/embedding sharing point. Orientation classifies a padded content view; layout uses
+the full rotated page and boxes map to original pixels. Region calls are serial and
+paced across documents within the existing deadlines. Native inventory observers use
+separate sessions so shutdown cannot mistake its own observer for an unknown child.

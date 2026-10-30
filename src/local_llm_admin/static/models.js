@@ -251,8 +251,8 @@ function syncLifecycle() {
   const target = document.getElementById("engine-target").value;
   document.getElementById("engine-apply").disabled = !gate.ok || busy || !target || target === EngineUI.currentTarget(lastStatus);
   const reason = document.getElementById("engine-action-reason");
-  if (!gate.ok || busy) for (const id of ["sidecar-start", "sidecar-stop", "embed-start", "embed-stop"]) {
-    const button = document.getElementById(id); if (button) button.disabled = true;
+  if (!gate.ok || busy) {
+    for (const button of document.querySelectorAll("[data-resident-action], #sidecar-start, #sidecar-stop")) button.disabled = true;
   }
   if (reason) reason.textContent = busy ? "An engine action is pending." : gate.text ||
     (target === EngineUI.currentTarget(lastStatus) ? "Choose a different serving target to apply a change." : "Review the selected target before applying.");
@@ -573,56 +573,87 @@ if (document.getElementById("sidecar-card")) {
   setInterval(() => loadSidecars().catch(() => {}), 10000);
 }
 
-// --- embedding service (M8) ---------------------------------------------------------
+// --- resident services -------------------------------------------------------------
 let services = null;
 
-async function fetchServices() {
-  if (!document.getElementById("embed-card")) return;
-  services = await api("/api/services");
-  const s = services.services.find((x) => x.name === "qwen-embed");
-  if (!s) return;
-  const state = s.availability?.reason || (s.running ? (s.ready ? "Ready" : "Starting; waiting for readiness") : s.intent === "running" ? "Unavailable (expected running)" : "Stopped");
-  const facts = [
-    ["State", state], ["Intent", s.intent], ["Models", s.models.join(" · ")],
-    ["Memory (RSS)", fmt.bytes(s.rss_bytes)], ["Weights", s.weights || "—"], ["Listens on", s.listen],
-    ["Allowed MLX models", s.allowed_mlx.join(", ") || "none"],
-  ];
-  try {
-    const day = (await api("/api/embed/history?days=1")).daily?.at(-1);
-    facts.push(["Requests today", day ? `${fmt.num(day.requests)} · p50 ${day.p50_ms === null ? "—" : `${Math.round(day.p50_ms)} ms`}` : "none"]);
-  } catch (e) { facts.push(["Requests today", "Unavailable: " + e.message]); }
-  document.getElementById("embed-facts").replaceChildren(...facts.map(([k, v]) => el("div", {}, el("dt", { text: k }), el("dd", { text: v }))));
-  const b = s.budget;
-  const lines = s.running ? [] : [...b.lines, b.ok ? "A start passes the memory check now." : "A start would be refused:"];
-  document.getElementById("embed-budget").replaceChildren(...lines.map((t) => el("li", { text: t })));
-  const refusal = document.getElementById("embed-refusal");
-  refusal.hidden = s.running || b.ok;
-  refusal.textContent = b.reasons.join("; ");
-  const jobBusy = !EngineUI.lifecycle(lastStatus).ok || lifecyclePending || pollTimer !== null;
-  document.getElementById("embed-start").disabled = s.running || !b.ok || s.availability?.owner || jobBusy;
-  document.getElementById("embed-stop").disabled = !s.running || jobBusy;
+function residentCard(s) {
+  const id = "service-" + s.name;
+  let card = document.getElementById(id);
+  if (card) return card;
+  card = el("article", { id, "data-resident-service": s.name, class: "resident-service" },
+    el("div", { class: "card-head" }, el("h3", { text: s.title || s.name }),
+      el("a", { id: id + "-page", class: "button", href: s.ui_path || "#", text: "Open test page" })),
+    el("dl", { id: id + "-facts", class: "facts" }),
+    el("div", { id: id + "-logs", class: "actions" }),
+    el("ul", { id: id + "-budget", class: "muted" }),
+    el("div", { id: id + "-refusal", class: "error", hidden: true }),
+    el("div", { class: "actions" },
+      el("button", { id: id + "-start", "data-requires-fresh": "", "data-resident-action": "start", disabled: true, class: "primary", text: "Start", onclick: () => residentAction(s.name, "start") }),
+      el("button", { id: id + "-stop", "data-requires-fresh": "", "data-resident-action": "stop", disabled: true, text: "Stop", onclick: () => residentAction(s.name, "stop") })));
+  document.getElementById("resident-cards").append(card);
+  return card;
 }
 
-async function submitEmbedAction(action) {
-  const start = action === "start";
-  const title = start ? "Start the embeddings service?" : "Stop the embeddings service?";
-  const body = start
-    ? "It loads Qwen3-Embedding-4B and Qwen3-Reranker-0.6B (~7 GB) next to the running model and stays on until you stop it. The chat model is slower while it embeds."
-    : "Cortex and other LAN clients get 503 until it is started again. It is not restarted automatically.";
-  if (!(await confirmAction(title, body))) return;
-  if (!EngineUI.lifecycle(lastStatus).ok) return;
-  try {
-    const job = await api(`/api/services/qwen-embed/${action}`, { method: "POST" });
-    showJob(job, true); pollJob(job.id);
-  } catch (e) {
-    const r = document.getElementById("embed-refusal");
-    r.textContent = e.message; r.hidden = false;
+async function fetchServices() {
+  services = await api("/api/services");
+  const container = document.getElementById("resident-cards");
+  const keep = new Set(services.services.map(s => "service-" + s.name));
+  for (const card of container.querySelectorAll("[data-resident-service]")) if (!keep.has(card.id)) card.remove();
+  let empty = document.getElementById("resident-empty");
+  if (!services.services.length) {
+    if (!empty) container.append(el("p", { id: "resident-empty", class: "muted", text: "No resident services are enabled." }));
+    return;
+  }
+  if (empty) empty.remove();
+  for (const s of services.services) {
+    residentCard(s);
+    const id = "service-" + s.name;
+    document.getElementById(id + "-logs").replaceChildren(...(s.log_sources || []).map(source =>
+      el("a", {href: "/logs?source=" + encodeURIComponent(source), text: source + " log"})));
+    const state = s.availability?.reason || (s.running ? (s.ready ? "Ready" : "Loading") : s.intent === "running" ? "Unavailable (expected running)" : "Stopped");
+    const facts = [
+      ["State", state], ["Intent", s.intent], ["Models", s.models.join(" · ")],
+      ["Memory reservation", s.reservation_gb ? s.reservation_gb + " GB" : "Not qualified"],
+      ["Memory (RSS)", fmt.bytes(s.rss_bytes)], ["Work", s.busy ? "Busy" : "Idle"],
+      ["Weights", s.weights || "—"], ["Listens on", s.listen || "—"],
+      ["Allowed MLX models", s.allowed_mlx.join(", ") || "none"],
+    ];
+    try {
+      const day = (await api(s.history_url || "/api/services/" + encodeURIComponent(s.name) + "/history")).daily?.at(-1);
+      facts.push(["Requests today", day ? fmt.num(day.requests) + " · p50 " + (day.p50_ms === null ? "—" : Math.round(day.p50_ms) + " ms") : "No recorded requests"]);
+    } catch (e) { facts.push(["Requests today", "Unavailable: " + e.message]); }
+    document.getElementById(id + "-facts").replaceChildren(...facts.map(([k, v]) => el("div", {}, el("dt", { text: k }), el("dd", { text: v }))));
+    const b = s.budget;
+    document.getElementById(id + "-budget").replaceChildren(...(s.running ? [] : b.lines).map(t => el("li", { text: t })));
+    const refusal = document.getElementById(id + "-refusal");
+    refusal.hidden = s.running || b.ok;
+    refusal.textContent = b.reasons.join("; ");
+    const blocked = !EngineUI.lifecycle(lastStatus).ok || lifecyclePending || pollTimer !== null;
+    document.getElementById(id + "-start").disabled = s.enabled === false || s.running || !b.ok || !!s.availability?.owner || blocked;
+    document.getElementById(id + "-stop").disabled = (!s.running && s.intent !== "running") || blocked;
   }
 }
 
-if (document.getElementById("embed-card")) {
-  document.getElementById("embed-start").addEventListener("click", () => embedAction("start"));
-  document.getElementById("embed-stop").addEventListener("click", () => embedAction("stop"));
+async function submitResidentAction(name, action) {
+  const service = services?.services.find(s => s.name === name);
+  if (!service) return;
+  const title = (action === "start" ? "Start " : "Stop ") + (service.title || name) + "?";
+  const body = action === "start"
+    ? "This service stays loaded until stopped or suspended by an exclusive engine. The combined memory reservation is checked before starting."
+    : service.busy ? "This service has active work. Stopping it cancels that work and keeps its running intent off."
+      : "Clients receive an unavailable response until the service is started again.";
+  if (!(await confirmAction(title, body))) return;
+  const force = action === "stop" && service.busy ? "?force=true" : "";
+  try {
+    const job = await api("/api/services/" + encodeURIComponent(name) + "/" + action + force, { method: "POST" });
+    showJob(job, true); pollJob(job.id);
+  } catch (e) {
+    const refusal = document.getElementById("service-" + name + "-refusal");
+    refusal.textContent = e.message; refusal.hidden = false;
+  }
+}
+
+if (document.getElementById("resident-services")) {
   loadServices().catch(() => {});
   setInterval(() => loadServices().catch(() => {}), 10000);
 }
@@ -805,8 +836,8 @@ async function loadSidecars() {
 }
 
 async function loadServices() {
-  if (!document.getElementById("embed-card")) return;
-  await trackSection("embed-card", () => fetchServices());
+  if (!document.getElementById("resident-services")) return;
+  await trackSection("resident-services", () => fetchServices());
 }
 
 async function serviceAction(buttonId, sectionId, action) {
@@ -818,7 +849,7 @@ async function serviceAction(buttonId, sectionId, action) {
 }
 async function sidecarStart() { return serviceAction("sidecar-start", "sidecar-card", submitSidecarStart); }
 async function sidecarStop() { return serviceAction("sidecar-stop", "sidecar-card", submitSidecarStop); }
-async function embedAction(action) { return serviceAction("embed-" + action, "embed-card", () => submitEmbedAction(action)); }
+async function residentAction(name, action) { return serviceAction("service-" + name + "-" + action, "resident-services", () => submitResidentAction(name, action)); }
 
 async function loadDownloads() {
   await trackSection("dl-runs", fetchDownloads);

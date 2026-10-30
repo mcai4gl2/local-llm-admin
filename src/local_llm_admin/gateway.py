@@ -28,7 +28,10 @@ from .decision_keys import ClientKeys
 from .decision_store import DecisionStore, request_summary
 from .embed import EmbedClient, EmbedError, encode_base64, texts_of, validate_embed, validate_rerank
 from .embed_store import EmbedStore
-from .sidecars import SidecarRegistry
+from .ocr import OcrClient
+from .ocr_routes import install_ocr_routes
+from .service_store import ServiceStore
+from .sidecars import SidecarRegistry, SidecarSpec
 from .tts import TtsClient, TtsError, text_weight, validate_speech
 from .tts_store import TtsStore
 
@@ -62,6 +65,9 @@ def create_gateway_app(
     embed: EmbedClient | None = None,
     embed_history: EmbedStore | None = None,
     embed_reason: Callable[[], str | None] | None = None,
+    ocr: OcrClient | None = None,
+    ocr_reason: Callable[[], str | None] | None = None,
+    service_history: ServiceStore | None = None,
 ) -> FastAPI:
     registry = registry or SidecarRegistry(settings)
     app = FastAPI(title="sidecar gateway", docs_url=None, redoc_url=None, openapi_url=None)
@@ -117,24 +123,31 @@ def create_gateway_app(
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    async def embed_up() -> bool:
-        return embed is not None and embed_reason is not None and (
-            await asyncio.to_thread(embed_reason)
-        ) is None
+    async def resident_models() -> list[dict[str, str]]:
+        async def entries(spec: SidecarSpec) -> list[dict[str, str]]:
+            try:
+                process = registry.process(spec.name)
+                status = await asyncio.to_thread(process.status)
+                if not status.running or not status.owned:
+                    return []
+                if not await asyncio.to_thread(process.ready_sync):
+                    return []
+            except Exception:
+                # A broken adapter must not hide another service's healthy models.
+                return []
+            return [
+                {"id": model.id, "object": "model", "owned_by": "local"}
+                for model in spec.models
+            ]
+        results = await asyncio.gather(*(entries(spec) for spec in registry.services()))
+        return [model for group in results for model in group]
 
     @app.get("/v1/models")
     async def models(request: Request) -> Response:
         if refused(await authenticate(request)):
             return _error(401, "authentication_error", "invalid or missing API key")
         name = await running_name()
-        extra = (
-            [
-                {"id": settings.embed_model_id, "object": "model", "owned_by": "local"},
-                {"id": settings.rerank_model_id, "object": "model", "owned_by": "local"},
-            ]
-            if await embed_up()
-            else []
-        )
+        extra = await resident_models()
         if name is None:
             if extra:
                 return JSONResponse({"object": "list", "data": extra})
@@ -142,12 +155,29 @@ def create_gateway_app(
         if name == "qwen-tts":
             tts_entry = {"id": settings.tts_model_id, "object": "model", "owned_by": "local"}
             return JSONResponse({"object": "list", "data": [tts_entry, *extra]})
-        # OpenJev's own response passes through unchanged so Jev clients keep parsing it
         try:
             resp = await decision.models()
         except DecisionError as exc:
+            if extra:
+                return JSONResponse({"object": "list", "data": extra})
             return _error(exc.code, "unavailable", exc.message)
-        return Response(resp.content, resp.status_code, media_type="application/json")
+        # Keep Jev's legacy fields and exact response when no resident models are ready.
+        if not extra:
+            return Response(resp.content, resp.status_code, media_type="application/json")
+        try:
+            data = resp.json()
+        except ValueError:
+            data = {}
+        if not isinstance(data, dict) or resp.status_code != 200:
+            data = {}
+        entries = data.get("data")
+        if not isinstance(entries, list):
+            legacy = data.get("models")
+            entries = [
+                {"id": entry["name"], "object": "model", "owned_by": "local"}
+                for entry in legacy if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+            ] if isinstance(legacy, list) else []
+        return JSONResponse({**data, "object": "list", "data": [*entries, *extra]})
 
     @app.post("/v1/systemone")
     async def systemone(request: Request) -> Response:
@@ -231,6 +261,12 @@ def create_gateway_app(
 
     if embed is not None and embed_reason is not None:
         _embed_routes(app, settings, embed, embed_history, authenticate, refused, embed_reason)
+    if ocr is not None and ocr_reason is not None and settings.ocr_enabled:
+        install_ocr_routes(
+            app, settings, ocr, ocr_reason, service_history, native_path="/v1/ocr",
+            chat_path="/v1/chat/completions", source="gateway", authenticate=authenticate,
+            refused=lambda client: client is None,
+        )
     return app
 
 

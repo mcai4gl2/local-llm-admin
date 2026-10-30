@@ -1,0 +1,178 @@
+{
+  "baseline": {
+    "chat_p95_ms": 952.6389780221507,
+    "chat_requests": 30,
+    "chat_tokens_s": 73.37635287232368,
+    "embed_p95_ms": 1639.234451984521,
+    "embed_requests": 30,
+    "errors": 0,
+    "ocr_requests": 0,
+    "schema_version": 1
+  },
+  "combined": {
+    "chat_p95_ms": 1050.537928007543,
+    "chat_requests": 30,
+    "chat_tokens_s": 67.1237941743916,
+    "embed_p95_ms": 1608.760714996606,
+    "embed_requests": 30,
+    "errors": 0,
+    "ocr_requests": 32,
+    "schema_version": 1
+  },
+  "local_validation": {
+    "coverage_percent": 97.24,
+    "pytest_passed": 3844,
+    "pytest_skipped": 4,
+    "ruff": "passed",
+    "strict_mypy": "passed"
+  },
+  "memory": {
+    "aggregate_peak_gb": 37.41743050515652,
+    "duration_s": 941.3641059398651,
+    "headroom_gb": 6.0,
+    "method": "Maximum sample sums of per-process lifetime peak physical footprint; includes OCR descendants and rendering. Aggregate covers managed model/service processes; pressure and system VM counters sampled separately.",
+    "ocr_peak_gb": 5.315268345177174,
+    "pressure_levels": [
+      1
+    ],
+    "pressure_normal": true,
+    "ram_gb": 64.0,
+    "reservation_gb": 12.0,
+    "sample_interval_s": 2,
+    "samples": 459,
+    "system_wired_peak_gb": 28.867431640625,
+    "wired_limit_gb": 51.84001159667969,
+    "wired_limit_source": "Conservative device-reported Metal recommended working set; kernel override returned zero, no tuning applied."
+  },
+  "native_checks": {
+    "active_exclusive_switch_requires_force_http": 409,
+    "active_stop_requires_force_http": 409,
+    "anonymous_ocr_http": 401,
+    "chat_model_and_profile_preserved": true,
+    "complete_16_page_pdf_with_exact_page_markers": true,
+    "corrupt_pdf_http": 422,
+    "exclusive_engine_pauses_both_services": true,
+    "final_chat_embed_rerank_image_pdf_http": 200,
+    "forced_stop_verified_down": true,
+    "max_16000000_pixel_image": true,
+    "over_16_pages_http": 413,
+    "oversized_image_http": 413,
+    "remote_url_http": 400,
+    "return_restores_both_services": true
+  },
+  "preservation": {
+    "existing_clients_changed": 0,
+    "existing_proxy_routes_identical": true,
+    "historical_tables_compared": 19,
+    "original_historical_rows_changed_or_missing": 0,
+    "sqlite_integrity": "ok",
+    "sqlite_schema": 17
+  },
+  "qualification": {
+    "load": {
+      "passed": true,
+      "ratios": {
+        "chat_p95_ms": 1.1027660553934588,
+        "chat_tokens_s": 0.914787823962692,
+        "embed_p95_ms": 0.9814097751843721
+      }
+    },
+    "memory": {
+      "passed": true
+    },
+    "passed": true,
+    "schema_version": 1,
+    "tasks": {
+      "blank": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "columns": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "english": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "formula": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "numeric": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "rotated": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "scanned-pdf": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "simplified": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "table": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      },
+      "traditional": {
+        "cer": 0.0,
+        "complete": true,
+        "numeric_exact": true,
+        "passed": true,
+        "table_structure": true
+      }
+    }
+  },
+  "runtime": {
+    "layout_revision": "241f8bdfc77a7c7bee915a5057aaee58c235a8d3",
+    "mlx": "0.32.2",
+    "mlx_vlm": "0.7.3",
+    "orientation_revision": "d3b95a6dff5fe8a94f2748e12b61cb26818a0df8",
+    "paddleocr": "3.6.0",
+    "paddlepaddle": "3.2.1",
+    "platform": "Darwin arm64",
+    "precision": "bf16",
+    "python": "3.12",
+    "vlm_revision": "c5630abae1d940eafe0697512a0325494b02ab42"
+  },
+  "schema_version": 1,
+  "scope": {
+    "corpus_cases": 10,
+    "other_chat_models_qualified": false,
+    "region_idle_cap_s": 1,
+    "region_idle_ratio": 1,
+    "shared_chat_models_qualified": 1
+  }
+}

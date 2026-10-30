@@ -57,7 +57,14 @@ def source_ids(settings: Settings) -> list[str]:
     extra = ["decision"] if settings.decision_enabled else []
     extra += ["strata", *strata_engine_log_ids(settings)] if settings.strata_enabled else []
     extra += ["splash"] if settings.splash_enabled else []
-    return [*FIXED_SOURCE_IDS, *extra, *download_log_ids(settings)]
+    return [*FIXED_SOURCE_IDS, *extra, *resident_log_paths(settings), *download_log_ids(settings)]
+
+
+def resident_log_paths(settings: Settings) -> dict[str, Path]:
+    from .sidecars import SidecarRegistry  # sidecars -> mlx -> logs
+
+    return {source: path for spec in SidecarRegistry(settings).services()
+            for source, path in zip(spec.log_sources, spec.log_paths, strict=True)}
 
 
 def resolve_source(settings: Settings, source_id: str) -> Path:
@@ -66,6 +73,9 @@ def resolve_source(settings: Settings, source_id: str) -> Path:
     Download ids must match a strict pattern (no dots or slashes) and name an existing
     file in the fixed MLX logs directory, so client input never becomes a free path.
     """
+    resident = resident_log_paths(settings)
+    if source_id in resident:
+        return resident[source_id]
     if source_id == "admin":
         return admin_log_path(settings)
     if source_id == "comfyui":

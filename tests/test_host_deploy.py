@@ -43,37 +43,8 @@ fi
 exec /bin/mv "$@"
 """
 
-CODE = [
-    "bin/engine-ports",
-    "etc/engine-ports.example.json",
-    "bin/mlx-model",
-    "bin/mlx-download",
-    "bin/mlx-profile",
-    "bin/mlx-env.sh",
-    "bin/chat-qwen.sh",
-    "bin/serve-qwen.sh",
-    "bin/download-models.sh",
-    "bin/README.md",
-    "comfyui/bin/comfyui",
-    "decision/bin/openjev",
-    "decision/README.md",
-    "tts/bin/qwen-tts",
-    "tts/README.md",
-    "embed/bin/qwen-embed",
-    "embed/README.md",
-    "strata/bin/strata",
-    "strata/README.md",
-    "strata/etc/strata.env.example",
-    "splash/lib/profiles.py",
-    "splash/README.md",
-    "splash/etc/splash.env.example",
-    "splash/etc/profiles.example.json",
-    "splash/etc/receipt.example.json",
-    "bin/engine-guard.sh",
-    "splash/bin/splash",
-    "splash/lib/control.py",
-    "splash/etc/runtime.example.json",
-]
+CODE = [line.split()[1] for line in (ROOT / "ops/host-files.list").read_text().splitlines()
+        if line.startswith("code ")]
 
 
 def _exe(path, text):
@@ -373,7 +344,7 @@ def test_manifest_lists_every_versioned_host_file():
         str(p.relative_to(HOST))
         for p in HOST.rglob("*")
         if p.is_file()
-        and "environment" not in p.parts
+        and ("environment" not in p.parts or p.name in ("ocr-app.txt", "ocr-vlm.txt"))
         and (
             p.name != "README.md"
             or p
@@ -384,6 +355,7 @@ def test_manifest_lists_every_versioned_host_file():
                 HOST / "embed/README.md",
                 HOST / "strata/README.md",
                 HOST / "splash/README.md",
+                HOST / "ocr/README.md",
             )
         )
     }

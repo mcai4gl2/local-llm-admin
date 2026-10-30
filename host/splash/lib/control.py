@@ -380,6 +380,20 @@ def native_ports(root: Path) -> dict[str, int]:
     return ports
 
 
+def _resident_guard(root: Path) -> None:
+    resident_helper = root.parent / "bin/resident-services"
+    try:
+        result = subprocess.run(
+            [sys.executable, "-I", str(resident_helper),
+             str(root.parent / "etc/resident-services.json"), "guard", "exclusive"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        raise HostError("Resident ownership cannot be checked.") from None
+    if result.returncode:
+        raise HostError("Resident resources remain or ownership is unknown.")
+
+
 def start(root: Path, name: str) -> None:
     if observe(root)["state"] != "absent":
         raise HostError("Splash already owns resources or ownership is unknown.")
@@ -404,7 +418,8 @@ def start(root: Path, name: str) -> None:
     ports = native_ports(root)
     if "splash" in ports and ports["splash"] != env.port:
         raise HostError("Splash native port configuration differs from its environment.")
-    for port in (ports["mlx"], ports["strata"], env.port, 7860, 8188, 8081, 8083, 8084):
+    _resident_guard(root)
+    for port in (ports["mlx"], ports["strata"], env.port, 7860, 8188, 8081, 8083):
         if listeners(port):
             raise HostError("An engine or GPU service still owns resources.")
     for path in [
@@ -413,7 +428,6 @@ def start(root: Path, name: str) -> None:
         root.parent / "strata/run/strata.pid",
         root.parent / "decision/run/openjev.pid",
         root.parent / "tts/run/qwen-tts.pid",
-        root.parent / "embed/run/qwen-embed.pid",
     ]:
         if path.exists():
             try:

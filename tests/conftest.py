@@ -256,7 +256,7 @@ def fake_decision(fake_comfy, monkeypatch):
     s.decision_root = root
     s.decision_bin = FIX / "fake-openjev"
     s.decision_api_base = "http://decision.test"
-    s.decision_port = 1
+    s.decision_port = 4
     s.decision_api_key = SecretStr("k" * 64)
     s.decision_ready_timeout_s = 3.0
     s.decision_allowed_mlx = "qwen"
@@ -344,7 +344,7 @@ def fake_tts(fake_decision, monkeypatch):
     s.tts_root = root
     s.tts_bin = FIX / "fake-qwen-tts"
     s.tts_api_base = "http://tts.test"
-    s.tts_port = 1
+    s.tts_port = 3
     s.tts_ready_timeout_s = 3.0
     s.tts_allowed_mlx = "qwen"
     s.tts_voices = "Vivian,Ryan"
@@ -422,7 +422,7 @@ def fake_embed(fake_comfy, monkeypatch):
     s.embed_root = root
     s.embed_bin = FIX / "fake-qwen-embed"
     s.embed_api_base = "http://embed.test"
-    s.embed_port = 1
+    s.embed_port = 2
     s.embed_ready_timeout_s = 3.0
     s.embed_allowed_mlx = "qwen"
     s.embed_dims = 8

@@ -33,7 +33,9 @@ def svc(fake_decision, fake_comfy, fake_mlx):
     dj = DecisionClient(s, transport=fake_decision.transport)
     store = JobStore(s.admin_data_dir / "admin.sqlite")
     runner = JobRunner(s, store, current_name=lambda: mlx.active_env().get("MLX_ACTIVE_NAME"))
-    return ControlService(s, store, runner, mlx, comfy, decision=dj)
+    control = ControlService(s, store, runner, mlx, comfy, decision=dj)
+    control.memory_pressure = lambda: "normal"
+    return control
 
 
 def _weights(svc):

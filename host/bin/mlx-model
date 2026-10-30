@@ -264,6 +264,7 @@ strata_guard() {
 start_server() {
   local name="$1" model_dir
   model_dir="$(lookup "$name")"
+  engine_resident_guard mlx "$name"
   strata_guard
   if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:7860 -sTCP:LISTEN >/dev/null 2>&1 || lsof -nP -iTCP:8188 -sTCP:LISTEN >/dev/null 2>&1; then
     echo "An MLX or ComfyUI process is already running. Use switch or stop first (ComfyUI: /Volumes/Models/comfyui/bin/comfyui stop)." >&2

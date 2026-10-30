@@ -206,10 +206,6 @@ refuse_if_busy() {
     echo "The TTS sidecar is running. Stop it first: $VOLUME/tts/bin/qwen-tts stop" >&2
     exit 1
   fi
-  if port_listening 8084; then
-    echo "The embedding service is running. Stop it first: $VOLUME/embed/bin/qwen-embed stop" >&2
-    exit 1
-  fi
   if [[ -e "$MLX_LOCK" ]] && ! engine_owns_lock "$MLX_LOCK"; then
     echo "$MLX_LOCK exists: an mlx-model command is running. Try again when it finishes." >&2
     exit 1
@@ -241,6 +237,7 @@ cmd_status() {
 
 cmd_start() {
   engine_splash_guard
+  engine_resident_guard exclusive
   local pid="" cfg="" pack=""
   if (( $# )); then
     pack="$1"

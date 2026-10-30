@@ -601,3 +601,48 @@ def test_strata_engine_switch_labels_usage_days(store):
         )
     got = store.active_by_day(["2026-10-15", "2026-10-16", "2026-10-17"], tz_offset_min=-480)
     assert got == {"2026-10-15": ["strata"], "2026-10-16": ["strata", "qwen"], "2026-10-17": ["qwen"]}
+
+
+def test_optional_step_group_stops_at_failure_and_cleans_up(runner):
+    ran = []
+    def fail():
+        raise RuntimeError("dependency failed")
+    group = Step("restore service", optional=True, steps=(
+        Step("start dependency", call=lambda: ran.append("start")),
+        Step("load pipeline", call=fail),
+        Step("warmup", call=lambda: ran.append("warmup")),
+    ), cleanup=(Step("stop owned dependency", call=lambda: ran.append("cleanup")),))
+    done = _wait(runner, runner.submit_sequence(
+        "engine", name=None, from_name=None, to_name="mlx:qwen",
+        steps=[group, Step("continue", call=lambda: ran.append("continue"))],
+    )["id"])
+    assert done["status"] == "succeeded"
+    assert ran == ["start", "cleanup", "continue"]
+    assert "restore service: failed (optional, continuing)" in done["output"]
+
+
+def test_group_refusal_does_not_clean_up_existing_owner(runner):
+    ran = []
+    def refuse():
+        raise RuntimeError("budget refused")
+    group = Step("restore", optional=True, steps=(
+        Step("admission", call=refuse),
+        Step("start", call=lambda: ran.append("start")),
+    ), cleanup=(Step("stop", call=lambda: ran.append("stop")),), cleanup_after=1)
+    done = _wait(runner, runner.submit_sequence(
+        "engine", name=None, from_name=None, to_name="mlx:qwen", steps=[group],
+    )["id"])
+    assert done["status"] == "succeeded" and ran == []
+
+
+def test_optional_group_cleanup_failure_stops_later_admission(runner):
+    ran = []
+    def fail():
+        raise RuntimeError("failed")
+    group = Step("restore", optional=True, steps=(Step("start", call=fail),),
+                 cleanup=(Step("cleanup", call=fail),))
+    done = _wait(runner, runner.submit_sequence(
+        "engine", name=None, from_name=None, to_name="mlx:qwen",
+        steps=[group, Step("next admission", call=lambda: ran.append("unsafe"))],
+    )["id"])
+    assert done["status"] == "failed" and ran == []
