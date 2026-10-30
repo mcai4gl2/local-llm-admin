@@ -777,8 +777,26 @@ class QualityRunner:
             self._check(plan)  # a cancel during the switch wins over moving on
             return
         self._check(plan)
-        info = await asyncio.to_thread(model_info, path)
         descriptor = self._inference(plan.original["engine"])
+        engine = "mlx" if plan.original["engine"] == "none" else plan.original["engine"]
+        backend = self.control.backends.get(engine)
+        health = await self._get(http, descriptor.health_path)
+        await self._owned(name, generation, plan.original["engine"])
+        served = descriptor.served_model(health)
+        if served and served.startswith("/"):
+            served = served.rsplit("/", 1)[-1]
+        identity = {
+            "engine": engine,
+            "reference": plan.original.get("reference") if descriptor.current_only else name,
+            "model": served,
+            "target_label": descriptor.identity.get("target_label")
+            or backend.spec.label + " · " + (served if descriptor.current_only and served else name),
+            "loaded_context": descriptor.context(health) if backend.inference_ready(health) else None,
+            "profile_fingerprint": self._profile_fingerprint(plan.original["engine"]),
+        }
+        plan.original.setdefault("target_identities", {})[name] = identity
+        self.store.update_run(plan.run_id, original=plan.original)
+        info = await asyncio.to_thread(model_info, path)
         if descriptor.current_only and descriptor.profile_fingerprint is not None:
             info["fingerprint"] = descriptor.profile_fingerprint
         if plan.kind == "benchmark":

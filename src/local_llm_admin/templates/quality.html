@@ -18,7 +18,7 @@
       </select>
     </label>
     <label id="q-model-label" hidden>Model <select id="q-model"></select></label>
-    <button id="quality-start" class="primary">Start</button>
+    <button id="quality-start" disabled class="primary">Start</button>
   </div>
   <p class="warn-note" id="q-effect"></p>
   <details>
@@ -57,7 +57,7 @@
     </label>
     <label id="eval-model-label" hidden>Model <select id="eval-model"></select></label>
     <label><input type="checkbox" id="eval-thinking"> Thinking on</label>
-    <button id="eval-start" class="primary">Run eval</button>
+    <button id="eval-start" disabled class="primary">Run eval</button>
   </div>
   <p class="muted" id="eval-suite-note"></p>
   <p class="error" id="eval-error" hidden></p>
@@ -113,7 +113,7 @@
   </div>
 </section>
 
-<section class="card">
+<section class="card" id="runs-card">
   <div class="card-head"><h2>Runs</h2><span class="muted">details kept 90 days; baselines are kept</span></div>
   <div class="table-wrap"><table id="runs-table">
     <thead><tr><th>Started</th><th>Kind</th><th>Models</th><th>Status</th><th>Restoration</th><th>Measurements</th><th></th></tr></thead>

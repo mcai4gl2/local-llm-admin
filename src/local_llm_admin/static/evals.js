@@ -29,11 +29,14 @@ function renderEvalForm() {
   const currentOnly = backend?.operations.includes("quality") && !backend.operations.includes("multi-model");
   const scope = document.getElementById("eval-scope");
   if (currentOnly && scope.value !== "current") scope.value = "current";
-  for (const option of scope.options) option.disabled = currentOnly && option.value !== "current";
+  for (const option of scope.options) {
+    option.disabled = currentOnly && option.value !== "current";
+    if (option.value === "current") option.textContent = "Current · " + EngineUI.label(lastStatus);
+  }
   document.getElementById("eval-model-label").hidden = scope.value !== "model";
-  const policy = EngineUI.quality(lastStatus, "eval", scope.value);
-  document.getElementById("eval-engine-note").textContent = policy.handled ? policy.text : "";
-  document.getElementById("eval-start").disabled = (policy.handled && !policy.ok) || Boolean(lastStatus?.job) || !evalSuites.length;
+  const policy = effectText("eval", scope.value, document.getElementById("eval-model").value);
+  document.getElementById("eval-engine-note").textContent = policy.text || "";
+  document.getElementById("eval-start").disabled = !policy.ok || qualitySubmitting || Boolean(lastStatus?.job) || !evalSuites.length;
   const thinking = document.getElementById("eval-thinking");
   if (!thinking.dataset.userSet) thinking.checked = EngineUI.reasoningDefault(lastStatus) === true;
   const suite = evalSuites.find((s) => s.id === document.getElementById("eval-suite").value);
@@ -67,7 +70,7 @@ async function loadEvalSuites() {
 async function deleteSuite(s) {
   if (!(await confirmStart(`Delete suite ${s.id}?`, "Stored results of this suite stay, but the suite can no longer be run.", "Delete"))) return;
   try { await api(`/api/evals/suites/${encodeURIComponent(s.id)}`, { method: "DELETE" }); } catch (e) { showEvalError("eval-error", e.message); }
-  loadEvalSuites().catch(() => {});
+  trackSection("eval-suites", loadEvalSuites);
 }
 
 async function importSuite() {
@@ -86,6 +89,12 @@ async function importSuite() {
 }
 
 async function startEval() {
+  if (qualitySubmitting || !effectText("eval", document.getElementById("eval-scope").value).ok) return;
+  qualitySubmitting = true; renderEffect(); renderEvalForm();
+  try { await submitEval(); }
+  finally { qualitySubmitting = false; renderEffect(); renderEvalForm(); }
+}
+async function submitEval() {
   const suite = document.getElementById("eval-suite").value;
   const thinking = document.getElementById("eval-thinking").checked;
   const body = { ...evalScopeBody(), suite, thinking };
@@ -100,6 +109,7 @@ async function startEval() {
       + `${s ? s.cases : "?"} cases per model. ${effectText("eval", body.scope, body.model).text}`;
   } catch (e) { showEvalError("eval-error", e.message); return; }
   if (!(await confirmStart("Start an eval run?", text))) return;
+  if (!effectText("eval", body.scope, body.model).ok) return;
   const run = { kind: "eval", ...body };
   if (effectText("eval", body.scope, body.model).off) run.confirm_off = true;
   try {
@@ -116,14 +126,14 @@ async function loadScorecard() {
     // cells are keyed "<suite>" (thinking off) and "<suite>+thinking"
     ...ids.map((i) => el("th", { text: i.endsWith("+thinking") ? `${i.slice(0, -9)} (thinking on)` : i })), el("th", { class: "num", text: "Decode" }), el("th", { class: "num", text: "Prefill" }),
     el("th", { class: "num", text: "Peak RSS" })));
-  const rows = models.map((m) => el("tr", {}, el("td", {}, el("strong", { text: m.model })),
+  const rows = models.map((m) => el("tr", {}, el("td", {}, el("strong", { text: m.model }), el("div", {class: "muted", text: "Identity " + m.fingerprint.slice(0, 12)})),
     ...ids.map((i) => {
       const c = m.suites[i];
       if (!c) return el("td", { class: "muted", text: "—" });
       const note = `${c.n} graded${c.excluded ? `, ${c.excluded} excluded` : ""}, thinking ${c.thinking ? "on" : "off"}`
         + `${c.suite_version ? `, v${c.suite_version}` : `, suite ${c.suite_hash.slice(0, 8)}`}${c.judge ? `, judge ${c.judge}` : ""}${c.self_judged ? " (self-judged)" : ""}`;
       const cats = Object.entries(c.by_category || {}).map(([k, v]) => `${k} ${pct(typeof v === "object" ? v.mean : v)}`).join(", ");
-      return el("td", { title: cats }, interval(c), el("div", { class: "muted", text: note }));
+      return el("td", {}, interval(c), el("div", {class: "muted", text: note}), el("div", {class: "muted", text: EngineUI.runLabel(c.provenance || {}) + " · settings " + c.settings_hash.slice(0, 12)}), el("details", {}, el("summary", {text: "Categories and identity"}), el("p", {text: cats}), el("pre", {text: JSON.stringify(c.provenance || {})})));
     }),
     el("td", { class: "num", text: m.speed ? fmt.tok(m.speed.decode_tok_s) : "—" }),
     el("td", { class: "num", text: m.speed ? fmt.tok(m.speed.prefill_tok_s) : "—" }),
@@ -156,7 +166,11 @@ async function fillCompareModels(side) {
   if (!run) { sel.replaceChildren(); return; }
   try {
     const { results } = await api(`/api/evals/runs/${encodeURIComponent(run)}/results`);
-    populateModelSelect(sel, [...new Set(results.map((r) => r.model))], sel.value);
+    const keep = sel.value;
+    const metadata = evalRuns.find(r => r.id === run) || {};
+    const models = [...new Set(results.map(r => r.model))];
+    sel.replaceChildren(...models.map(model => el("option", {value: model, text: EngineUI.runLabel({...metadata, scope: "model", model})})));
+    if (models.includes(keep)) sel.value = keep;
   } catch (e) { sel.replaceChildren(); }
 }
 
@@ -242,7 +256,7 @@ async function regrade() {
     document.getElementById("eval-results-note").textContent = `Regraded ${r.regraded} cases; ${r.changed} changed.`;
     await showEvalResults(evalRunId);
     document.getElementById("eval-results-note").textContent = `Regraded ${r.regraded} cases; ${r.changed} changed.`;
-    loadScorecard().catch(() => {});
+    trackSection("eval-scorecard", loadScorecard);
   } catch (e) { document.getElementById("eval-results-note").textContent = e.message; }
 }
 
@@ -281,8 +295,8 @@ setInterval(() => {
   const names = roster.map((m) => m.name);
   if (sel.options.length !== names.length) populateModelSelect(sel, names, sel.value);
 }, 1000);
-const refreshEvals = () => { loadEvalRuns().catch(() => {}); loadScorecard().catch(() => {}); };
-loadEvalSuites().catch(() => {});
+const refreshEvals = () => { trackSection("eval-runs-card", loadEvalRuns); trackSection("eval-scorecard", loadScorecard); };
+trackSection("eval-suites", loadEvalSuites);
 refreshEvals();
 setInterval(refreshEvals, 15000);
 

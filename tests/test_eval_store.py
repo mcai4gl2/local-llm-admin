@@ -1,6 +1,7 @@
 """M10: eval storage."""
 
 import sqlite3
+from typing import Any
 
 import pytest
 
@@ -315,3 +316,18 @@ def test_scorecard_suite_version_is_null_for_an_unknown_hash(store):
     _row(store, "r1", "m", "a", 1.0)
     store.finalize("r1", "m", promote=True)
     assert store.scorecard()[0]["suites"]["t"]["suite_version"] is None
+
+
+def test_scorecard_exposes_stored_run_identity_without_using_current_engine(store: Any) -> None:
+    import json
+    with store._conn() as conn:
+        conn.execute("INSERT INTO quality_runs (id, kind, scope, status, started, original, settings, runtime_version, runtime_fingerprint) VALUES (?, 'eval', 'current', 'succeeded', 100, ?, ?, '1.4.0', 'runtime-a')", ("r1", json.dumps({"engine": "splash", "reference": "stock-8bit-32k", "loaded_context": 32768}), json.dumps({"thinking": True})))
+    _row(store, "r1", "m", "a", 1.0)
+    store.finalize("r1", "m", promote=True)
+    cell = store.scorecard()[0]["suites"]["t"]
+    assert cell["provenance"]["original"]["engine"] == "splash"
+    assert cell["provenance"]["original"]["loaded_context"] == 32768
+    assert cell["provenance"]["runtime_fingerprint"] == "runtime-a"
+    with store._conn() as conn:
+        conn.execute("DELETE FROM quality_runs WHERE id='r1'")
+    assert store.scorecard()[0]["suites"]["t"]["provenance"]["original"] is None

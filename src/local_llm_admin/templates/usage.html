@@ -2,6 +2,7 @@
 {% block title %}Usage{% endblock %}
 {% block content %}
 <section class="card">
+  <p id="usage-scope" class="muted"></p>
   <div class="toolbar">
     <div class="seg" role="group" aria-label="Range">
       <button data-days="7" aria-pressed="false">7 days</button>
@@ -20,22 +21,24 @@
 </section>
 
 <div class="tabs" role="tablist">
-  <button role="tab" aria-selected="true" data-tab="daily">By date</button>
-  <button role="tab" aria-selected="false" data-tab="sessions">Sessions</button>
+  <button role="tab" id="tab-daily" aria-controls="panel-daily" tabindex="0" aria-selected="true" data-tab="daily">By date</button>
+  <button role="tab" id="tab-sessions" aria-controls="panel-sessions" tabindex="-1" aria-selected="false" data-tab="sessions">Sessions</button>
 </div>
 
-<section class="card" data-panel="daily">
+<section class="card" id="panel-daily" role="tabpanel" aria-labelledby="tab-daily" data-panel="daily">
+  <p id="daily-state" class="muted" role="status"></p>
   <div class="card-head"><h2>Tokens per day</h2>
     <div class="legend"><span class="key s1"></span>Prompt <span class="key s2"></span>Completion</div></div>
   <div class="chart tall" id="usage-chart"></div>
   <div class="table-wrap"><table id="daily-table">
-    <thead><tr><th>Date</th><th>App</th><th class="num">Requests</th><th class="num">Prompt</th><th class="num">Completion</th><th class="num">Errors</th><th>Model active that day</th></tr></thead>
+    <thead><tr><th>Date</th><th>App</th><th class="num">Requests</th><th class="num">Prompt</th><th class="num">Completion</th><th class="num">Errors</th><th>MLX activity observed that day</th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <p class="muted">Days use the ops timezone (UTC+8), counted from LiteLLM's request logs (LiteLLM's own daily rollups are UTC days). LiteLLM keeps 90 days.</p>
+  <p class="muted">Days use the configured operations timezone shown above, counted from LiteLLM's request logs (LiteLLM's own daily rollups are UTC days). LiteLLM keeps 90 days.</p>
 </section>
 
-<section class="card" data-panel="sessions" hidden>
+<section class="card" id="panel-sessions" role="tabpanel" aria-labelledby="tab-sessions" data-panel="sessions" hidden>
+  <p id="sessions-state" class="muted" role="status"></p>
   <div class="table-wrap"><table id="sessions-table">
     <thead><tr><th>App</th><th>Session</th><th class="num">Requests</th><th class="num">Prompt</th><th class="num">Completion</th><th>First</th><th>Last</th><th>Status</th></tr></thead>
     <tbody></tbody>
@@ -49,7 +52,7 @@
     <thead><tr><th>Date</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Questions</th><th class="num">Reads run</th><th class="num">Input tokens</th><th class="num">p50</th><th class="num">p95</th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <p class="muted">Recorded by the admin for the Decision page and LAN clients on the gateway; last 30 days, ops timezone. Per-client totals are on the <a href="/decision">Decision</a> page.</p>
+  <p class="muted">Recorded by the admin for the Decision page and LAN clients on the gateway; independent rolling 30 days, bucketed in the configured operations timezone; unaffected by the LiteLLM range above. Per-client totals are on the <a href="/decision">Decision</a> page.</p>
 </section>
 {% endif %}
 {% if tts_enabled %}
@@ -61,12 +64,12 @@
   <div class="table-wrap"><table id="tts-usage-clients">
     <thead><tr><th>Client</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Characters</th><th class="num">Audio</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
   </table></div>
-  <p class="muted">Recorded by the admin for the TTS page and gateway clients (LiteLLM calls the gateway with its own key); last 30 days, ops timezone.</p>
+  <p class="muted">Recorded by the admin for the TTS page and gateway clients (LiteLLM calls the gateway with its own key); independent rolling 30 days, bucketed in the configured operations timezone; unaffected by the LiteLLM range above.</p>
 </section>
 {% endif %}
 {% if embed_enabled %}
 <section class="card" id="embed-usage">
-  <div class="card-head"><h2>Embeddings</h2><span class="muted">last 30 days</span></div>
+  <div class="card-head"><h2>Embeddings</h2><span class="muted">Independent rolling 30 days · configured operations timezone</span></div>
   <div class="table-wrap"><table id="embed-usage-table">
     <thead><tr><th>Day</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Inputs</th><th class="num">Characters</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody></tbody>
   </table></div>

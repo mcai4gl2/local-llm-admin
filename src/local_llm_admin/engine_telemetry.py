@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import sqlite3
 from typing import Any
 
@@ -169,6 +170,66 @@ class EngineTelemetryStore(Database):
             row["identity"] = json.loads(row["identity"])
             row.pop("digest")
         return result
+
+    def page(
+        self,
+        frm: float,
+        to: float,
+        *,
+        profile: str | None = None,
+        fingerprint: str | None = None,
+        epoch: str | None = None,
+        limit: int = 20,
+        before: str | None = None,
+    ) -> dict[str, Any]:
+        """A stable (observed, id) cursor; catalogs cover the range, never just a page."""
+        where = ["source='splash'", "observed>=?", "observed<?"]
+        args: list[Any] = [frm, to]
+        if before is not None:
+            try:
+                raw_ts, raw_id = before.split(":")
+                ts, row_id = float(raw_ts), int(raw_id)
+                if not math.isfinite(ts) or row_id < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValueError("invalid snapshot cursor") from None
+            where.append("(observed<? OR (observed=? AND id<?))")
+            args.extend((ts, ts, row_id))
+        for column, value in (("profile", profile), ("fingerprint", fingerprint), ("epoch", epoch)):
+            if value is not None:
+                where.append(f"{column}=?")
+                args.append(value)
+        limit = min(500, max(1, limit))
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM engine_readings WHERE " + " AND ".join(where)
+                + " ORDER BY observed DESC, id DESC LIMIT ?", (*args, limit + 1)
+            ).fetchall()
+            profiles = c.execute(
+                "SELECT DISTINCT profile, fingerprint FROM engine_readings"
+                " WHERE source='splash' AND observed>=? AND observed<? ORDER BY profile, fingerprint",
+                (frm, to),
+            ).fetchall()
+            epochs = c.execute(
+                "SELECT epoch, profile, fingerprint, MAX(observed) AS observed FROM engine_readings"
+                " WHERE source='splash' AND observed>=? AND observed<?"
+                + (" AND profile=?" if profile is not None else "")
+                + " GROUP BY epoch, profile, fingerprint ORDER BY observed DESC, epoch",
+                (frm, to, profile) if profile is not None else (frm, to),
+            ).fetchall()
+        more = len(rows) > limit
+        result = [dict(row) for row in rows[:limit]]
+        for row in result:
+            row["counters"] = json.loads(row["counters"])
+            row["identity"] = json.loads(row["identity"])
+            row.pop("digest")
+        return {
+            "readings": result,
+            "next": f"{result[-1]['observed']}:{result[-1]['id']}" if more else None,
+            "limit": limit,
+            "profiles": [dict(row) for row in profiles],
+            "epochs": [dict(row) for row in epochs],
+        }
 
     def prune(self, before: float, limit: int = 5000) -> int:
         with self._conn() as c:

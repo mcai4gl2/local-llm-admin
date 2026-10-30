@@ -1,41 +1,42 @@
 "use strict";
 let windowSel = "15m";
 
-onStatus((st) => {
-  const backend = EngineUI.active(st);
-  const modelMetrics = backend?.operations.includes("multi-model");
-  const activeStatus = st.engine?.[backend?.id] || {};
-  document.getElementById("st-selected").textContent = modelMetrics ? st.selected || "—" : EngineUI.label(st);
-  document.getElementById("st-state").textContent = modelMetrics ? STATE_LABEL[st.state] || st.state : EngineUI.badge(st);
-  document.getElementById("st-decode").textContent = fmt.tok(modelMetrics ? st.inference?.last_decode_rate : null);
-  document.getElementById("st-prefill").textContent = fmt.tok(modelMetrics ? st.inference?.last_prefill_rate : null);
-  document.getElementById("status-checked").textContent = `checked ${new Date(st.checked_at * 1000).toLocaleTimeString()}`;
-  const h = modelMetrics ? st.health || {} : {}, mdl = modelMetrics ? st.model || {} : {}, inf = modelMetrics ? st.inference || {} : {};
-  const facts = [
-    ["Active engine", EngineUI.label(st)],
-    ...(st.decision?.enabled ? [["Decision sidecar", st.decision.running ? "running" : "stopped"]] : []),
-    ["Loaded model", modelMetrics ? h.loaded_model || (st.health ? "—" : "API not answering") : activeStatus.model || "—"],
-    ["Context size", fmt.num(modelMetrics ? h.loaded_context_size : activeStatus.max_context)],
-    ["Tool parser", h.loaded_tool_parser || "—"],
-    ["Process", backend?.running ? `running (pid ${modelMetrics ? st.process.pid ?? "?" : activeStatus.pid ?? "?"})` : "stopped"],
-    ["Requests in flight", modelMetrics ? inf.in_flight_count ?? (inf.in_flight ? "yes" : "0") : "—"],
-    ["Last time to first token", inf.last_ttft_s == null ? "—" : `${inf.last_ttft_s.toFixed(2)} s`],
-    ["Last request", inf.last_request_at || "—"],
-    ["Last generated tokens", fmt.num(inf.last_generated_tokens)],
-    ["Architecture", mdl.architecture || "—"],
-    ["Quantization", mdl.quant_bits ? `${mdl.quant_bits}-bit` : "—"],
-    ["Max position embeddings", fmt.num(mdl.max_position_embeddings)],
-    ["Weights on disk", fmt.bytes(mdl.size_bytes)],
-    ["Drive", st.drive_mounted ? "mounted" : "NOT mounted"],
-    ["Chat UI (:7860)", st.chat_ui ? "running — API is down" : "off"],
-    ["Admin job", st.job ? `${st.job.action} ${st.job.name || ""} (running)` : "none"],
-    ["mlx-model lock", st.lock ? `held for ${Math.round((st.lock_age_s || 0) / 60)} min` : "free"],
-  ];
+onStatus(st => {
+  const backend = EngineUI.active(st), mlx = backend?.operations.includes("multi-model");
+  const active = st.engine?.[backend?.id] || {}, metrics = active.metrics || {};
+  const h = mlx ? st.health || {} : {}, inf = mlx ? st.inference || {} : {};
+  document.getElementById("st-selected").textContent = EngineUI.label(st);
+  document.getElementById("st-state").textContent = EngineUI.badge(st);
+  const decode = mlx ? inf.last_decode_rate : metrics.tok_s;
+  const prefill = mlx ? inf.last_prefill_rate : metrics.prompt_tok_s;
+  document.getElementById("st-decode").textContent = fmt.tok(decode);
+  document.getElementById("st-prefill").textContent = fmt.tok(prefill);
+  document.getElementById("decode-label").textContent = mlx ? "Last request decode" : "Live decode";
+  document.getElementById("prefill-label").textContent = mlx ? "Last request prefill" : "Mean prompt rate";
+  document.getElementById("st-decode").parentElement.hidden = !mlx && decode == null;
+  document.getElementById("st-prefill").parentElement.hidden = !mlx && prefill == null;
+  document.getElementById("status-checked").textContent = (EngineUI.fresh(st) ? "checked " : "stale · last check ") + fmt.time(st.checked_at);
+  const context = EngineUI.contexts(st);
+  const loaded = context.loaded;
+  const facts = [["Active engine", EngineUI.label(st)],
+    ["Loaded model", mlx ? h.loaded_model || "Unverified" : active.model || "Unverified"],
+    ["Configured context", EngineUI.context(context.configured) || "Not reported"],
+    ["Loaded context", (EngineUI.context(loaded) || "Unknown") + " · " + context.state],
+    ["Process", backend?.running ? `running (pid ${mlx ? st.process?.pid ?? "?" : active.pid ?? "?"})` : "stopped"],
+    ...(mlx ? [["Requests in flight", inf.in_flight_count ?? (inf.in_flight ? "yes" : "0")],
+      ["Last time to first token", inf.last_ttft_s == null ? "—" : `${inf.last_ttft_s.toFixed(2)} s`]] : []),
+    ...(metrics.queued != null ? [["Queued", fmt.num(metrics.queued)]] : []),
+    ["Admin job", st.job ? `${st.job.action} ${st.job.name || ""} (running)` : "none"]];
+  const mdl = st.model || {};
+  const details = mlx ? [["Tool parser", h.loaded_tool_parser || "—"], ["Last request", inf.last_request_at || "—"],
+    ["Last generated tokens", fmt.num(inf.last_generated_tokens)], ["Architecture", mdl.architecture || "—"],
+    ["Quantization", mdl.quant_bits ? `${mdl.quant_bits}-bit` : "—"], ["Model position embeddings", fmt.num(mdl.max_position_embeddings)],
+    ["Weights on disk", fmt.bytes(mdl.size_bytes)], ["Drive", st.drive_mounted ? "mounted" : "not mounted"],
+    ["mlx-model lock", st.lock ? `held for ${Math.round((st.lock_age_s || 0) / 60)} min` : "free"]] : [];
+  document.getElementById("st-details").hidden = !details.length;
+  for (const [id, rows] of [["st-facts", facts], ["st-detail-facts", details]]) document.getElementById(id).replaceChildren(...rows.map(([k, v]) => el("div", {}, el("dt", {text: k}), el("dd", {text: v}))));
   const access = document.getElementById("access-error");
-  access.hidden = !st.access_error;
-  access.textContent = st.access_error || "";
-  document.getElementById("st-facts").replaceChildren(
-    ...facts.map(([k, v]) => el("div", {}, el("dt", { text: k }), el("dd", { text: v }))));
+  access.hidden = !st.access_error; access.textContent = st.access_error || "";
 });
 
 function tile(label, value, sub, pct) {
@@ -60,15 +61,17 @@ async function refreshMetrics() {
   tiles.push(tile("Disk I/O", fmt.rate(m.disk_read_bps), `write ${fmt.rate(m.disk_write_bps)}`));
   tiles.push(tile("Network", fmt.rate(m.net_rx_bps), `send ${fmt.rate(m.net_tx_bps)}`));
   const bundle = m.engine_bundle;
-  if (bundle && bundle.source) tiles.push(tile("Engine bundle · " + bundle.source,
+  if (bundle && bundle.source) tiles.push(tile("Engine bundle · " + bundle.source + " · summed RSS",
     bundle.rss === null ? bundle.state : fmt.bytes(bundle.rss),
     `Sum of process RSS · ${bundle.members.length} members · CPU ${fmt.pct(bundle.cpu_percent)}; shared pages may be counted twice`));
-  tiles.push(tile("Engine process", m.mlx ? fmt.bytes(m.mlx.rss) : bundle && bundle.state !== "absent" ? "unavailable" : "not running", m.mlx ? `CPU ${fmt.pct(m.mlx.cpu_percent)}` : ""));
+  tiles.push(tile("Primary engine process RSS", m.mlx ? fmt.bytes(m.mlx.rss) : bundle && bundle.state !== "absent" ? "unavailable" : "not running", m.mlx ? `CPU ${fmt.pct(m.mlx.cpu_percent)}` : ""));
   document.getElementById("metric-tiles").replaceChildren(...tiles);
 }
 
 async function refreshHistory() {
-  const { points } = await api(`/api/metrics/history?window=${windowSel}`);
+  const selectedWindow = windowSel;
+  const { points } = await api(`/api/metrics/history?window=${selectedWindow}`);
+  if (selectedWindow !== windowSel) return;
   lineChart(document.getElementById("chart-cpu"), points.map((p) => ({ t: p.ts, v: p.cpu_percent })), { max: 100 });
   lineChart(document.getElementById("chart-mem"), points.map((p) => ({ t: p.ts, v: p.mem_percent })), { max: 100 });
   const gpu = points.some((p) => p.gpu_util !== null);
@@ -79,7 +82,7 @@ async function refreshHistory() {
 document.querySelectorAll("[data-window]").forEach((b) => b.addEventListener("click", () => {
   windowSel = b.dataset.window;
   document.querySelectorAll("[data-window]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
-  refreshHistory();
+  trackSection("history-panel", refreshHistory);
 }));
 
 async function refreshProblems() {
@@ -89,8 +92,8 @@ async function refreshProblems() {
   document.getElementById("problems").replaceChildren(...bad.map((c) => checkRow(c, refreshProblems)));
 }
 
-function tick() { refreshMetrics().catch(() => {}); refreshHistory().catch(() => {}); }
+function tick() { trackSection("metric-tiles", refreshMetrics); trackSection("history-panel", refreshHistory); }
 tick();
 setInterval(tick, 5000);
-refreshProblems().catch(() => {});
-setInterval(() => refreshProblems().catch(() => {}), 30000);
+trackSection("problems-card", refreshProblems);
+setInterval(() => trackSection("problems-card", refreshProblems), 30000);

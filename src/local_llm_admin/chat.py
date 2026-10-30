@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .config import Settings
 
+CHAT_OUTPUT_CAP = 32768
 ACTIVE_MODEL_ID = "/Volumes/Models/models/active"
 
 
@@ -36,7 +37,7 @@ class ChatRequest(BaseModel):
     system: str | None = Field(default=None, max_length=50_000)
     # None: use the model's saved admin-chat default (M3c), else the built-in one
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    max_tokens: int | None = Field(default=None, ge=1, le=32768)
+    max_tokens: int | None = Field(default=None, ge=1, le=CHAT_OUTPUT_CAP)
     thinking: bool | None = None
 
 
@@ -54,14 +55,14 @@ _PROFILE_CHAT = (
 )
 
 
-def effective_chat(req: ChatRequest, defaults: dict[str, Any] | None = None) -> dict[str, Any]:
+def effective_chat(req: ChatRequest | None, defaults: dict[str, Any] | None = None) -> dict[str, Any]:
     """Built-in, then the model's saved chat defaults, then explicit request fields."""
     out = dict(BUILTIN_CHAT)
     out.update({k: v for k, v in (defaults or {}).items() if k in _PROFILE_CHAT and v is not None})
     explicit = {
-        "temperature": req.temperature,
-        "max_tokens": req.max_tokens,
-        "enable_thinking": req.thinking,
+        "temperature": req.temperature if req else None,
+        "max_tokens": req.max_tokens if req else None,
+        "enable_thinking": req.thinking if req else None,
     }
     out.update({k: v for k, v in explicit.items() if v is not None})
     return out
@@ -100,12 +101,14 @@ async def stream_chat(
     defaults: dict[str, Any] | None = None,
     target: ChatTarget | None = None,
     estimate_usage: bool = True,
+    identity: Mapping[str, Any] | None = None,
 ) -> AsyncIterator[str]:
     """Yield SSE events: reasoning/delta chunks, then one ``done`` (or one ``error``).
 
     Closing this generator (browser Stop) closes the upstream response, which makes the
     server log ``Generation cancelled`` and frees the single decode slot.
     """
+    reply_identity = dict(identity or {})
     t0 = time.monotonic()
     t_first: float | None = None
     usage: dict[str, Any] | None = None
@@ -115,6 +118,8 @@ async def stream_chat(
     base_url = target.base_url if target else settings.mlx_api_base
     payload = build_payload(req, defaults, target.model) if target else build_payload(req, defaults)
     headers = {"Authorization": f"Bearer {target.api_key}"} if target and target.api_key else None
+    if reply_identity:
+        yield _event({"type": "identity", "identity": reply_identity, "settings": effective_chat(req, defaults)})
     try:
         async with (
             httpx.AsyncClient(
@@ -159,6 +164,7 @@ async def stream_chat(
     yield _event(
         {
             "type": "done",
+            "identity": reply_identity,
             "usage": {
                 "prompt_tokens": (usage or {}).get("prompt_tokens"),
                 "completion_tokens": completion,

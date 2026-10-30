@@ -1,6 +1,7 @@
 """M8: admin routes for the embedding service."""
 
 import json
+from typing import Any
 
 import httpx
 import pytest
@@ -111,3 +112,19 @@ async def test_nav_page_and_usage_section(client):
     assert 'id="embed-sim-form"' in page and 'id="embed-rr-form"' in page and "/static/embed.js" in page
     usage = (await client.get("/usage")).text
     assert 'id="embed-usage"' in usage and "/static/embed_usage.js" in usage
+
+
+@pytest.mark.parametrize("owner", ["comfyui", "strata", "splash"])
+@pytest.mark.parametrize("intent", ["running", "stopped"])
+async def test_service_pause_owner_is_shared_with_test_page(client: Any, monkeypatch: Any, owner: str, intent: str) -> None:
+    control = client.app.state.control
+    monkeypatch.setattr(control, "exclusive_running", lambda: owner)
+    spec = client.app.state.sidecars.get_service("qwen-embed")
+    sidecars_mod.write_service_intent(control.store, spec, intent)
+    service = (await client.get("/api/services")).json()["services"][0]
+    assert service["paused"] is (intent == "running")
+    assert service["availability"]["owner"] == owner
+    assert owner.lower() in service["availability"]["reason"].lower()
+    assert not service["availability"]["available"]
+    page_status = (await client.get("/api/embed")).json()
+    assert page_status["availability"] == service["availability"]

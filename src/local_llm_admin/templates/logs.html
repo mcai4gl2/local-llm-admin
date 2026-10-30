@@ -15,7 +15,9 @@
     <a id="download" class="button" href="#">Download</a>
   </form>
   <div id="dl-summary" class="facts" hidden></div>
-  <p class="muted" id="log-meta"></p>
+  <p class="muted" id="log-meta" role="status"></p>
+  <p class="muted" id="log-connection" role="status">Paused</p>
+  <p class="muted">Text and minimum-level changes reload the tail and restart Follow with the same filters.</p>
   <pre class="log wrap" id="log-view"></pre>
 </section>
 {% endblock %}

@@ -166,3 +166,15 @@ async def test_stream_to_another_engine_uses_its_base_model_and_key():
     assert str(seen[0].url) == "http://strata.test/v1/chat/completions"
     assert seen[0].headers["authorization"] == "Bearer k"
     assert json.loads(seen[0].content)["model"] == "Qwen3.8-Flash-Next"
+
+
+async def test_reply_identity_is_captured_before_stream_and_not_sampled_later() -> None:
+    llm = FakeOpenAI(sse_chunks(["Hi", "!"], usage={"prompt_tokens": 5, "completion_tokens": 2}))
+    req = chat.ChatRequest(messages=[{"role": "user", "content": "hi"}])
+    identity = {"engine": "splash", "reference": "stock", "profile_fingerprint": "fp-a"}
+    gen = chat.stream_chat(S, req, transport=llm.transport, identity=identity)
+    first = await anext(gen)
+    identity["engine"] = "mlx"
+    events = _events([first, *await _collect(gen)])
+    assert events[-1]["identity"]["engine"] == "splash"
+    assert events[-1]["identity"]["profile_fingerprint"] == "fp-a"

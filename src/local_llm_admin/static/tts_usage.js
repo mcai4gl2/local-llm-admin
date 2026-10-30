@@ -16,5 +16,5 @@
     const c = clients.rows.map((r) => row(r.client, r));
     q("tts-usage-clients").querySelector("tbody").replaceChildren(...(c.length ? c : empty("No clients yet.")));
   }
-  load().catch(() => {});
+  trackSection("tts-usage-table", load);
 })();

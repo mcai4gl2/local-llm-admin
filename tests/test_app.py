@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -393,6 +394,11 @@ async def test_chat_streams(client, mlx_health, fake_llm, fake_comfy):
     events = [json.loads(ln[6:]) for ln in r.text.splitlines() if ln.startswith("data: ")]
     assert "".join(e["content"] for e in events if e["type"] == "delta") == "Hi!"
     assert events[-1]["type"] == "done"
+    assert events[-1]["identity"]["engine"] == "mlx"
+    config = (await client.get("/api/chat/config")).json()
+    assert config["identity"]["loaded_context"] == 32768
+    assert config["output_cap"] == 32768
+    assert config["defaults"]["max_tokens"] == events[-1]["settings"]["max_tokens"]
     assert fake_llm.requests[0]["messages"] == [{"role": "user", "content": "hello"}]
 
 
@@ -555,3 +561,25 @@ async def test_tts_page_and_nav(client, fake_tts):
     assert 'id="tts-form"' in html and 'id="tts-text"' in html and "/static/tts.js" in html
     assert 'href="/tts"' in (await client.get("/")).text
     assert 'id="tts-usage"' in (await client.get("/usage")).text
+
+
+async def test_status_exposes_quality_reservation_and_observation_time(client: Any, app: Any, monkeypatch: Any) -> None:
+    monkeypatch.setattr(app.state.quality, "active", lambda: {"id": "test-run", "status": "running"})
+    result = (await client.get("/api/status")).json()
+    assert result["quality_active"]["id"] == "test-run"
+    assert result["checked_at"] > 0
+    assert result["measurement_coverage"]["splash"]["counter_qualification"] == "unverified"
+
+
+async def test_log_follow_uses_the_same_text_and_minimum_level_filters_as_tail(client: Any, app: Any, monkeypatch: Any) -> None:
+    from local_llm_admin import app as app_mod
+    lines = ["INFO keep", "WARNING KEEP", "ERROR unrelated", "CRITICAL keep"]
+    monkeypatch.setattr(app_mod, "tail_lines", lambda *args: lines)
+    monkeypatch.setattr(app_mod.Follower, "poll", lambda self: lines)
+    app.state.follow_max_s = 0.01
+    params = {"grep": "keep", "level": "WARNING"}
+    tail = (await client.get("/api/logs/mlx-server", params=params)).json()["lines"]
+    response = await client.get("/api/logs/mlx-server/follow", params=params)
+    events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+    followed = [ev["line"] for ev in events if ev["type"] == "line"]
+    assert followed == tail == ["WARNING KEEP", "CRITICAL keep"]

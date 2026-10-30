@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -673,3 +674,21 @@ def test_aggregate_rows_count_their_requests_but_skip_timing(env):
     s = perf.summary(0, 4e9, tz_offset_min=TZ)["totals"]
     assert s["requests"] == 1 and s["partial"] == 0
     assert [r["state"] for r in perf.requests(0, 4e9)["requests"]] == ["completed"]
+
+
+@pytest.mark.parametrize("source", ["mlx-perf", "strata"])
+def test_source_filter_applies_to_summary_requests_models_and_folded_tokens(env: Any, source: str) -> None:
+    perf = env[2]
+    base = {"started": NOW, "finished": NOW + 1, "state": "completed", "complete": 1,
+            "prompt_tokens": 10, "generated_tokens": 2, "ttft_s": 0.5, "attribution": "generation"}
+    for i, origin in enumerate(("mlx-perf", "strata")):
+        perf.insert_rows(origin, [{**base, "key": str(i), "model": "model-" + str(i)}])
+    expected = "model-0" if source == "mlx-perf" else "model-1"
+    assert perf.models(0, 2e9, source=source) == [expected]
+    assert perf.summary(0, 2e9, tz_offset_min=0, source=source)["totals"]["requests"] == 1
+    assert {r["source"] for r in perf.requests(0, 2e9, source=source)["requests"]} == {source}
+    before = perf.tokens(0, 2e9, tz_offset_min=0, group="model", source=source)
+    assert before["totals"]["input_tokens"] == 10
+    assert before["rows"][0]["model"] == expected
+    perf.prune(2e9)
+    assert perf.tokens(0, 2e9, tz_offset_min=0, group="model", source=source) == before

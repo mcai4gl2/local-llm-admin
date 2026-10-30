@@ -256,9 +256,11 @@ class EvalStore(Database):
         version it was scored on (None once that version is no longer stored)."""
         with self._conn() as c:
             rows = c.execute(
-                "SELECT s.*, (SELECT MAX(version) FROM eval_suites v WHERE v.id = s.suite_id"
+                "SELECT s.*, q.original AS run_original, q.settings AS run_settings,"
+                " q.runtime_version, q.runtime_fingerprint,"
+                " (SELECT MAX(version) FROM eval_suites v WHERE v.id = s.suite_id"
                 " AND v.content_hash = s.suite_hash) AS suite_version"
-                " FROM eval_scores s ORDER BY s.ts, s.rowid"
+                " FROM eval_scores s LEFT JOIN quality_runs q ON q.id = s.run_id ORDER BY s.ts, s.rowid"
             ).fetchall()
         cards: dict[str, dict[str, Any]] = {}
         for r in rows:  # ascending ts, so the newest score per cell wins
@@ -274,6 +276,14 @@ class EvalStore(Database):
                 "thinking": thinking,
                 "suite_hash": r["suite_hash"],
                 "settings_hash": r["settings_hash"],
+                "provenance": {
+                    "model": r["model"],
+                    "scope": "model",
+                    "original": json.loads(r["run_original"]) if r["run_original"] else None,
+                    "settings": json.loads(r["run_settings"]) if r["run_settings"] else None,
+                    "runtime_version": r["runtime_version"],
+                    "runtime_fingerprint": r["runtime_fingerprint"],
+                },
                 "run_id": r["run_id"],
                 "n": r["n"],
                 "excluded": r["excluded"],

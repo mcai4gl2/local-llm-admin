@@ -38,7 +38,7 @@ from .availability import AvailabilityRecorder, AvailabilityStore, summarize
 from .backend_availability import BackendAvailabilityStore, backend_state
 from .backend_types import EngineObservation, resolve_observations
 from .backends import BackendUnavailable
-from .chat import ChatRequest, stream_chat
+from .chat import CHAT_OUTPUT_CAP, ChatRequest, effective_chat, stream_chat
 from .comfy_outputs import (
     ID_RE,
     Entry,
@@ -62,7 +62,7 @@ from .downloads import DownloadError, DownloadService
 from .embed import QUERY_INSTRUCTION, EmbedClient, EmbedError, validate_embed, validate_rerank
 from .embed_store import EmbedStore
 from .engine_telemetry import EngineTelemetryStore
-from .engines import ComfyClient, StrataClient, observation_badge
+from .engines import ComfyClient, StrataClient, observation_badge, strata_pack_of
 from .eval_graders import grade_response
 from .eval_judge import judge_target
 from .eval_stats import paired
@@ -392,7 +392,7 @@ def create_app(
             return
         last_backend_sample = snap.wall
         if settings.splash_enabled or (snap.intent or "").startswith("splash:"):
-            sample = backend_state(snap, "splash")
+            splash_sample = backend_state(snap, "splash")
             # The monitor's cached bundle must match this tick's local generation.
             identity = snap.backends.get("splash", {}).get("identity", {})
             generation = (observed or {}).get("generation") or {}
@@ -400,18 +400,34 @@ def create_app(
                 {k: p[k] for k in ("pid", "started", "role")}
                 for p in generation.get("processes", [])
             ]
-            if sample["state"] == "serving" and (
+            if splash_sample["state"] == "serving" and (
                 not observed_members or observed_members != identity.get("processes")
             ):
-                sample["state"] = "unknown"
+                splash_sample["state"] = "unknown"
 
             def persist() -> None:
-                backend_availability.add("splash", snap.wall, sample)
+                backend_availability.add("splash", snap.wall, splash_sample)
                 backend_availability.prune(
                     snap.wall - settings.observability_retention_days * 86400
                 )
 
             await probes.run("backend-availability", persist, settings.probe_timeout_s)
+
+        if settings.strata_enabled or (snap.intent or "").partition(":")[0] == "strata":
+            descriptor: dict[str, Any] = {"enabled": settings.strata_enabled, "state": "unknown", "ready": False}
+            if snap.engine == "strata" and (observed or {}).get("generation"):
+                health = await strata.get_json("/health")
+                checked = await probes.run("strata-availability-identity", control.observe, settings.probe_timeout_s)
+                if checked.state == "done" and checked.value == observed and isinstance(health, dict) and health.get("service") == "strata":
+                    loaded = health.get("loaded") is True
+                    descriptor.update(ready=loaded, state="ready" if loaded else "starting", profile=strata_pack_of(health.get("model")))
+            strata_sample = backend_state(dataclasses.replace(snap, backends={**snap.backends, "strata": descriptor}), "strata")
+
+            def persist_strata() -> None:
+                backend_availability.add("strata", snap.wall, strata_sample)
+                backend_availability.prune(snap.wall - settings.observability_retention_days * 86400)
+
+            await probes.run("strata-availability", persist_strata, settings.probe_timeout_s)
 
     supervisor.add_listener(record_backend_availability)
     supervisor.add_listener(ingest_requests)
@@ -653,6 +669,7 @@ def create_app(
                     "page": page,
                     "csrf": request.state.session["csrf"],
                     "version": __version__,
+                    "ops_timezone_offset_min": settings.litellm_timezone_offset_min,
                     "decision_enabled": settings.decision_enabled,
                     "tts_enabled": settings.tts_enabled,
                     "embed_enabled": settings.embed_enabled,
@@ -698,6 +715,12 @@ def create_app(
             ),
         }
         st["job"] = job
+        st["quality_active"] = quality.active()
+        st["measurement_coverage"] = {"splash": await asyncio.to_thread(
+            native_telemetry.coverage, settings.splash_enabled,
+            now=time.time(), stale_s=settings.splash_poll_interval_s * 3,
+        )}
+        st["checked_at"] = time.time()
         st["intent"] = await asyncio.to_thread(control.intent)
         st["recovery_blocked"] = await asyncio.to_thread(control.recovery_blocked)
         st["alerts"] = await asyncio.to_thread(alerts.summary)
@@ -1011,13 +1034,29 @@ def create_app(
             "stop_first": b.stop_first.name if b.stop_first else None,
         }
 
+    async def _service_availability(running: bool, ready: bool, intent: str | None) -> dict[str, Any]:
+        owner = await asyncio.to_thread(control.exclusive_running)
+        label = control.backends.get(owner).spec.label if owner else None
+        state = "ready" if ready else "starting" if running else "paused" if owner and intent == "running" else "down" if intent == "running" else "stopped"
+        reason = (
+            f"{label} owns the GPU. Switch engines on the Models page; restoration follows saved intent and target compatibility."
+            if owner else "Ready" if ready else "Starting; waiting for readiness."
+            if running else "Expected to run but unavailable. Inspect the job and logs on Models."
+            if intent == "running" else "Stopped. Start it on the Models page."
+        )
+        return {"available": ready and owner is None, "state": state, "owner": owner,
+                "paused": state == "paused", "intent": intent or "stopped", "reason": reason}
+
     async def _sidecar_view(spec: SidecarSpec) -> dict[str, Any]:
         proc = sidecar_registry.process(spec.name)
         st = await asyncio.to_thread(proc.status)
         ready = st.running and await asyncio.to_thread(proc.ready_sync)
         cli = await asyncio.to_thread(proc.cli_status)
         budget = await control.sidecar_budget(spec.name, app.state.sampler_pressure())
-        return {
+        saved = await asyncio.to_thread(read_intent, store)
+        intent = saved.get("value") if saved and saved.get("name") == spec.name else None
+        availability = await _service_availability(st.running, ready, intent)
+        return {"availability": availability, "paused": availability["paused"], "intent": intent or "stopped", "checked_at": time.time(),
             "name": spec.name,
             "label": spec.label,
             "title": spec.title,
@@ -1068,6 +1107,7 @@ def create_app(
         intent = await asyncio.to_thread(read_intent, store)
         return {
             **st,
+            "availability": await _service_availability(st["running"], st["ready"], intent["value"] if intent and intent.get("name") == "openjev" else None),
             "intent": intent["value"] if intent and intent.get("name") == "openjev" else None,
             "weights": cli["weights"],
             "allowed_mlx": sorted(settings.decision_allowed),
@@ -1226,10 +1266,13 @@ def create_app(
         _tts_enabled()
         proc = sidecar_registry.process("qwen-tts")
         st = await asyncio.to_thread(proc.status)
-        return {
+        ready = st.running and await asyncio.to_thread(proc.ready_sync)
+        intent = await asyncio.to_thread(read_intent, store)
+        availability = await _service_availability(st.running, ready, intent.get("value") if intent and intent.get("name") == "qwen-tts" else None)
+        return {"availability": availability, "checked_at": time.time(),
             "enabled": True,
             "running": st.running,
-            "ready": st.running and await asyncio.to_thread(proc.ready_sync),
+            "ready": ready,
             "model_id": settings.tts_model_id,
             "voices": settings.tts_voice_list,
             "default_voice": settings.tts_default_voice or None,
@@ -1339,7 +1382,7 @@ def create_app(
         cli = await asyncio.to_thread(proc.cli_status)
         budget = await control.service_budget(spec.name, app.state.sampler_pressure())
         intent = await asyncio.to_thread(read_service_intent, store, spec)
-        comfy_up = (await asyncio.to_thread(comfy.running)).running
+        availability = await _service_availability(st.running, ready, intent)
         return {
             "name": spec.name,
             "label": spec.label,
@@ -1347,7 +1390,9 @@ def create_app(
             "running": st.running,
             "pid": st.pid,
             "ready": ready,
-            "paused": not st.running and comfy_up and intent == "running",
+            "paused": availability["paused"],
+            "availability": availability,
+            "checked_at": time.time(),
             "intent": intent or "stopped",
             "rss_bytes": proc.rss_bytes(st.pid),
             "listen": spec.api_base,
@@ -1374,10 +1419,14 @@ def create_app(
         _embed_enabled()
         reason = await asyncio.to_thread(embed_reason)
         proc = sidecar_registry.process("qwen-embed")
-        return {
+        ready = reason is None and await asyncio.to_thread(proc.ready_sync)
+        spec = sidecar_registry.get_service("qwen-embed")
+        intent = await asyncio.to_thread(read_service_intent, store, spec)
+        availability = await _service_availability(reason is None, ready, intent)
+        return {"availability": availability, "checked_at": time.time(),
             "enabled": True,
             "running": reason is None,
-            "ready": reason is None and await asyncio.to_thread(proc.ready_sync),
+            "ready": ready,
             "reason": reason,
             "embed_model_id": settings.embed_model_id,
             "rerank_model_id": settings.rerank_model_id,
@@ -1829,6 +1878,15 @@ def create_app(
         )
 
     # --- chat --------------------------------------------------------------
+    @app.get("/api/chat/config")
+    async def chat_config() -> dict[str, Any]:
+        try:
+            descriptor = await control.backends.resolve_inference(profiles.chat_defaults)
+        except BackendUnavailable as exc:
+            raise HTTPException(409, str(exc)) from None
+        return {"identity": dict(descriptor.identity), "defaults": effective_chat(None, dict(descriptor.defaults)),
+                "output_cap": CHAT_OUTPUT_CAP, "checked_at": time.time()}
+
     @app.post("/api/chat")
     async def chat(req: ChatRequest) -> StreamingResponse:
         if quality.active():
@@ -1845,6 +1903,7 @@ def create_app(
                 defaults=dict(descriptor.defaults),
                 target=descriptor.target,
                 estimate_usage=descriptor.estimate_usage,
+                identity=descriptor.identity,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -1935,7 +1994,11 @@ def create_app(
         )
 
     @app.get("/api/logs/{source_id}/follow")
-    async def log_follow(source_id: str, request: Request) -> StreamingResponse:
+    async def log_follow(
+        source_id: str, request: Request,
+        grep: str | None = Query(None, max_length=200),
+        level: Literal["INFO", "WARNING", "ERROR"] | None = None,
+    ) -> StreamingResponse:
         path = _source(source_id)
 
         async def events() -> AsyncIterator[str]:
@@ -1945,7 +2008,8 @@ def create_app(
             while time.monotonic() < deadline:
                 if await request.is_disconnected():
                     break
-                for line in await asyncio.to_thread(follower.poll):
+                raw = await asyncio.to_thread(follower.poll)
+                for line in filter_lines(raw, grep, level):
                     yield _sse({"type": "line", "line": line})
                 await asyncio.sleep(app.state.follow_interval_s)
 
@@ -1989,7 +2053,7 @@ def create_app(
             }
             for d in out["days"]
         ]
-        return out
+        return {**out, "tz_offset_min": settings.litellm_timezone_offset_min}
 
     @app.get("/api/usage/sessions", response_model=None)
     async def usage_sessions(
@@ -1999,7 +2063,8 @@ def create_app(
     ) -> dict[str, Any] | JSONResponse:
         start, end = _range(frm, to)
         try:
-            return await usage.sessions(start, end, page=page)
+            out = await usage.sessions(start, end, page=page)
+            return {**out, "tz_offset_min": settings.litellm_timezone_offset_min}
         except UsageError as exc:
             return _usage_error(exc)
 
@@ -2020,6 +2085,7 @@ def create_app(
         frm: str | None = Query(None, alias="from"),
         to: str | None = None,
         model: str | None = Query(None, max_length=200),
+        source: Literal["mlx-perf", "strata"] | None = None,
     ) -> dict[str, Any]:
         start, end, lo, hi = _epoch_range(frm, to)
         out = await asyncio.to_thread(
@@ -2029,16 +2095,19 @@ def create_app(
             tz_offset_min=settings.litellm_timezone_offset_min,
             slow_ttft_s=settings.perf_slow_ttft_s,
             model=model,
+            source=source,
         )
         return {
             "from": start.isoformat(),
             "to": end.isoformat(),
             "tz_offset_min": settings.litellm_timezone_offset_min,
-            "models": await asyncio.to_thread(perf.models, lo, hi),
+            "models": await asyncio.to_thread(perf.models, lo, hi, source=source),
             "source": {
-                "source": PERF_SOURCE,
-                "parser": PARSER,
-                "last_ingest": await asyncio.to_thread(perf.last_ingest, PERF_SOURCE),
+                "source": source or PERF_SOURCE,
+                "includes": [source] if source else [PERF_SOURCE, "strata"],
+                "scope": "Recorded engine requests only; excludes Splash native snapshots and LiteLLM gateway totals.",
+                "parser": PARSER if source in (None, PERF_SOURCE) else "Strata request metrics" if source == "strata" else "MLX logs + Strata request metrics",
+                "last_ingest": await asyncio.to_thread(perf.last_ingest, source or PERF_SOURCE),
             },
             "coverage": {
                 "splash": await asyncio.to_thread(
@@ -2056,13 +2125,14 @@ def create_app(
         frm: str | None = Query(None, alias="from"),
         to: str | None = None,
         model: str | None = Query(None, max_length=200),
+        source: Literal["mlx-perf", "strata"] | None = None,
         origin: Literal["client", "quality"] | None = None,
     ) -> dict[str, Any]:
         start, end, lo, hi = _epoch_range(frm, to)
         tz = settings.litellm_timezone_offset_min
 
         def both() -> tuple[dict[str, Any], dict[str, Any]]:
-            kw: dict[str, Any] = {"tz_offset_min": tz, "model": model, "origin": origin}
+            kw: dict[str, Any] = {"tz_offset_min": tz, "model": model, "origin": origin, "source": source}
             return perf.tokens(lo, hi, group="day", **kw), perf.tokens(lo, hi, group="model", **kw)
 
         days, models = await asyncio.to_thread(both)
@@ -2090,20 +2160,23 @@ def create_app(
         profile: str | None = Query(None, max_length=128),
         fingerprint: str | None = Query(None, max_length=128),
         limit: int = Query(200, ge=1, le=500),
+        epoch: str | None = Query(None, max_length=128),
+        before: str | None = Query(None, max_length=100),
     ) -> dict[str, Any]:
         start, end, lo, hi = _epoch_range(frm, to)
+        try:
+            page = await asyncio.to_thread(
+                native_telemetry.page, lo, hi, profile=profile, fingerprint=fingerprint,
+                epoch=epoch, limit=limit, before=before,
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
         return {
             "from": start.isoformat(),
             "to": end.isoformat(),
+            "tz_offset_min": settings.litellm_timezone_offset_min,
             "source": "splash",
-            "readings": await asyncio.to_thread(
-                native_telemetry.readings,
-                lo,
-                hi,
-                profile=profile,
-                fingerprint=fingerprint,
-                limit=limit,
-            ),
+            **page,
             "coverage": await asyncio.to_thread(
                 native_telemetry.coverage,
                 settings.splash_enabled,
@@ -2118,6 +2191,7 @@ def create_app(
         frm: str | None = Query(None, alias="from"),
         to: str | None = None,
         model: str | None = Query(None, max_length=200),
+        source: Literal["mlx-perf", "strata"] | None = None,
         state: REQUEST_STATES | None = None,
         slow: bool = False,
         limit: int = Query(50, ge=1, le=200),
@@ -2129,6 +2203,7 @@ def create_app(
                 lo,
                 hi,
                 model=model,
+            source=source,
                 state=state,
                 min_ttft_s=settings.perf_slow_ttft_s if slow else None,
                 limit=limit,
@@ -2157,12 +2232,12 @@ def create_app(
     async def availability_view(
         frm: str | None = Query(None, alias="from"),
         to: str | None = None,
-        source: Literal["mlx", "splash"] = "mlx",
+        source: Literal["mlx", "splash", "strata"] = "mlx",
         profile: str | None = Query(None, max_length=128),
     ) -> dict[str, Any]:
         start, end, lo, hi = _epoch_range(frm, to)
         interval = settings.availability_interval_s
-        if source == "splash":
+        if source in {"splash", "strata"}:
             out = await asyncio.to_thread(
                 backend_availability.query,
                 source,
@@ -2173,7 +2248,9 @@ def create_app(
                 now=time.time(),
                 profile=profile,
             )
-            return {"from": start.isoformat(), "to": end.isoformat(), **out}
+            return {"from": start.isoformat(), "to": end.isoformat(), "source": source,
+                    "range_start": lo, "range_end": hi,
+                    "tz_offset_min": settings.litellm_timezone_offset_min, **out}
         samples = await asyncio.to_thread(availability.samples, lo, hi, 2 * interval)
         out = summarize(
             samples,
@@ -2183,7 +2260,9 @@ def create_app(
             tz_offset_min=settings.litellm_timezone_offset_min,
             now=time.time(),
         )
-        return {"from": start.isoformat(), "to": end.isoformat(), **out}
+        return {"from": start.isoformat(), "to": end.isoformat(), "source": source,
+                    "range_start": lo, "range_end": hi,
+                    "tz_offset_min": settings.litellm_timezone_offset_min, **out}
 
     @app.get("/api/maintenance/log-rotation")
     async def log_rotation_state() -> dict[str, Any]:

@@ -47,9 +47,9 @@ async function refreshDiagnostics() {
 }
 
 function refreshAll() {
-  refreshOpen().catch(() => {});
-  refreshHistory().catch(() => {});
-  refreshDiagnostics().catch(() => {});
+  trackSection("alert-list", refreshOpen);
+  trackSection("history-list", refreshHistory);
+  trackSection("diag-list", refreshDiagnostics);
 }
 
 document.getElementById("ack-all").addEventListener("click", async () => {
@@ -57,7 +57,7 @@ document.getElementById("ack-all").addEventListener("click", async () => {
   refreshStatus();
   refreshAll();
 });
-document.getElementById("diag-refresh").addEventListener("click", () => refreshDiagnostics().catch(() => {}));
-document.getElementById("history-more").addEventListener("click", () => refreshHistory(true).catch(() => {}));
+document.getElementById("diag-refresh").addEventListener("click", () => trackSection("diag-list", refreshDiagnostics));
+document.getElementById("history-more").addEventListener("click", () => trackSection("history-list", () => refreshHistory(true)));
 refreshAll();
-setInterval(() => refreshOpen().catch(() => {}), 15000);
+setInterval(() => trackSection("alert-list", refreshOpen), 15000);

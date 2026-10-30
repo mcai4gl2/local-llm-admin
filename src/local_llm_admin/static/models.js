@@ -1,5 +1,6 @@
 "use strict";
 let pollTimer = null;
+let lifecyclePending = false;
 
 const DEFAULT_CONFIRM = document.getElementById("confirm-body").textContent;
 
@@ -14,38 +15,54 @@ function confirmAction(title, body = DEFAULT_CONFIRM) {
 }
 
 async function runAction(path, body, title) {
-  if (!(await confirmAction(title))) return;
+  if (lifecyclePending || !EngineUI.canUseModelActions(lastStatus)) return;
+  lifecyclePending = true; syncLifecycle();
   try {
+    if (!(await confirmAction(title))) return;
+    if (!EngineUI.canUseModelActions(lastStatus)) return;
     const job = await api(path, { method: "POST", json: body });
-    showJob(job);
+    showJob(job, true);
     pollJob(job.id);
-  } catch (e) {
-    alert(e.message);
-  }
+  } catch (e) { alert(e.message); }
+  finally { lifecyclePending = false; syncLifecycle(); }
 }
 
-function showJob(job) {
+function showJob(job, focus = false) {
   document.getElementById("job-card").hidden = false;
-  document.getElementById("job-title").textContent = `${job.action} ${job.name || ""}`;
+  syncLifecycle();
+  document.getElementById("job-title").textContent = `${job.action} ${job.name ? EngineUI.wireLabel(job.name) : ""}`;
   const s = document.getElementById("job-status");
   s.dataset.state = job.status; s.textContent = job.status;
   const out = document.getElementById("job-output");
   out.textContent = job.output || "";
   out.scrollTop = out.scrollHeight;
+  if (focus) {
+    const card = document.getElementById("job-card");
+    card.focus({preventScroll: true}); card.scrollIntoView({block: "nearest"});
+  }
 }
 
 function pollJob(id) {
   clearInterval(pollTimer);
-  pollTimer = setInterval(async () => {
-    const job = await api(`/api/jobs/${encodeURIComponent(id)}`);
-    showJob(job);
-    if (job.status !== "running") {
-      clearInterval(pollTimer); pollTimer = null; userPicked = false;
-      loadModels(); loadHistory(); loadInventory(true).catch(() => {}); loadComfy().catch(() => {}); refreshStatus();
-      loadSidecars().catch(() => {});
-      loadServices().catch(() => {});
-    }
-  }, 1000);
+  let pending = false, lastSuccess = null;
+  const tick = async () => {
+    if (pending) return;
+    pending = true;
+    try {
+      const job = await api(`/api/jobs/${encodeURIComponent(id)}`);
+      showJob(job);
+      lastSuccess = Date.now() / 1000;
+      document.getElementById("job-poll-state").textContent = "Updated " + fmt.time(lastSuccess);
+      if (job.status !== "running") {
+        clearInterval(pollTimer); pollTimer = null; userPicked = false; syncLifecycle();
+        loadModels(); loadHistory(); loadInventory(true); loadComfy(); refreshStatus(); loadSidecars(); loadServices();
+      }
+    } catch (e) {
+      document.getElementById("job-poll-state").textContent = `Job status unavailable: ${e.message}. Last success ${fmt.time(lastSuccess)}. Waiting to verify completion.`;
+    } finally { pending = false; }
+  };
+  pollTimer = setInterval(tick, 1000);
+  syncLifecycle();
 }
 
 const STATE_TEXT = { complete: "complete", downloading: "downloading", incomplete: "incomplete",
@@ -72,12 +89,12 @@ async function registerDir(d) {
   try {
     const job = await api("/api/models/register", { method: "POST",
       json: { dir_name: d.dir_name, name: document.getElementById("reg-name").value.trim() } });
-    showJob(job); pollJob(job.id);
+    showJob(job, true); pollJob(job.id);
   } catch (e) { alert(e.message); }
 }
 
 function renderDisk(discovered) {
-  document.getElementById("disk-checked").textContent = `checked ${new Date().toLocaleTimeString()}`;
+  document.getElementById("disk-checked").textContent = "checked " + fmt.time(Date.now() / 1000);
   const rows = discovered.map((d) => el("tr", {},
     el("td", {}, el("code", { text: d.dir_name })),
     el("td", {}, weightsCell(d)),
@@ -108,7 +125,7 @@ function checksCell(results, profileFp) {
     stale ? el("span", { class: "pill", title: "checked with other launch settings; re-run on the Quality page", text: "stale" }) : null);
 }
 
-async function loadModels() {
+async function fetchModels() {
   const { models, discovered } = await api("/api/models");
   const compat = await api("/api/quality/latest").then((r) => r.compatibility).catch(() => ({}));
   engineModels = models;
@@ -124,9 +141,10 @@ async function loadModels() {
     el("td", { class: "actions" },
       el("button", { onclick: () => openProfile(m.name), text: "Settings", title: `profile ${m.profile_fingerprint}` }),
       el("button", { onclick: () => removeModel(m.name), text: "Remove", disabled: m.selected }),
-      el("button", { disabled: !m.dir_exists || !m.has_config || m.weights?.state !== "complete" || !EngineUI.canUseModelActions(lastStatus), onclick: () => runAction("/api/models/switch", { name: m.name }, `Switch to ${m.name}?`), text: m.selected ? "Restart" : "Switch" }))));
+      el("button", { "data-mlx-action": true, "data-unavailable": !m.dir_exists || !m.has_config || m.weights?.state !== "complete" ? "true" : "false", disabled: !m.dir_exists || !m.has_config || m.weights?.state !== "complete" || !EngineUI.canUseModelActions(lastStatus), onclick: () => runAction("/api/models/switch", { name: m.name }, `Switch to ${m.name}?`), text: m.selected ? "Restart" : "Switch" }))));
   document.querySelector("#models-table tbody").replaceChildren(...(rows.length ? rows :
     [el("tr", {}, el("td", { colspan: 6, class: "muted", text: "No models (is the drive mounted?)" }))]));
+  syncLifecycle();
 }
 
 async function removeModel(name) {
@@ -154,11 +172,11 @@ async function removeModel(name) {
   try {
     const job = await api("/api/models/remove", { method: "POST",
       json: { name, delete_files: del.checked, confirmation: del.checked ? confirmBox.value : null } });
-    showJob(job); pollJob(job.id);
+    showJob(job, true); pollJob(job.id);
   } catch (e) { alert(e.message); }
 }
 
-async function loadInventory(refresh = false) {
+async function fetchInventory(refresh = false) {
   const inv = await api(`/api/models/inventory${refresh ? "?refresh=true" : ""}`);
   document.getElementById("inv-checked").textContent = inv.available ? `checked ${fmt.time(inv.checked_at)}` : inv.reason;
   if (!inv.available) return;
@@ -188,11 +206,15 @@ function evalCell(ev) {
   return parts.length ? parts.join(" · ") : "—";
 }
 
-async function loadHistory() {
+function historyIdentity(value) {
+  return el("div", {}, el("span", {text: EngineUI.wireLabel(value)}), value ? el("details", {}, el("summary", {text: "Stored ID"}), el("code", {text: value})) : null);
+}
+
+async function fetchHistory() {
   const { history } = await api("/api/history?limit=100");
   document.querySelector("#history-table tbody").replaceChildren(...history.map((h) => el("tr", {},
-    el("td", { text: fmt.time(h.ts) }), el("td", { text: h.action }), el("td", { text: h.from_name || "—" }),
-    el("td", { text: h.to_name || "—" }), el("td", { class: ["succeeded", "observed"].includes(h.result) ? "ok" : "bad", text: h.result }),
+    el("td", { text: fmt.time(h.ts) }), el("td", { text: h.action }), el("td", {}, historyIdentity(h.from_name)),
+    el("td", {}, historyIdentity(h.to_name)), el("td", { class: ["succeeded", "observed"].includes(h.result) ? "ok" : "bad", text: h.result }),
     el("td", { class: "num", text: h.duration_s === null ? "—" : `${h.duration_s.toFixed(0)} s` }), el("td", { text: h.source }))));
 }
 
@@ -214,16 +236,42 @@ function renderEngineOptions() {
   sel.replaceChildren(...options.map(t => el("option", {value: t.value, text: t.label})));
   sel.value = current && options.some(t => t.value === current)
     ? current : EngineUI.defaultTarget(lastStatus, engineModels);
+  syncLifecycle();
 }
 
-async function applyEngine() {
+function syncLifecycle() {
+  const gate = EngineUI.lifecycle(lastStatus);
+  const busy = lifecyclePending || pollTimer !== null;
+  const mlx = EngineUI.canUseModelActions(lastStatus) && !busy && document.getElementById("library-card")?.dataset.stale !== "true";
+  document.getElementById("btn-start").disabled = !mlx || !engineModels.some(m => m.selected);
+  document.getElementById("btn-stop").disabled = !mlx || lastStatus?.engine?.active === "none";
+  for (const button of document.querySelectorAll("[data-mlx-action]")) {
+    button.disabled = !mlx || button.dataset.unavailable === "true";
+  }
   const target = document.getElementById("engine-target").value;
+  document.getElementById("engine-apply").disabled = !gate.ok || busy || !target || target === EngineUI.currentTarget(lastStatus);
+  const reason = document.getElementById("engine-action-reason");
+  if (!gate.ok || busy) for (const id of ["sidecar-start", "sidecar-stop", "embed-start", "embed-stop"]) {
+    const button = document.getElementById(id); if (button) button.disabled = true;
+  }
+  if (reason) reason.textContent = busy ? "An engine action is pending." : gate.text ||
+    (target === EngineUI.currentTarget(lastStatus) ? "Choose a different serving target to apply a change." : "Review the selected target before applying.");
+  const mlxReason = document.getElementById("mlx-action-reason");
+  if (mlxReason) mlxReason.textContent = mlx ? "MLX lifecycle controls" : gate.text || "These controls apply to MLX only. Use the engine selector above to switch back to MLX.";
+}
+async function applyEngine() {
+  if (lifecyclePending || pollTimer || !EngineUI.lifecycle(lastStatus).ok) return;
+  const target = document.getElementById("engine-target").value;
+  if (!target || target === EngineUI.currentTarget(lastStatus)) return;
   const prompt = EngineUI.prompt(lastStatus, target);
-  if (!(await confirmAction(prompt.title, prompt.body))) return;
+  lifecyclePending = true; syncLifecycle();
   try {
+    if (!(await confirmAction(prompt.title, prompt.body))) return;
+    if (!EngineUI.lifecycle(lastStatus).ok) return;
     const job = await setEngineWithForce(target, confirmAction);
-    if (job) { showJob(job); pollJob(job.id); }
+    if (job) { showJob(job, true); pollJob(job.id); }
   } catch (e) { alert(e.message); }
+  finally { lifecyclePending = false; syncLifecycle(); }
 }
 
 function renderBackendCards(st) {
@@ -233,15 +281,27 @@ function renderBackendCards(st) {
   container.replaceChildren(...cards.map(b => {
     const status = st.engine?.[b.id] || {};
     const target = b.targets.find(t => t.value === b.id + ":" + b.reference) || {};
-    const facts = [["Profile", b.reference || "—"], ["Model", status.model || "—"],
+    const context = EngineUI.contexts(st, b);
+    const previous = container.querySelector(`[data-backend="${b.id}"]`);
+    const opened = previous ? previous.open : st.engine.active === b.id;
+    const facts = [["Profile", EngineUI.targetLabel(b, EngineUI.target(st, b))], ["Model", status.model || "—"],
       ["Checkpoint", target.cohort || "—"],
-      ["Context", EngineUI.context(status.max_context || target.max_context) || "—"],
-      ["Reasoning", target.reasoning ? "On by default" : "—"], ["Usage", "unavailable"]];
-    return el("section", {class: "card"},
-      el("div", {class: "card-head"}, el("h2", {text: b.label}),
-        el("span", {class: "badge", "data-state": b.id + "-" + b.state, text: EngineUI.badge(st.engine.active === b.id ? st : {engine: {active: b.id, backends: st.engine.backends}})})),
+      ["Configured context", EngineUI.context(context.configured) || "Not selected"],
+      ["Loaded context", (EngineUI.context(context.loaded) || "Unknown") + " · " + context.state],
+      ["Reasoning", target.reasoning ? "On by default" : "—"],
+      ["Response usage", "When reported by the runtime"],
+      ["Native counters", st.measurement_coverage?.[b.id]?.coverage === "aggregate_snapshots" ? (st.measurement_coverage[b.id].stale ? "Stale · see Performance" : "Available · cumulative execution") : "Not collected · see Performance"],
+      ["All-client request history", "Unsupported"],
+      ["Gateway accounting", "LiteLLM Usage only"]];
+    return el("details", {class: "card", "data-backend": b.id, open: opened},
+      el("summary", {}, el("strong", {text: b.label}),
+        el("span", {class: "badge", "data-tone": EngineUI.tone(st, b), text: EngineUI.badge(st.engine.active === b.id ? st : {engine: {active: b.id, backends: st.engine.backends}})})),
       el("p", {class: "muted", text: b.note || ""}),
-      el("dl", {class: "facts"}, ...facts.map(([key, value]) => el("div", {}, el("dt", {text: key}), el("dd", {text: value})))));
+      el("dl", {class: "facts"}, ...facts.map(([key, value]) => el("div", {}, el("dt", {text: key}), el("dd", {text: value})))),
+      el("p", {class: "muted", text: "Context is the total prompt plus output window."}),
+      el("a", {href: "/logs?source=" + encodeURIComponent(b.id), text: "Open engine logs"}),
+      el("details", {}, el("summary", {text: "Technical identity"}), el("p", {text: "Profile ID: " + (b.reference || "unknown")})));
+
   }));
 }
 
@@ -253,11 +313,14 @@ function renderStrata(st) {
   if (card.hidden || !s) return;
   const m = s.metrics || {};
   const badge = document.getElementById("strata-state");
-  badge.dataset.state = !s.running ? "stopped" : s.ready ? "strata" : "strata-starting";
+  badge.dataset.tone = EngineUI.tone(st, st.engine?.backends?.strata);
   badge.textContent = !s.running ? "Stopped" : s.ready ? (m.state || "Loaded") : "Loading";
   const dash = (v, f = String) => (v === null || v === undefined ? "—" : f(v));
+  const contexts = EngineUI.contexts(st, st.engine?.backends?.strata);
   const facts = [
-    ["Model", dash(s.model)], ["Pack", dash(s.pack)], ["Context", dash(s.max_context, fmt.compact)],
+    ["Model", dash(s.model)], ["Pack", dash(s.pack)],
+    ["Configured context", contexts.configured ? EngineUI.context(contexts.configured) : "Unrecorded"],
+    ["Loaded context", contexts.loaded ? EngineUI.context(contexts.loaded) + " · " + contexts.state : "Unverified"],
     ["Queued", dash(m.queued)], ["Live decode", fmt.tok(m.tok_s)],
     ["Requests", dash(m.requests)], ["Mean prompt", fmt.tok(m.prompt_tok_s)],
     ["Mean decode", fmt.tok(m.decode_tok_s)], ["PID", dash(s.pid)],
@@ -265,7 +328,7 @@ function renderStrata(st) {
   document.getElementById("strata-facts").replaceChildren(...facts.map(([k, v]) => el("div", {}, el("dt", { text: k }), el("dd", { text: v }))));
 }
 
-async function loadComfy() {
+async function fetchComfy() {
   const c = await api("/api/comfyui");
   document.getElementById("comfy-link").href = c.public_url;
   const facts = [
@@ -400,18 +463,24 @@ onStatus((st) => {
   lastStatus = st;
   renderEngineOptions();
   renderBackendCards(st);
-  if (engineChanged) {  // redraw what depends on the engine: buttons, default target, card
+  if (engineChanged) {
+    document.getElementById("comfy-card").open = st.engine?.active === "comfyui";
+    document.getElementById("strata-card").open = st.engine?.active === "strata";
     renderEngineOptions();
     loadModels().catch(() => {});
     loadComfy().catch(() => {});
   }
   const cur = document.getElementById("engine-current");
-  cur.dataset.state = st.state; cur.textContent = engineLabel(st);
+  cur.dataset.tone = EngineUI.tone(st); cur.textContent = engineLabel(st);
+  const logs = document.getElementById("engine-logs");
+  const backend = EngineUI.active(st); logs.hidden = !backend?.log_source;
+  if (backend?.log_source) logs.href = "/logs?source=" + encodeURIComponent(backend.log_source);
+  syncLifecycle();
   renderStrata(st);
   syncQueuePolling(st);
 });
 document.getElementById("engine-apply").addEventListener("click", applyEngine);
-document.getElementById("engine-target").addEventListener("change", () => { userPicked = true; });
+document.getElementById("engine-target").addEventListener("change", () => { userPicked = true; syncLifecycle(); });
 
 onStatus((st) => { if (st.job && !pollTimer) { showJob(st.job); pollJob(st.job.id); } });
 loadModels();
@@ -429,7 +498,7 @@ const SIDECAR_LOAD = { openjev: "It loads DiffusionGemma (~20 GB) next to the ru
 const SIDECAR_TODAY = { openjev: ["Reads today", "/api/decision/history?days=1"], "qwen-tts": ["Speech today", "/api/tts/history?days=1"] };
 let sidecars = null;
 
-async function loadSidecars() {
+async function fetchSidecars() {
   if (!document.getElementById("sidecar-card")) return;
   sidecars = await api("/api/sidecars");
   const sel = document.getElementById("sidecar-select");
@@ -441,15 +510,17 @@ async function loadSidecars() {
   const s = sidecars.sidecars.find((x) => x.name === sel.value) || sidecars.sidecars[0];
   document.getElementById("sidecar-page").href = SIDECAR_PAGE[s.name] || "#";
   document.getElementById("sidecar-conflict").hidden = !sidecars.conflict;
-  const state = s.running ? (s.ready ? `running (pid ${s.pid})` : "starting") : "stopped";
+  const state = s.availability?.reason || (s.running ? (s.ready ? "Ready" : "Starting; waiting for readiness") : "Stopped");
   const facts = [
     ["State", state], ["Memory (RSS)", fmt.bytes(s.rss_bytes)], ["Weights", s.weights || "—"],
     ["Listens on", s.listen], ["Allowed MLX models", s.allowed_mlx.join(", ") || "none"],
   ];
   const today = SIDECAR_TODAY[s.name];
   if (today) {
-    const day = (await api(today[1]).catch(() => null))?.daily?.at(-1);
-    facts.push([today[0], day ? `${fmt.num(day.requests)} · p50 ${day.p50_ms === null ? "—" : `${Math.round(day.p50_ms)} ms`}` : "none"]);
+    try {
+      const day = (await api(today[1])).daily?.at(-1);
+      facts.push([today[0], day ? `${fmt.num(day.requests)} · p50 ${day.p50_ms === null ? "—" : `${Math.round(day.p50_ms)} ms`}` : "none"]);
+    } catch (e) { facts.push([today[0], "Unavailable: " + e.message]); }
   }
   document.getElementById("sidecar-facts").replaceChildren(...facts.map(([k, v]) => el("div", {}, el("dt", { text: k }), el("dd", { text: v }))));
   const b = s.budget;
@@ -458,8 +529,8 @@ async function loadSidecars() {
   const refusal = document.getElementById("sidecar-refusal");
   refusal.hidden = s.running || b.ok;
   refusal.textContent = b.reasons.join("; ");
-  const jobBusy = Boolean(lastStatus?.job);
-  document.getElementById("sidecar-start").disabled = s.running || !b.ok || jobBusy || sidecars.conflict;
+  const jobBusy = !EngineUI.lifecycle(lastStatus).ok || lifecyclePending || pollTimer !== null;
+  document.getElementById("sidecar-start").disabled = s.running || !b.ok || s.availability?.owner || jobBusy || sidecars.conflict;
   document.getElementById("sidecar-stop").disabled = !s.running || jobBusy;
 }
 
@@ -468,7 +539,7 @@ function sidecarRefused(e) {
   refusal.textContent = e.message; refusal.hidden = false;
 }
 
-async function sidecarStart() {
+async function submitSidecarStart() {
   const name = document.getElementById("sidecar-select").value;
   const s = sidecars.sidecars.find((x) => x.name === name);
   const other = sidecars.sidecars.find((x) => x.running && x.name !== name);
@@ -476,19 +547,21 @@ async function sidecarStart() {
   const body = (other ? `${other.title} stops first; its LAN clients get 503 until it is started again. ` : "")
     + `${SIDECAR_LOAD[name] || ""} While it works, the chat model generates more slowly.`;
   if (!(await confirmAction(title, body))) return;
+  if (!EngineUI.lifecycle(lastStatus).ok) return;
   try {
     const job = await api(`/api/sidecars/${encodeURIComponent(name)}/start`, { method: "POST", json: { confirm: Boolean(other) } });
-    showJob(job); pollJob(job.id);
+    showJob(job, true); pollJob(job.id);
   } catch (e) { sidecarRefused(e); }
 }
 
-async function sidecarStop() {
+async function submitSidecarStop() {
   const name = document.getElementById("sidecar-select").value;
   const s = sidecars.sidecars.find((x) => x.name === name);
   if (!(await confirmAction(`Stop ${s.title}?`, "The test page and LAN clients fail until it is started again."))) return;
+  if (!EngineUI.lifecycle(lastStatus).ok) return;
   try {
     const job = await api(`/api/sidecars/${encodeURIComponent(name)}/stop`, { method: "POST" });
-    showJob(job); pollJob(job.id);
+    showJob(job, true); pollJob(job.id);
   } catch (e) { sidecarRefused(e); }
 }
 
@@ -503,20 +576,21 @@ if (document.getElementById("sidecar-card")) {
 // --- embedding service (M8) ---------------------------------------------------------
 let services = null;
 
-async function loadServices() {
+async function fetchServices() {
   if (!document.getElementById("embed-card")) return;
   services = await api("/api/services");
   const s = services.services.find((x) => x.name === "qwen-embed");
   if (!s) return;
-  const state = s.running ? (s.ready ? `running (pid ${s.pid})` : "starting")
-    : s.paused ? "paused while ComfyUI runs" : s.intent === "running" ? "down" : "stopped";
+  const state = s.availability?.reason || (s.running ? (s.ready ? "Ready" : "Starting; waiting for readiness") : s.intent === "running" ? "Unavailable (expected running)" : "Stopped");
   const facts = [
     ["State", state], ["Intent", s.intent], ["Models", s.models.join(" · ")],
     ["Memory (RSS)", fmt.bytes(s.rss_bytes)], ["Weights", s.weights || "—"], ["Listens on", s.listen],
     ["Allowed MLX models", s.allowed_mlx.join(", ") || "none"],
   ];
-  const day = (await api("/api/embed/history?days=1").catch(() => null))?.daily?.at(-1);
-  facts.push(["Requests today", day ? `${fmt.num(day.requests)} · p50 ${day.p50_ms === null ? "—" : `${Math.round(day.p50_ms)} ms`}` : "none"]);
+  try {
+    const day = (await api("/api/embed/history?days=1")).daily?.at(-1);
+    facts.push(["Requests today", day ? `${fmt.num(day.requests)} · p50 ${day.p50_ms === null ? "—" : `${Math.round(day.p50_ms)} ms`}` : "none"]);
+  } catch (e) { facts.push(["Requests today", "Unavailable: " + e.message]); }
   document.getElementById("embed-facts").replaceChildren(...facts.map(([k, v]) => el("div", {}, el("dt", { text: k }), el("dd", { text: v }))));
   const b = s.budget;
   const lines = s.running ? [] : [...b.lines, b.ok ? "A start passes the memory check now." : "A start would be refused:"];
@@ -524,21 +598,22 @@ async function loadServices() {
   const refusal = document.getElementById("embed-refusal");
   refusal.hidden = s.running || b.ok;
   refusal.textContent = b.reasons.join("; ");
-  const jobBusy = Boolean(lastStatus?.job);
-  document.getElementById("embed-start").disabled = s.running || !b.ok || jobBusy;
+  const jobBusy = !EngineUI.lifecycle(lastStatus).ok || lifecyclePending || pollTimer !== null;
+  document.getElementById("embed-start").disabled = s.running || !b.ok || s.availability?.owner || jobBusy;
   document.getElementById("embed-stop").disabled = !s.running || jobBusy;
 }
 
-async function embedAction(action) {
+async function submitEmbedAction(action) {
   const start = action === "start";
   const title = start ? "Start the embeddings service?" : "Stop the embeddings service?";
   const body = start
     ? "It loads Qwen3-Embedding-4B and Qwen3-Reranker-0.6B (~7 GB) next to the running model and stays on until you stop it. The chat model is slower while it embeds."
     : "Cortex and other LAN clients get 503 until it is started again. It is not restarted automatically.";
   if (!(await confirmAction(title, body))) return;
+  if (!EngineUI.lifecycle(lastStatus).ok) return;
   try {
     const job = await api(`/api/services/qwen-embed/${action}`, { method: "POST" });
-    showJob(job); pollJob(job.id);
+    showJob(job, true); pollJob(job.id);
   } catch (e) {
     const r = document.getElementById("embed-refusal");
     r.textContent = e.message; r.hidden = false;
@@ -570,7 +645,7 @@ async function dlAction(path, what) {
   loadDownloads().catch(() => {});
 }
 
-async function loadDownloads() {
+async function fetchDownloads() {
   const { runs, allowed_owners } = await api("/api/downloads/runs");
   document.getElementById("dl-owners").textContent = `allowed owners: ${allowed_owners}`;
   const rows = runs.map((r) => el("tr", {},
@@ -662,7 +737,7 @@ function readFields(section, fields) {
 }
 
 async function afterProfileJob(job, name) {
-  showJob(job); pollJob(job.id);
+  showJob(job, true); pollJob(job.id);
   for (let i = 0; i < 60; i++) {
     const j = await api(`/api/jobs/${encodeURIComponent(job.id)}`);
     if (j.status !== "running") {
@@ -701,4 +776,50 @@ async function openProfile(name) {
   document.getElementById("pf-error").textContent = "";
   try { await renderProfile(name); } catch (e) { alert(e.message); return; }
   document.getElementById("profile-dialog").showModal();
+}
+
+async function loadModels() {
+  if (!document.getElementById("library-card")) return;
+  await trackSection("library-card", () => fetchModels());
+  syncLifecycle();
+}
+
+async function loadInventory(refresh = false) {
+  if (!document.getElementById("inventory-card")) return;
+  await trackSection("inventory-card", () => fetchInventory(refresh));
+}
+
+async function loadHistory() {
+  if (!document.getElementById("history-card")) return;
+  await trackSection("history-card", () => fetchHistory());
+}
+
+async function loadComfy() {
+  if (!document.getElementById("comfy-card")) return;
+  await trackSection("comfy-card", () => fetchComfy());
+}
+
+async function loadSidecars() {
+  if (!document.getElementById("sidecar-card")) return;
+  await trackSection("sidecar-card", () => fetchSidecars());
+}
+
+async function loadServices() {
+  if (!document.getElementById("embed-card")) return;
+  await trackSection("embed-card", () => fetchServices());
+}
+
+async function serviceAction(buttonId, sectionId, action) {
+  const button = document.getElementById(buttonId), section = document.getElementById(sectionId);
+  if (button.disabled || section.dataset.stale === "true" || lifecyclePending || pollTimer || !EngineUI.lifecycle(lastStatus).ok) return;
+  lifecyclePending = true; syncLifecycle();
+  try { await action(); }
+  finally { lifecyclePending = false; syncLifecycle(); loadSidecars(); loadServices(); }
+}
+async function sidecarStart() { return serviceAction("sidecar-start", "sidecar-card", submitSidecarStart); }
+async function sidecarStop() { return serviceAction("sidecar-stop", "sidecar-card", submitSidecarStop); }
+async function embedAction(action) { return serviceAction("embed-" + action, "embed-card", () => submitEmbedAction(action)); }
+
+async function loadDownloads() {
+  await trackSection("dl-runs", fetchDownloads);
 }

@@ -8,9 +8,10 @@
     <form id="embed-sim-form">
       <div class="card-head"><h2>Similarity</h2><span class="muted" id="embed-dims"></span></div>
       <p class="muted">One text per line (2–8). Related lines should score close to 1, unrelated ones much lower.</p>
+      <label for="embed-texts">Texts, one per line</label>
       <textarea id="embed-texts" rows="8" required placeholder="how do I deploy the admin&#10;Run ops/deploy-mac.sh from the dev container.&#10;Paris is the capital of France."></textarea>
       <label class="check"><input type="checkbox" id="embed-query-first"> Treat the first line as a query (adds Qwen3's retrieval instruction)</label>
-      <div class="actions"><button type="submit" id="embed-sim-run" class="primary">Compare</button></div>
+      <div class="actions"><button type="submit" id="embed-sim-run" disabled class="primary">Compare</button></div>
     </form>
     <div id="embed-sim-error" class="error" hidden></div>
     <div class="table-wrap"><table id="embed-matrix"><tbody></tbody></table></div>
@@ -19,10 +20,11 @@
     <form id="embed-rr-form">
       <div class="card-head"><h2>Rerank</h2></div>
       <label>Query <input id="embed-rr-query" required></label>
+      <label for="embed-rr-docs">Documents, one per line</label>
       <textarea id="embed-rr-docs" rows="6" required placeholder="One document per line"></textarea>
       <div class="actions">
         <button type="button" id="embed-curl">Copy as curl</button>
-        <button type="submit" id="embed-rr-run" class="primary">Rerank</button>
+        <button type="submit" id="embed-rr-run" disabled class="primary">Rerank</button>
       </div>
     </form>
     <div id="embed-rr-error" class="error" hidden></div>

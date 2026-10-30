@@ -181,3 +181,32 @@ def test_missing_field_does_not_erase_monotonic_regression_baseline(tmp_path: Pa
     regressed["counters"]["completed"] = 1
     assert store.record(regressed, now=102) == 0
     assert store.coverage(True, now=103)["error"] == "counter_regression"
+
+
+def test_snapshot_cursor_is_stable_for_equal_timestamps_and_catalog_is_not_page_bound(tmp_path: Path) -> None:
+    store = EngineTelemetryStore(tmp_path / "admin.sqlite")
+    first = reading()
+    store.record(first, now=100)
+    other = reading(profile="modified", fingerprint="fp-b")
+    store.record(other, now=101)
+    # The cursor must distinguish IDs, including externally restored equal timestamps.
+    with store._conn() as conn:
+        conn.execute("UPDATE engine_readings SET observed=100")
+    page = store.page(0, 200, limit=1)
+    assert len(page["readings"]) == 1
+    assert page["next"] is not None
+    assert {p["profile"] for p in page["profiles"]} == {"stock", "modified"}
+    older = store.page(0, 200, limit=1, before=page["next"])
+    assert older["next"] is None
+    assert older["readings"][0]["id"] != page["readings"][0]["id"]
+    assert store.page(0, 200, profile="stock", limit=1)["readings"][0]["profile"] == "stock"
+    assert store.page(0, 200, epoch=first["epoch"])["readings"][0]["epoch"] == first["epoch"]
+    with pytest.raises(ValueError, match="cursor"):
+        store.page(0, 200, before="invalid")
+
+
+@pytest.mark.parametrize("cursor", ["nan:1", "inf:1", "100:0", "100:-1", "100:1:2"])
+def test_snapshot_cursor_rejects_nonfinite_and_invalid_ids(tmp_path: Path, cursor: str) -> None:
+    store = EngineTelemetryStore(tmp_path / "admin.sqlite")
+    with pytest.raises(ValueError, match="cursor"):
+        store.page(0, 200, before=cursor)

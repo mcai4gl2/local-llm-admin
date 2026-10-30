@@ -233,6 +233,7 @@ class PerformanceStore(Database):
         to: float,
         *,
         model: str | None = None,
+        source: str | None = None,
         state: str | None = None,
         min_ttft_s: float | None = None,
         limit: int = 50,
@@ -244,6 +245,7 @@ class PerformanceStore(Database):
         args: list[Any] = [frm, to]
         for clause, value in (
             (" AND model = ?", model),
+            (" AND source = ?", source),
             (" AND state = ?", state),
             (" AND ttft_s >= ?", min_ttft_s),
             (" AND id < ?", before),
@@ -259,12 +261,12 @@ class PerformanceStore(Database):
         rows = rows[:limit]
         return {"requests": rows, "next": rows[-1]["id"] if more else None}
 
-    def models(self, frm: float, to: float) -> list[str]:
+    def models(self, frm: float, to: float, *, source: str | None = None) -> list[str]:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT DISTINCT model FROM inference_requests WHERE started >= ? AND started < ?"
-                " AND model IS NOT NULL ORDER BY model",
-                (frm, to),
+                " AND model IS NOT NULL" + (" AND source=?" if source else "") + " ORDER BY model",
+                (frm, to, source) if source else (frm, to),
             ).fetchall()
         return [r["model"] for r in rows]
 
@@ -281,6 +283,7 @@ class PerformanceStore(Database):
         tz_offset_min: int,
         slow_ttft_s: float = 10.0,
         model: str | None = None,
+        source: str | None = None,
     ) -> dict[str, Any]:
         sql = (
             "SELECT started, model, state, complete, ttft_s, decode_tok_s, prompt_tokens,"
@@ -291,6 +294,9 @@ class PerformanceStore(Database):
         if model is not None:
             sql += " AND model = ?"
             args.append(model)
+        if source is not None:
+            sql += " AND source = ?"
+            args.append(source)
         with self._conn() as c:
             rows = c.execute(sql + " ORDER BY started", args).fetchall()
         tz = ops_tz(tz_offset_min)
@@ -334,6 +340,7 @@ class PerformanceStore(Database):
         tz_offset_min: int,
         group: TokenGroup,
         model: str | None = None,
+        source: str | None = None,
         origin: str | None = None,
     ) -> dict[str, Any]:
         """Input, cached and output tokens per ops day and/or model: live rows plus the
@@ -350,7 +357,7 @@ class PerformanceStore(Database):
         last = datetime.fromtimestamp(max(frm, to - 0.001), tz).date().isoformat()
         folded = f"SELECT date, model, {_FOLDED_SUMS} FROM token_usage_daily WHERE date >= ? AND date <= ?"
         folded_args: list[Any] = [datetime.fromtimestamp(frm, tz).date().isoformat(), last]
-        for col, value in (("model", model), ("origin", origin)):
+        for col, value in (("model", model), ("origin", origin), ("source", source)):
             if value is not None:
                 live += f" AND COALESCE({col}, '') = ?"
                 folded += f" AND {col} = ?"

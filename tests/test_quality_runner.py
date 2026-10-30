@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import subprocess
+from typing import Any
 
 import pytest
 
@@ -839,3 +840,13 @@ async def test_current_backend_readiness_refuses_loading_or_replaced_owner(
     async with httpx.AsyncClient(base_url="http://strata.test") as http:
         with pytest.raises(ModelLoadFailed, match=message):
             await qr._current_ready(http, "strata")
+
+
+async def test_current_quality_records_loaded_context_and_target_configuration(running: Any, server: Any) -> None:
+    done = await _finish(running, await running.start("benchmark", "current"))
+    identity = done["original"]["target_identities"]["qwen"]
+    assert identity["engine"] == "mlx"
+    assert identity["reference"] == "qwen"
+    assert identity["loaded_context"] == server.health["loaded_context_size"]
+    assert identity["target_label"] == "MLX · qwen"
+    assert not any(key in identity for key in ("base_url", "api_key", "model_path"))

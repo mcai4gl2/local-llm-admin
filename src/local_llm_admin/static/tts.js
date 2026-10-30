@@ -4,11 +4,12 @@
   const $ = (id) => document.getElementById(id);
   let cfg = null;
   let url = null;
+  let busy = false;
 
   function count() {
     const n = $("tts-text").value.length;
     $("tts-count").textContent = cfg ? `${fmt.num(n)} / ${fmt.num(cfg.max_chars)} characters` : "";
-    $("tts-run").disabled = !cfg || !cfg.running || n === 0 || n > cfg.max_chars;
+    $("tts-run").disabled = !serviceEligibility(cfg).ok || busy || n === 0 || n > cfg.max_chars;
   }
 
   function body() {
@@ -18,21 +19,24 @@
     return b;
   }
 
-  async function load() {
-    cfg = await api("/api/tts");
-    const sel = $("tts-voice");
-    if (!sel.options.length) {
-      for (const v of cfg.voices.length ? cfg.voices : [cfg.default_voice || ""]) sel.append(el("option", { value: v, text: v || "(default)" }));
-      if (cfg.default_voice) sel.value = cfg.default_voice;
+  watchService("/api/tts", data => {
+    cfg = data;
+    serviceNotice($("tts-disabled"), cfg);
+    if (cfg.max_chars) {
+      const sel = $("tts-voice");
+      if (!sel.options.length) {
+        for (const v of cfg.voices.length ? cfg.voices : [cfg.default_voice || ""]) sel.append(el("option", {value: v, text: v || "(default)"}));
+        if (cfg.default_voice) sel.value = cfg.default_voice;
+      }
+      $("tts-text").maxLength = cfg.max_chars;
     }
-    $("tts-text").maxLength = cfg.max_chars;
-    $("tts-disabled").hidden = cfg.running;
-    $("tts-disabled").textContent = cfg.running ? "" : "The TTS sidecar is stopped. Start it on the Models page (Sidecar card).";
     count();
-  }
+  });
 
   async function speak(ev) {
     ev.preventDefault();
+    if (!serviceEligibility(cfg).ok || busy) return;
+    busy = true;
     $("tts-error").hidden = true;
     $("tts-run").disabled = true;
     $("tts-meta").textContent = "synthesizing…";
@@ -51,10 +55,11 @@
       $("tts-audio").src = url; $("tts-audio").hidden = false;
       $("tts-download").href = url; $("tts-download").download = `speech.${$("tts-format").value}`; $("tts-download").hidden = false;
       $("tts-meta").textContent = `${resp.headers.get("x-audio-seconds")} s audio · ${resp.headers.get("x-chunks")} chunk(s) · ${(Number(resp.headers.get("x-latency-ms")) / 1000).toFixed(1)} s`;
-      loadHistory().catch(() => {});
+      trackSection("tts-daily", loadHistory);
     } catch (e) {
       $("tts-error").textContent = e.message; $("tts-error").hidden = false; $("tts-meta").textContent = "";
     } finally {
+      busy = false;
       count();
     }
   }
@@ -80,7 +85,5 @@
   $("tts-text").addEventListener("input", count);
   $("tts-form").addEventListener("submit", speak);
   $("tts-curl").addEventListener("click", curl);
-  load().catch((e) => { $("tts-disabled").textContent = e.message; $("tts-disabled").hidden = false; });
-  loadHistory().catch(() => {});
-  setInterval(() => load().catch(() => {}), 10000);
+  trackSection("tts-daily", loadHistory);
 })();

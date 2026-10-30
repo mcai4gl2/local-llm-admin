@@ -4,6 +4,7 @@ let lastStatus = null;
 let roster = [];
 let meta = null;
 let activeTimer = null;
+let qualitySubmitting = false;
 
 const OUTCOME_SEV = { pass: "ok", fail: "fail", unknown: "warn", unsupported: "" };
 const RESTORE_TEXT = { restored: "restored", not_needed: "nothing to restore", failed: "FAILED",
@@ -34,6 +35,7 @@ function effectText(kind = document.getElementById("q-kind").value, scope = docu
   const parts = [];
   const policy = EngineUI.quality(st, kind, scope);
   if (policy.handled) return policy;
+  if (!roster.length) return {ok: false, text: "No registered MLX models are available. Add a model on Models or select a ready engine."};
   const n = scope === "all" ? roster.length : 1;
   const target = scope === "model" ? chosen : scope === "all" ? null : cur;
   if (engine === "mlx") {
@@ -49,26 +51,39 @@ function effectText(kind = document.getElementById("q-kind").value, scope = docu
 }
 
 function renderEffect() {
+  const backend = EngineUI.active(lastStatus);
+  const currentOnly = Boolean(backend?.operations.includes("quality") && !backend.operations.includes("multi-model"));
+  const kind = document.getElementById("q-kind"), scope = document.getElementById("q-scope");
+  for (const option of kind.options) option.disabled = currentOnly && option.value === "benchmark";
+  if (kind.selectedOptions[0]?.disabled) kind.value = "compatibility";
+  for (const option of scope.options) {
+    option.disabled = currentOnly && option.value !== "current";
+    if (option.value === "current") option.textContent = "Current · " + EngineUI.label(lastStatus);
+  }
+  if (scope.selectedOptions[0]?.disabled) scope.value = "current";
+  document.getElementById("q-model-label").hidden = scope.value !== "model";
   const e = effectText();
   document.getElementById("q-effect").textContent = e.text;
-  document.getElementById("quality-start").disabled = !e.ok || Boolean(lastStatus?.job);
+  document.getElementById("quality-start").disabled = !e.ok || qualitySubmitting || Boolean(lastStatus?.job);
   const st = lastStatus || {};
   document.getElementById("engine-now").textContent = EngineUI.label(st);
 }
 
 async function start() {
-  const kind = document.getElementById("q-kind").value;
-  const scope = document.getElementById("q-scope").value;
-  const body = { kind, scope };
+  if (qualitySubmitting || !effectText().ok) return;
+  const kind = document.getElementById("q-kind").value, scope = document.getElementById("q-scope").value;
+  const body = {kind, scope};
   if (scope === "model") body.model = document.getElementById("q-model").value;
   const e = effectText();
-  if (!(await confirmStart(`Start a ${kind} run?`, e.text))) return;
-  if (e.off) body.confirm_off = true;
+  qualitySubmitting = true; renderEffect();
   try {
-    const run = await api("/api/quality/runs", { method: "POST", json: body });
-    watchRun(run.id);
-    refreshStatus();
+    if (!(await confirmStart(`Start a ${kind} run?`, e.text))) return;
+    if (!effectText(kind, scope, body.model).ok) return;
+    if (e.off) body.confirm_off = true;
+    const run = await api("/api/quality/runs", {method: "POST", json: body});
+    watchRun(run.id); refreshStatus();
   } catch (err) { alert(err.message); }
+  finally { qualitySubmitting = false; renderEffect(); if (typeof renderEvalForm === "function") renderEvalForm(); }
 }
 
 function progressText(run) {
@@ -102,12 +117,12 @@ function watchRun(id) {
     if (run.status !== "running") {
       clearInterval(activeTimer); activeTimer = null;
       document.getElementById("active-cancel").disabled = false;
-      loadRuns(); loadLatest(); showRun(run); refreshStatus();
+      trackSection("runs-card", loadRuns); trackSection("q-params", loadLatest); showRun(run); refreshStatus();
       if (typeof refreshEvals === "function") refreshEvals();
     }
   };
-  tick().catch(() => {});
-  activeTimer = setInterval(() => tick().catch(() => {}), 2000);
+  trackSection("active-card", tick);
+  activeTimer = setInterval(() => trackSection("active-card", tick), 2000);
 }
 
 async function loadLatest() {
@@ -124,7 +139,7 @@ async function loadLatest() {
   const models = Object.keys(meta.compatibility);
   document.querySelector("#compat-table thead").replaceChildren(el("tr", {}, el("th", { text: "Model" }),
     ...cases.map((c) => el("th", { text: c.replaceAll("_", " ") }))));
-  const rows = models.map((m) => el("tr", {}, el("td", {}, el("strong", { text: m })),
+  const rows = models.map((m) => el("tr", {}, el("td", {}, el("strong", { text: EngineUI.wireLabel(m) })),
     ...cases.map((c) => {
       const r = meta.compatibility[m][c];
       return el("td", {}, r ? el("span", { class: "sev", "data-status": OUTCOME_SEV[r.status], title: r.detail || "", text: r.status })
@@ -134,7 +149,7 @@ async function loadLatest() {
     : [el("tr", {}, el("td", { class: "muted", colspan: cases.length + 1, text: "No compatibility run yet." }))]));
 }
 
-function runModels(r) { return r.scope === "model" ? r.model : r.scope === "all" ? "all" : "current"; }
+function runModels(r) { return EngineUI.runLabel(r); }
 
 async function loadRuns() {
   const { runs, active } = await api("/api/quality/runs?limit=30");
@@ -185,7 +200,7 @@ function showRun(run) {
   document.querySelector("#detail-bench tbody").replaceChildren(...bench.map((c) => {
     const med = c.summary?.medians || {};
     return el("tr", {},
-      el("td", { text: c.model }), el("td", {}, el("code", { text: c.case_key })),
+      el("td", {}, el("strong", {text: EngineUI.wireLabel(c.model)}), el("div", {class: "muted", text: EngineUI.runLabel({...run, scope: "model", model: c.model})})), el("td", {}, el("code", { text: c.case_key })),
       el("td", { class: c.status === "complete" ? "ok" : "bad", title: c.detail || "", text: c.status }),
       el("td", { text: (c.cache_state || "—").replace("_", " ") }),
       el("td", { class: "num", text: c.summary ? `${c.summary.valid}` : "—" }),
@@ -199,7 +214,7 @@ function showRun(run) {
       el("td", {}, c.status === "complete" || c.status === "incomplete" ? baselineCell(c.summary) : el("span", { class: "muted", text: c.detail || "—" })));
   }));
   document.querySelector("#detail-compat tbody").replaceChildren(...compat.map((c) => el("tr", {},
-    el("td", { text: c.model }), el("td", { text: c.case_key.replaceAll("_", " ") }),
+    el("td", {}, el("strong", {text: EngineUI.wireLabel(c.model)}), el("div", {class: "muted", text: EngineUI.runLabel({...run, scope: "model", model: c.model})})), el("td", { text: c.case_key.replaceAll("_", " ") }),
     el("td", {}, el("span", { class: "sev", "data-status": OUTCOME_SEV[c.status] ?? "", text: c.status })),
     el("td", { class: "muted", text: c.detail || "" }))));
 }
@@ -212,6 +227,7 @@ async function loadRoster() {
   sel.replaceChildren(...models.map((m) => el("option", { value: m.name, text: m.name })));
   if (keep && models.some((m) => m.name === keep)) sel.value = keep;
   renderEffect();
+  if (typeof renderEvalForm === "function") renderEvalForm();
 }
 
 document.getElementById("q-scope").addEventListener("change", () => {
@@ -222,7 +238,7 @@ document.getElementById("q-model").addEventListener("change", renderEffect);
 document.getElementById("q-kind").addEventListener("change", renderEffect);
 document.getElementById("quality-start").addEventListener("click", start);
 onStatus((st) => { lastStatus = st; renderEffect(); });
-loadRoster().catch(() => {});
-loadLatest().catch(() => {});
-loadRuns().catch(() => {});
-setInterval(() => loadRuns().catch(() => {}), 15000);
+trackSection("q-model-label", loadRoster);
+trackSection("q-params", loadLatest);
+trackSection("runs-card", loadRuns);
+setInterval(() => trackSection("runs-card", loadRuns), 15000);

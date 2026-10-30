@@ -74,7 +74,7 @@
     } catch (e) { showError(e); }
   }
 
-  if (q("decision-usage-table")) loadUsageDays().catch(() => {});
+  if (q("decision-usage-table")) trackSection("decision-usage-table", loadUsageDays);
   if (q("clients-card")) {
     q("client-form").addEventListener("submit", create);
     q("copy-key").addEventListener("click", async () => {
@@ -82,7 +82,7 @@
       catch (e) { prompt("Copy the key:", q("new-key-value").textContent); }
     });
     loadClients().catch(showError);
-    loadClientUsage().catch(() => {});
-    setInterval(() => loadClientUsage().catch(() => {}), 30000);
+    trackSection("client-usage", loadClientUsage);
+    setInterval(() => trackSection("client-usage", loadClientUsage), 30000);
   }
 })();

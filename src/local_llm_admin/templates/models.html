@@ -3,19 +3,30 @@
 {% block content %}
 <section class="card" id="engine-card">
   <div class="card-head"><h2>Engine</h2><span class="badge" id="engine-current" data-state="unknown">…</span></div>
-  <p class="muted">Only one engine may use the GPU. Switching stops the other one first.</p>
+  <p class="muted">Engine switching follows the selected backend’s GPU policy. Exclusive engines pause GPU sidecars and embeddings; supported MLX combinations can share the GPU.</p>
   <div class="toolbar">
     <label>Run <select id="engine-target"></select></label>
-    <button id="engine-apply" class="primary">Apply</button>
+    <button id="engine-apply" class="primary" disabled>Apply</button>
   </div>
+  <a id="engine-logs" hidden>Open engine logs</a>
+  <p id="engine-action-reason" class="muted" role="status"></p>
 </section>
+<section class="card" id="job-card" tabindex="-1" aria-label="Current job" hidden>
+  <div class="card-head"><h2>Job <span id="job-title"></span></h2><span class="badge" id="job-status" role="status"></span></div>
+  <p id="job-poll-state" class="muted" role="status"></p>
+  <pre class="log" id="job-output"></pre>
+</section>
+<p class="muted" id="target-catalog">Serving targets: MLX models have editable settings in the library below. Strata packs and Splash profiles are configured externally; downloading or registering MLX files does not install either.</p>
+<nav aria-label="Models sections"><a href="#engine-card">Engine</a> · <a href="#library-card">MLX library</a> · <a href="#inventory-card">Inventory</a> · <a href="#download-card">Downloads</a> · <a href="#history-card">History</a></nav>
 <div id="backend-cards"></div>
-<section class="card" id="strata-card" hidden>
+<details class="card" id="strata-card" hidden>
+<summary>Strata pack details</summary>
   <div class="card-head"><h2>Strata</h2><span class="badge" id="strata-state" data-state="unknown">…</span></div>
   <p class="muted">Qwen3.8-Flash-Next on Metal, one request at a time. Sidecars and the embedding service stay stopped while it runs.</p>
   <dl class="facts" id="strata-facts"></dl>
-</section>
-<section class="card" id="comfy-card">
+</details>
+<details class="card" id="comfy-card">
+<summary>ComfyUI queue, output and weights</summary>
   <div class="card-head"><h2>ComfyUI</h2><a id="comfy-link" class="button" target="_blank" rel="noopener">Open ComfyUI</a></div>
   <dl class="facts" id="comfy-facts"></dl>
   <p class="muted">ComfyUI has no login; anyone on the LAN can reach it on port 8188.</p>
@@ -38,21 +49,21 @@
     </div>
     <p class="muted" id="q-result" role="status"></p>
   </div>
-</section>
+</details>
 {% if decision_enabled or tts_enabled %}
 <section class="card" id="sidecar-card">
   <div class="card-head"><h2>Sidecar</h2>
     <label>Model <select id="sidecar-select"></select></label>
     <a class="button" id="sidecar-page" href="/decision">Open test page</a>
   </div>
-  <p class="muted">One small model runs next to an allowed MLX model at a time, never next to ComfyUI. Starting one while another runs stops the other first (you are asked). It shares GPU time with the chat model while it works.</p>
+  <p class="muted">One small model runs next to an allowed MLX model at a time. Exclusive engines pause these services. Starting one while another runs stops the other first (you are asked). It shares GPU time with the chat model while it works.</p>
   <div class="error" id="sidecar-conflict" hidden>More than one sidecar is running. Stop all but one.</div>
   <dl class="facts" id="sidecar-facts"></dl>
   <ul class="muted" id="sidecar-budget"></ul>
   <div class="error" id="sidecar-refusal" hidden></div>
   <div class="actions">
-    <button id="sidecar-start" class="primary">Start</button>
-    <button id="sidecar-stop">Stop</button>
+    <button id="sidecar-start" data-requires-fresh disabled class="primary">Start</button>
+    <button id="sidecar-stop" data-requires-fresh disabled>Stop</button>
   </div>
 </section>
 {% endif %}
@@ -61,24 +72,25 @@
   <div class="card-head"><h2>Embeddings</h2>
     <a class="button" href="/embed">Open test page</a>
   </div>
-  <p class="muted">Always on: Qwen3-Embedding-4B and Qwen3-Reranker-0.6B run next to the chat model and whichever sidecar is loaded. They stop while ComfyUI runs and come back when you switch away. A crash raises an alert; start it again here.</p>
+  <p class="muted">The embedding and reranking service can coexist with supported MLX models and sidecars. Exclusive engines pause it. Restoration follows saved intent and target compatibility; current availability and refusal reasons appear below.</p>
   <dl class="facts" id="embed-facts"></dl>
   <ul class="muted" id="embed-budget"></ul>
   <div class="error" id="embed-refusal" hidden></div>
   <div class="actions">
-    <button id="embed-start" class="primary">Start</button>
-    <button id="embed-stop">Stop</button>
+    <button id="embed-start" data-requires-fresh disabled class="primary">Start</button>
+    <button id="embed-stop" data-requires-fresh disabled>Stop</button>
   </div>
 </section>
 {% endif %}
-<section class="card">
+<section class="card" id="library-card">
   <div class="card-head">
-    <h2>Registered models</h2>
+    <h2>MLX model library</h2>
     <div class="actions">
-      <button id="btn-start">Start selected</button>
-      <button id="btn-stop" class="danger">Stop</button>
+      <button id="btn-start" disabled>Start selected (MLX)</button>
+      <button id="btn-stop" class="danger" disabled>Stop MLX</button>
     </div>
   </div>
+  <p id="mlx-action-reason" class="muted"></p>
   <p class="warn-note">Switching or stopping takes the API down for about 30–90 s. In-flight LiteLLM requests to <code>local-qwen</code> will fail.</p>
   <div class="table-wrap"><table id="models-table">
     <thead><tr><th>Name</th><th>Directory</th><th class="num">Size</th><th>Weights</th><th>Checks <a href="/quality" class="muted">(Quality)</a></th><th></th></tr></thead>
@@ -86,18 +98,20 @@
   </table></div>
 </section>
 
-<section class="card" id="inventory-card">
-  <div class="card-head"><h2>Inventory</h2><span class="muted" id="inv-checked"></span></div>
+<details class="card" id="inventory-card">
+<summary>MLX inventory and request attribution</summary>
+  <div class="card-head"><h2>MLX file inventory</h2><span class="muted" id="inv-checked"></span></div>
   <dl class="facts" id="inv-disk"></dl>
   <p class="muted" id="inv-note"></p>
   <div class="table-wrap"><table id="inv-table">
     <thead><tr><th>Name</th><th class="num">Size</th><th>Fingerprint</th><th>Quality <a href="/quality" class="muted">(Evals)</a></th><th>First observed</th><th>Last started</th><th class="num">Logged requests</th><th class="num">Logged tokens</th></tr></thead>
     <tbody></tbody>
   </table></div>
-</section>
+</details>
 
-<section class="card" id="download-card">
-  <div class="card-head"><h2>Download a model</h2><span class="muted" id="dl-owners"></span></div>
+<details class="card" id="download-card">
+<summary>Download MLX files</summary>
+  <div class="card-head"><h2>Download MLX model files</h2><span class="muted" id="dl-owners"></span></div>
   <p class="muted">Hugging Face repositories only (no URLs). The preview pins the exact commit; every file is checked against its published checksum before the directory appears under <code>models/</code>. Registering it is a separate step.</p>
   <form class="toolbar" id="dl-form">
     <label>Repository <input id="dl-repo" placeholder="mlx-community/…" required autocomplete="off" size="40"></label>
@@ -118,23 +132,20 @@
     <thead><tr><th>Started</th><th>Repository</th><th>Directory</th><th>State</th><th>Progress</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
-</section>
+</details>
 
-<section class="card">
+<details class="card"><summary>MLX files on disk and registration</summary>
   <div class="card-head"><h2>Weights on disk</h2><span class="muted" id="disk-checked"></span></div>
   <p class="muted">Every directory under <code>/Volumes/Models/models/</code>, re-read every 10 s. A download shows up here as soon as its directory exists; register it once it is complete to make it switchable.</p>
   <div class="table-wrap"><table id="disk-table">
     <thead><tr><th>Directory</th><th>State</th><th class="num">On disk</th><th>Model</th><th>Registered as</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
-</section>
+</details>
 
-<section class="card" id="job-card" hidden>
-  <div class="card-head"><h2>Job <span id="job-title"></span></h2><span class="badge" id="job-status"></span></div>
-  <pre class="log" id="job-output"></pre>
-</section>
 
-<section class="card">
+
+<section class="card" id="history-card">
   <h2>Switch history</h2>
   <div class="table-wrap"><table id="history-table">
     <thead><tr><th>When</th><th>Action</th><th>From</th><th>To</th><th>Result</th><th class="num">Duration</th><th>Source</th></tr></thead>

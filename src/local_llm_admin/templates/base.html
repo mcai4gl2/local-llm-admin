@@ -4,18 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf }}">
+<meta name="ops-timezone-offset" content="{{ ops_timezone_offset_min | default(-480) }}">
 <title>{% block title %}LLM Admin{% endblock %} · Mac mini</title>
 <script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body data-page="{{ page }}">
+<a class="skip-link" href="#main-content">Skip to content</a>
 <header class="top">
   <div class="brand">LLM Admin <span class="muted">Mac mini</span></div>
-  <nav>
-    {% for href, name, label in [("/", "dashboard", "Dashboard"), ("/models", "models", "Models"), ("/outputs", "outputs", "Outputs"), ("/chat", "chat", "Chat"), ("/decision", "decision", "Decision"), ("/tts", "tts", "TTS"), ("/embed", "embed", "Embeddings"), ("/logs", "logs", "Logs"), ("/usage", "usage", "Usage"), ("/performance", "performance", "Performance"), ("/quality", "quality", "Quality"), ("/alerts", "alerts", "Alerts")] if (name != "decision" or decision_enabled) and (name != "tts" or tts_enabled) and (name != "embed" or embed_enabled) %}
-    <a href="{{ href }}" {% if page == name %}aria-current="page"{% endif %}>{{ label }}{% if name == "alerts" %} <span id="nav-alerts" class="count" hidden></span>{% endif %}</a>
-    {% endfor %}
-  </nav>
+  <details id="site-nav" class="site-nav" open>
+    <summary>Navigation</summary>
+    <nav aria-label="Primary">
+      {% for href, name, label in [("/", "dashboard", "Dashboard"), ("/models", "models", "Models"), ("/chat", "chat", "Chat"), ("/performance", "performance", "Performance"), ("/quality", "quality", "Quality")] %}
+      <a href="{{ href }}" {% if page == name %}aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+      <details class="secondary-nav"><summary>Services and records</summary>
+        <div class="secondary-links">
+          {% for href, name, label in [("/outputs", "outputs", "ComfyUI Outputs"), ("/decision", "decision", "Decision"), ("/tts", "tts", "TTS"), ("/embed", "embed", "Embeddings"), ("/logs", "logs", "Logs"), ("/usage", "usage", "LiteLLM Usage"), ("/alerts", "alerts", "Alerts")] if (name != "decision" or decision_enabled) and (name != "tts" or tts_enabled) and (name != "embed" or embed_enabled) %}
+          <a href="{{ href }}" {% if page == name %}aria-current="page"{% endif %}>{{ label }}{% if name == "alerts" %} <span id="nav-alerts" class="count" hidden></span>{% endif %}</a>
+          {% endfor %}
+        </div>
+      </details>
+    </nav>
+  </details>
   <div class="top-right">
     <span id="state-badge" class="badge" data-state="unknown">…</span>
     <label class="theme"><span class="sr-only">Theme</span>
@@ -26,7 +38,9 @@
     <form method="post" action="/logout" id="logout-form"><button type="submit" class="link">Log out</button></form>
   </div>
 </header>
-<main>
+<main id="main-content" tabindex="-1">
+<h1>{{ self.title() }}</h1>
+<p id="status-freshness" class="warn-note" role="status" hidden></p>
 <div class="error" id="conflict-banner" hidden>
   More than one engine is running and competing for memory. Keep one:
   <span id="conflict-engine-controls"></span> <button data-keep="off">Stop all</button>

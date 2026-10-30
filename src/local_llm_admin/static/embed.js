@@ -4,19 +4,21 @@
   const $ = (id) => document.getElementById(id);
   const ms = (v) => (v === null || v === undefined ? "—" : `${Math.round(v)} ms`);
   let cfg = null;
+  let busy = false;
 
   const lines = (id) => $(id).value.split("\n").map((t) => t.trim()).filter(Boolean);
   function fail(id, e) { $(id).textContent = e.message; $(id).hidden = false; }
 
+  function sync() {
+    const gate = serviceNotice($("embed-disabled"), cfg);
+    $("embed-sim-run").disabled = $("embed-rr-run").disabled = !gate.ok || busy;
+  }
+  watchService("/api/embed", data => {
+    cfg = data;
+    if (cfg.dims) $("embed-dims").textContent = `${cfg.dims} dims · up to ${cfg.max_inputs} inputs`;
+    sync();
+  });
   async function load() {
-    cfg = await api("/api/embed");
-    $("embed-dims").textContent = `${cfg.dims} dims · up to ${cfg.max_inputs} inputs`;
-    $("embed-disabled").hidden = cfg.running;
-    $("embed-disabled").textContent = cfg.running ? "" : cfg.reason === "comfyui_active"
-      ? "The embedding service is paused while ComfyUI runs."
-      : cfg.reason === "strata_active" ? "The embedding service is paused while Strata runs."
-      : "The embedding service is stopped. Start it on the Models page (Embeddings card).";
-    $("embed-sim-run").disabled = $("embed-rr-run").disabled = !cfg.running;
     const h = await api("/api/embed/history?days=14");
     const a = h.availability;
     $("embed-availability").textContent = a.ratio === null ? "" : `availability ${(a.ratio * 100).toFixed(1)}%`;
@@ -29,6 +31,8 @@
 
   async function similarity(ev) {
     ev.preventDefault();
+    if (!serviceEligibility(cfg).ok || busy) return;
+    busy = true; sync();
     $("embed-sim-error").hidden = true;
     const texts = lines("embed-texts");
     try {
@@ -37,19 +41,23 @@
       const body = r.matrix.map((row, i) => el("tr", {}, el("th", { text: `#${i + 1} ${texts[i].slice(0, 40)}` }),
         ...row.map((v, j) => el("td", { class: i === j ? "num muted" : "num", text: v.toFixed(3) }))));
       $("embed-matrix").querySelector("tbody").replaceChildren(head, ...body);
-      load().catch(() => {});
+      trackSection("embed-daily", load);
     } catch (e) { fail("embed-sim-error", e); }
+    finally { busy = false; sync(); }
   }
 
   async function rerank(ev) {
     ev.preventDefault();
+    if (!serviceEligibility(cfg).ok || busy) return;
+    busy = true; sync();
     $("embed-rr-error").hidden = true;
     const docs = lines("embed-rr-docs");
     try {
       const r = await api("/api/embed/rerank", { method: "POST", json: { query: $("embed-rr-query").value, documents: docs } });
       $("embed-rr-results").replaceChildren(...r.results.map((x) => el("li", { text: `${x.relevance_score.toFixed(3)} — ${docs[x.index]}` })));
-      load().catch(() => {});
+      trackSection("embed-daily", load);
     } catch (e) { fail("embed-rr-error", e); }
+    finally { busy = false; sync(); }
   }
 
   function curl() {
@@ -62,5 +70,6 @@
   $("embed-sim-form").addEventListener("submit", similarity);
   $("embed-rr-form").addEventListener("submit", rerank);
   $("embed-curl").addEventListener("click", curl);
-  load().catch(() => {});
+  trackSection("embed-daily", load);
+  setInterval(() => trackSection("embed-daily", load), 30000);
 })();

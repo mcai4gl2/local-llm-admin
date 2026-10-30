@@ -85,6 +85,7 @@ class MlxBackend:
             model_sidecars=True,
             auto_recover=True,
             ports=(s.mlx_port, s.chat_ui_port),
+            log_source="mlx-server",
         )
 
     def validate(self, target: EngineTarget) -> None:
@@ -192,9 +193,11 @@ class MlxBackend:
         return {"tool_parser": health.get("loaded_tool_parser"), "vision": model_info.get("vision")}
 
     async def serving_inference(self) -> InferenceDescriptor:
-        if not self.inference_ready(await self.client.health()):
+        health = await self.client.health()
+        descriptor = self.inference()
+        if not self.inference_ready(health):
             raise BackendUnavailable("model server is not serving")
-        return self.inference()
+        return replace(descriptor, identity={"loaded_context": descriptor.context(health)})
 
     async def queue_count(self) -> int | None:
         return None
@@ -450,7 +453,7 @@ class StrataBackend:
         details = await self.client.status()
         if not details["ready"] or not details["model"]:
             raise BackendUnavailable("Strata is still loading the model")
-        return self.inference(details["model"])
+        return replace(self.inference(details["model"]), identity={"loaded_context": details.get("max_context"), "reference": details.get("pack")})
 
     async def queue_count(self) -> int | None:
         return None
@@ -590,6 +593,7 @@ class SplashBackend:
             health_path="/status",
             profile_fingerprint=profile.fingerprint,
             estimate_usage=False,
+            identity={"target_label": "Splash · " + profile.label, "configured_context": profile.max_context},
         )
 
     def inference_ready(self, health: Any) -> bool:
@@ -634,7 +638,8 @@ class SplashBackend:
         status = await self.client.status()
         if not status["ready"]:
             raise BackendUnavailable("Splash is not loaded and ready")
-        return self.inference(status["model"])
+        descriptor = self.inference(status["model"])
+        return replace(descriptor, identity={**descriptor.identity, "loaded_context": status.get("max_context")})
 
     async def queue_count(self) -> int | None:
         return None
@@ -838,11 +843,20 @@ class BackendRegistry:
         descriptor = await backend.serving_inference()
         if descriptor is None:
             raise BackendUnavailable(f"{backend.spec.label} does not support LLM chat")
+        observation = next(o for o in observations if o.backend == active)
         if profile_defaults and "multi-model" in backend.spec.operations:
-            observation = next(o for o in observations if o.backend == active)
             defaults = await asyncio.to_thread(profile_defaults, observation.reference)
             descriptor = replace(descriptor, defaults=defaults)
-        return descriptor
+        reference = descriptor.identity.get("reference") or observation.reference
+        model = reference if "multi-model" in backend.spec.operations else descriptor.target.model
+        # A public reply identity contains no endpoint, credential or deployment path.
+        if model and model.startswith("/"):
+            model = model.rsplit("/", 1)[-1]
+        return replace(descriptor, identity={
+            **descriptor.identity, "engine": active, "engine_label": backend.spec.label,
+            "reference": reference, "target_value": active + (":" + reference if reference else ""),
+            "model": model, "profile_fingerprint": descriptor.profile_fingerprint,
+        })
 
     def exclusive_labels(self, observations: Sequence[EngineObservation]) -> list[str]:
         return [
@@ -880,6 +894,7 @@ class BackendRegistry:
                 "operations": sorted(spec.operations),
                 "exclusive": spec.exclusive,
                 "model_sidecars": spec.model_sidecars,
+                "log_source": (spec.log_source or spec.id) if "logs" in spec.operations else None,
                 "auto_recover": spec.auto_recover,
                 "state": observation.state
                 if observation

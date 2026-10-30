@@ -36,6 +36,7 @@ class EngineSpec:
     model_sidecars: bool = False
     auto_recover: bool = False
     ports: tuple[int, ...] = ()
+    log_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,7 @@ class InferenceDescriptor:
     health_path: str = "/health"
     profile_fingerprint: str | None = None
     estimate_usage: bool = True
+    identity: Mapping[str, Any] = field(default_factory=dict)
 
     def context(self, health: Any) -> int | None:
         value = health.get(self.context_field) if isinstance(health, dict) else None

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Performance{% endblock %}
 {% block content %}
-<section class="card">
+<section class="card" id="performance-summary">
   <div class="toolbar">
     <div class="seg" role="group" aria-label="Range">
       <button data-days="1" aria-pressed="false">Today</button>
@@ -9,25 +9,20 @@
       <button data-days="30" aria-pressed="false">30 days</button>
       <button data-days="90" aria-pressed="false">90 days</button>
     </div>
-    <label>Model <select id="model"><option value="">All models</option></select></label>
+    <label>Engine <select id="perf-engine"><option value="mlx">MLX</option><option value="strata">Strata</option><option value="splash">Splash</option></select></label>
+    <label>Target <select id="model"><option value="">All targets</option></select></label>
     <span id="perf-source" class="muted"></span>
   </div>
   <p id="splash-coverage" class="muted" hidden></p>
+  <p class="muted" id="perf-scope"></p>
+  <p class="muted" id="perf-summary-state" role="status"></p>
   <div id="perf-error" class="error" hidden></div>
   <div class="hero" id="perf-totals"></div>
 </section>
 
-<section class="card" id="native-telemetry">
-  <div class="card-head"><h2>Splash native telemetry</h2>
-    <label>Profile <select id="native-profile"><option value="">All profiles</option></select></label>
-  </div>
-  <p class="muted" id="native-coverage"></p>
-  <p class="muted">Cumulative native execution counters within each verified epoch. Do not add snapshots or compare these directly to billed tokens. Request history is unsupported.</p>
-  <div class="table-wrap"><table id="native-readings"><thead><tr><th>Observed</th><th>Profile / fingerprint</th><th>Epoch</th><th>Completed</th><th>Cancelled / failed</th><th>Prefill execution tokens</th><th>Decode execution tokens</th></tr></thead><tbody></tbody></table></div>
-  <p class="muted" id="native-availability"></p>
-</section>
 
-<section class="card">
+<section class="card" id="availability-card">
+  <p id="availability-state" class="muted" role="status"></p>
   <div class="card-head"><h2>Availability</h2><span id="avail-summary" class="muted"></span></div>
   <div class="strip" id="avail-strip" role="img" aria-label="Engine state over the range"></div>
   <div class="legend strip-legend">
@@ -37,26 +32,28 @@
     <span class="key st-unknown"></span>Not observed
   </div>
   <div class="table-wrap"><table id="avail-table">
-    <thead><tr><th>Date</th><th class="num">Availability</th><th class="num">Observed</th><th class="num">Serving</th><th class="num">Down</th><th class="num">Off / ComfyUI</th><th class="num">Not observed</th></tr></thead>
+    <thead><tr><th>Date</th><th class="num">Availability</th><th class="num">Observed</th><th class="num">Serving</th><th class="num">Down</th><th class="num">Off / other engines</th><th class="num">Not observed</th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <p class="muted">Availability is serving time divided by observed time while MLX was the intended engine. Deliberate off and ComfyUI time is not downtime. Time with no sample (admin stopped, probes hung) is not observed and never counts as uptime.</p>
+  <p class="muted" id="avail-definition"></p>
+  <details><summary>State intervals</summary><ul id="avail-intervals"></ul></details>
 </section>
 
-<section class="charts">
+<section class="charts" id="request-charts">
   <figure class="card"><figcaption>Time to first token per day (median, p90)</figcaption><div class="chart" id="ttft-chart"></div></figure>
   <figure class="card"><figcaption>Decode rate per day (median, p90)</figcaption><div class="chart" id="decode-chart"></div></figure>
   <figure class="card"><figcaption>Requests per day (finished, failed or cut short)</figcaption><div class="chart" id="count-chart"></div></figure>
 </section>
 
 <section class="card" id="tokens">
-  <div class="card-head"><h2>Token usage</h2>
+  <div class="card-head"><h2>Engine token counts</h2><span class="pill" id="token-source"></span>
     <div class="toolbar">
-      <label>Traffic <select id="origin-filter">
+      <label>Token traffic only <select id="origin-filter">
         <option value="">All</option><option value="client">Clients</option><option value="quality">Quality and eval runs</option>
       </select></label>
     </div>
   </div>
+  <p id="tokens-state" class="muted" role="status"></p>
   <div class="hero" id="token-totals"></div>
   <figure><figcaption>Tokens per day</figcaption><div class="chart" id="token-chart"></div>
     <div class="legend"><span class="key s1"></span>Input, uncached <span class="key s1-light"></span>Input, cached <span class="key s2"></span>Output</div>
@@ -68,7 +65,8 @@
   <p class="muted">The engines' own counts: MLX from its server log, Strata from its <code>/metrics</code> request list (a request that list no longer held is added as one aggregate per poll, so totals match Strata's counters). Input includes the cached part. Totals stay after request rows are pruned. They differ from the Usage page, which counts only traffic through LiteLLM and per route. Requests without a full count are shown as unmeasured and never estimated. Test chat is counted as client traffic.</p>
 </section>
 
-<section class="card">
+<section class="card" id="requests-card">
+  <p id="requests-state" class="muted" role="status"></p>
   <div class="card-head"><h2>Requests</h2>
     <div class="toolbar">
       <label>State <select id="state-filter">
@@ -79,13 +77,29 @@
     </div>
   </div>
   <div class="table-wrap"><table id="req-table">
-    <thead><tr><th>Started</th><th>Model</th><th>State</th><th class="num">Prompt</th><th class="num">Cached</th><th class="num">Generated</th><th class="num">TTFT</th><th class="num">Decode</th><th class="num">Elapsed</th><th></th></tr></thead>
+    <thead><tr><th>Started</th><th>Source / definition</th><th>Model</th><th>State</th><th class="num">Prompt</th><th class="num">Cached</th><th class="num">Generated</th><th class="num">TTFT</th><th class="num">Decode</th><th class="num">Elapsed</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <div class="pager"><button id="more">Older ›</button></div>
+  <div class="pager"><button id="more" hidden disabled>Older ›</button></div>
   <pre class="log wrap" id="req-context" hidden></pre>
   <p class="muted">Measured from the MLX server log (and Strata's request list; Strata's time to first token is its prompt time): counts and rates are the server's own figures; a missing value is shown as —, never estimated. Rows marked partial lack some measurements. Model names come from the start marker of the process that served the request; "unknown" means that could not be established.</p>
   <p class="muted" id="rotation-state"></p>
 </section>
+<details class="card" id="engine-diagnostics">
+<summary>Engine diagnostics · cumulative native counters and history</summary>
+<div id="native-telemetry">
+  <div class="card-head"><h2>Native snapshots</h2>
+    <label>Epoch <select id="native-epoch"><option value="">Choose an epoch for latest counters</option></select></label>
+  </div>
+  <p class="muted" id="native-state" role="status"></p>
+  <p class="muted" id="native-coverage"></p>
+  <p id="native-latest"></p>
+  <p class="muted">Cumulative native execution counters within each verified epoch. Do not add snapshots or compare these directly to billed tokens. Request history is unsupported.</p>
+  <div class="table-wrap"><table id="native-readings"><thead><tr><th>Observed</th><th>Profile / fingerprint</th><th>Epoch</th><th>Completed</th><th>Cancelled / failed</th><th>Prefill execution tokens</th><th>Decode execution tokens</th></tr></thead><tbody></tbody></table></div>
+  <p class="muted" id="native-availability"></p>
+  <div class="pager"><button id="native-newer" disabled>‹ Newer</button><span id="native-page-info"></span><button id="native-older" disabled>Older ›</button></div>
+</div>
+</details>
+
 {% endblock %}
 {% block scripts %}<script src="/static/performance.js"></script>{% endblock %}

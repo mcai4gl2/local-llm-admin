@@ -591,3 +591,68 @@ fallback. Streaming remains incremental; disconnect closes upstream. See
 Reusable deployment tools remain in [ops](../ops/README.md); experiment bundles live in
 [experiments](../experiments/README.md). Active work, backlog and historical plans are
 indexed in [plans](../plans/README.md).
+
+
+## Admin presentation and monitoring scopes
+
+Backend descriptions supply the engine/target labels and operation capabilities used by
+Models, Dashboard, Chat, Quality and Logs. Human labels omit legacy capacity suffixes;
+stable wire identifiers remain available in technical disclosures. Configured context and
+verified loaded context are separate facts. Both describe the total prompt-plus-output
+window. An unready engine never presents a configured limit as verified loaded capacity.
+A context mismatch remains visible. Output-token defaults and the admin output cap are
+shown separately on Chat.
+
+Models starts with the current target, deliberate lifecycle controls and the current job.
+Inactive engine details and MLX storage/download inventory are collapsed. The MLX library
+manages MLX registrations; Splash profiles and Strata packs remain externally configured.
+Lifecycle reservations, unknown/conflicting ownership and stale essential status disable
+primary actions. Status transport errors and section rendering errors are distinct; one
+failed renderer cannot prevent other sections from updating. Polling sections retain useful
+last-known data with a last-success timestamp and a visible error. Essential status expires
+after 15 seconds. Decision, TTS and Embeddings require fresh ready service status and the
+shared engine policy; a desired-running service paused by an exclusive engine names its
+owner and links to Models instead of suggesting a futile start. Engine transitions trigger
+a new service check and discard replies resolved before the transition.
+
+Performance applies one calendar range, engine and dependent model/profile selection.
+Request summaries/history and retained token totals are source-filtered for MLX server logs
+or Strata metrics. Strata prompt duration is a TTFT proxy, not measured first-token latency.
+Unfiltered API responses retain their legacy fields and declare the included request
+sources. Traffic origin filters affect token totals; state/slow filters affect request
+history. MLX/Strata availability stays engine-wide when a model is selected. Splash
+availability can be profile-scoped. Timelines use the full selected range, including unknown
+intervals, and do not stretch sparse observations to fill it. Coverage percentages use the
+elapsed part of the range; future time is excluded from the denominator.
+
+Splash has no all-client request ledger. Its response usage, when reported, and cumulative
+native execution snapshots remain distinct from request history and LiteLLM accounting.
+Native diagnostics are collapsed, paged with stable `(observed,id)` cursors (20 rows in the
+UI), and filtered by recorded profile/epoch. Latest counters require an explicit epoch;
+never sum polls or claim period deltas. Current collector health distinguishes last successful
+poll from last new counters and is independent of selected-range coverage. Strata availability
+uses generation-checked health observations in the separate backend availability store;
+coverage starts when this collector is deployed. Historical gaps are not backfilled and the
+legacy MLX denominator is unchanged. Source failure, unsupported metrics, missing data and
+measured zero have separate presentations. Charts break at gaps and expose data tables or
+keyboard details.
+
+Chat resolves defaults and public identity through the selected verified backend. Each reply
+carries the identity captured when its request resolved, including reported settings and
+usage; later status cannot relabel it. Switching engines retains the visible conversation
+and marks the new engine segment. Clear aborts the current stream and invalidates its history
+generation, so late chunks cannot restore cleared messages. Direct admin Chat and native
+counters are separate from the LiteLLM Usage page. Quality run lists, comparisons and
+scorecards use stored identities, context, reasoning and settings/runtime indicators rather
+than today's active profile. Newly run targets persist their own verified public identity;
+legacy missing context is explicitly unrecorded.
+
+Logs defaults to the active engine's allowlisted source unless the user explicitly chooses
+one. Tail and Follow apply the same text and level filters; changing filters restarts Follow
+with visible connecting/following/reconnecting/paused state and bounded output. Usage is
+explicitly LiteLLM gateway accounting. Main date ranges and timestamps use the configured
+operations timezone, independent of browser timezone. Sidecar usage tables declare their
+independent rolling 30-day range. Shared navigation has a mobile disclosure, page headings,
+a skip link, labeled controls and keyboard-operable Usage tabs. Fixture browser tests cover
+light/dark contrast, mobile layouts, zoom and operational transitions; these checks do not
+qualify live engines or authorize deployment.

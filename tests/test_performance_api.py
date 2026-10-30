@@ -404,3 +404,70 @@ async def test_native_snapshots_and_scoped_availability_are_separate_apis(
     report = (await client.get("/api/availability?source=splash")).json()
     assert report["source"] == "splash" and report["totals"]["availability"] is None
     assert (await client.get("/api/performance/tokens")).json()["totals"]["requests"] == 0
+
+
+async def test_source_scope_is_consistent_across_performance_routes(client: Any, settings: Any) -> None:
+    store = PerformanceStore(_db(settings))
+    now = time.time()
+    store.insert_rows("mlx-perf", [_row(1, now, model="same-name", prompt_tokens=7)])
+    store.insert_rows("strata", [_row(2, now, model="same-name", prompt_tokens=17)])
+    for source, tokens in (("mlx-perf", 7), ("strata", 17)):
+        summary = (await client.get("/api/performance/summary", params={"source": source})).json()
+        assert summary["totals"]["requests"] == 1
+        assert summary["source"]["source"] == source
+        requests = (await client.get("/api/performance/requests", params={"source": source})).json()
+        assert {r["source"] for r in requests["requests"]} == {source}
+        counts = (await client.get("/api/performance/tokens", params={"source": source})).json()
+        assert counts["totals"]["input_tokens"] == tokens
+    assert (await client.get("/api/performance/summary?source=splash")).status_code == 422
+
+
+async def test_native_paging_api_includes_independent_catalog_and_rejects_bad_cursor(client: Any, settings: Any) -> None:
+    from local_llm_admin.engine_telemetry import EngineTelemetryStore
+    from tests.test_splash_ingestion import reading
+    store = EngineTelemetryStore(_db(settings))
+    # The native store shares the existing application database.
+    store.record(reading(), now=time.time())
+    response = await client.get("/api/performance/engines?limit=1")
+    assert response.status_code == 200
+    page = response.json()
+    assert page["limit"] == 1
+    assert page["profiles"][0]["profile"] == "stock"
+    assert page["epochs"][0]["epoch"] == page["readings"][0]["epoch"]
+    assert page["next"] is None
+    assert (await client.get("/api/performance/engines?before=invalid")).status_code == 400
+
+
+@pytest.mark.parametrize("changed", [False, True])
+async def test_strata_availability_collects_only_stable_owned_generation(client: Any, app: Any, settings: Any, monkeypatch: Any, changed: bool) -> None:
+    from tests.test_alerts import _snap
+    settings.strata_enabled = True
+    observed = {"engine": "strata", "generation": {"pid": 100, "started": 1.0}}
+    after = {**observed, "generation": {"pid": 101, "started": 2.0}} if changed else observed
+    monkeypatch.setattr(app.state.control, "observe", lambda: after)
+
+    async def health(path: str) -> dict[str, Any]:
+        assert path == "/health"
+        return {"service": "strata", "loaded": True, "model": "example/IQ3_XXS"}
+
+    monkeypatch.setattr(app.state.strata_usage.strata, "get_json", health)
+    sample = _snap(engine="strata", intent="strata", wall=time.time())
+    listener = next(fn for fn in app.state.supervisor._listeners if fn.__name__ == "record_backend_availability")
+    await listener(sample, observed)
+    result = await client.get("/api/availability?source=strata")
+    assert result.status_code == 200
+    report = result.json()
+    assert report["source"] == "strata"
+    assert report["totals"]["availability"] == (None if changed else 1.0)
+    assert not report["truncated"]
+
+
+async def test_performance_declares_source_populations_and_exact_availability_range(client: Any) -> None:
+    params = {"from": "2026-10-01", "to": "2026-10-02"}
+    summary = (await client.get("/api/performance/summary", params=params)).json()
+    assert summary["source"]["includes"] == ["mlx-perf", "strata"]
+    assert "splash" not in summary["source"]["includes"]
+    availability = (await client.get("/api/availability", params=params)).json()
+    assert availability["source"] == "mlx"
+    assert availability["range_end"] - availability["range_start"] == 2 * 86400
+    assert availability["tz_offset_min"] == -480

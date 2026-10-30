@@ -146,6 +146,7 @@ function syncRun() { $("run").disabled = !running || busy; }
 
 async function run(ev) {
   ev.preventDefault();
+  if (!running || busy) return;
   $("read-error").hidden = true;
   let body;
   try { body = buildBody(); } catch (e) { $("read-error").textContent = e.message; $("read-error").hidden = false; return; }
@@ -156,7 +157,7 @@ async function run(ev) {
     $("read-error").textContent = e.message; $("read-error").hidden = false; $("read-meta").textContent = "";
   } finally {
     busy = false; syncRun();
-    loadHistory().catch(() => {});
+    trackSection("hist-daily", loadHistory);
   }
 }
 
@@ -184,14 +185,11 @@ $("preset").addEventListener("change", (e) => loadPreset(e.target.value));
 $("add-question").addEventListener("click", () => addQuestion());
 $("read-form").addEventListener("submit", run);
 $("copy-curl").addEventListener("click", copyCurl);
-onStatus((st) => {
-  running = Boolean(st.decision?.running);
-  const box = $("decision-disabled");
-  box.hidden = running;
-  box.textContent = "The decision sidecar is not running. Start it on the Models page.";
+watchService("/api/decision", cfg => {
+  running = serviceNotice($("decision-disabled"), cfg).ok;
   syncRun();
 });
 $("preset").value = "ticket";
 loadPreset("ticket");
 syncRun();
-loadHistory().catch(() => {});
+trackSection("hist-daily", loadHistory);

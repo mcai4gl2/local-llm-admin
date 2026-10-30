@@ -25,6 +25,9 @@ MAX_SAMPLES = 20_000
 def backend_state(snap: Snapshot, source: str) -> dict[str, Any]:
     descriptor = snap.backends.get(source, {})
     wanted, _, profile = (snap.intent or "").partition(":")
+    # Strata's released intent contract intentionally omits its pack.
+    if source == "strata" and wanted == source and not profile:
+        profile = descriptor.get("profile") or ""
     intended = None if not snap.intent or snap.intent == "unknown" else int(wanted == source)
     state = "unknown"
     if snap.drive_mounted is True and snap.engine != "unknown":
@@ -36,7 +39,7 @@ def backend_state(snap: Snapshot, source: str) -> dict[str, Any]:
             state = "off" if intended is not None else "unknown"
         elif snap.engine != source or descriptor.get("enabled") is False:
             state = "down"
-        elif descriptor.get("profile") != profile:
+        elif (profile or source == "splash") and descriptor.get("profile") != profile:
             state = "unknown"
         elif descriptor.get("ready") is True:
             state = "serving"

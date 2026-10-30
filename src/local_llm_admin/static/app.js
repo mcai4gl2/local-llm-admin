@@ -32,6 +32,17 @@ function el(tag, attrs = {}, ...children) {
   return n;
 }
 
+const OpsTime = {
+  offset: Number(document.querySelector('meta[name="ops-timezone-offset"]')?.content ?? 0),
+  get label() {
+    return "UTC" + (this.offset <= 0 ? "+" : "−") + String(Math.floor(Math.abs(this.offset) / 60)).padStart(2, "0") + ":" + String(Math.abs(this.offset) % 60).padStart(2, "0");
+  },
+  day(date) { return new Date(date.getTime() - this.offset * 60000).toISOString().slice(0, 10); },
+  time(ts) { return Number.isFinite(ts) && ts ? new Date(ts * 1000 - this.offset * 60000).toISOString().slice(0, 19).replace("T", " ") + " " + this.label : "—"; },
+  clock(ts) { return Number.isFinite(ts) ? new Date(ts * 1000 - this.offset * 60000).toISOString().slice(11, 16) : "—"; },
+  epoch(raw) { return raw ? Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/.test(raw) ? raw : raw + "Z") / 1000 : null; },
+};
+
 const fmt = {
   num: (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString()),
   pct: (n) => (n === null || n === undefined ? "—" : `${Number(n).toFixed(0)}%`),
@@ -43,8 +54,8 @@ const fmt = {
   },
   rate: (n) => (n === null || n === undefined ? "—" : `${fmt.bytes(n)}/s`),
   tok: (n) => (n === null || n === undefined ? "—" : `${Number(n).toFixed(1)} tok/s`),
-  time: (ts) => (ts ? new Date(ts * 1000).toLocaleString() : "—"),
-  clock: (ts) => new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  time: ts => OpsTime.time(ts),
+  clock: ts => OpsTime.clock(ts),
   compact(n) {
     n = Number(n);
     if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
@@ -56,29 +67,125 @@ const fmt = {
 const STATE_LABEL = { serving: "Serving", loading: "Loading", switching: "Switching", stopped: "Stopped",
   "chat-ui": "Chat UI mode (API down)", "drive-missing": "Drive missing", error: "Error", unknown: "…",
   comfyui: "ComfyUI", "comfyui-starting": "ComfyUI starting", strata: "Strata", "strata-starting": "Strata starting",
-  conflict: "Conflict: two engines running" };
+  conflict: "Conflict: multiple engines running" };
 
 const statusListeners = [];
-async function refreshStatus() {
-  const badge = document.getElementById("state-badge");
-  try {
-    const st = await api("/api/status");
-    badge.dataset.state = st.state;
-    badge.textContent = st.engine?.active && st.engine.active !== "mlx"
-      ? EngineUI.badge(st) : STATE_LABEL[st.state] || st.state;
-    const nav = document.getElementById("nav-alerts");
-    if (nav && st.alerts) {
-      nav.hidden = !st.alerts.unacked;
-      nav.textContent = String(st.alerts.unacked);
-      nav.dataset.severity = st.alerts.worst_severity || "";
-      nav.title = `${st.alerts.unacked} unacknowledged, ${st.alerts.open} open`;
-    }
-    statusListeners.forEach((fn) => fn(st));
-  } catch (e) {
-    badge.dataset.state = "error"; badge.textContent = "Admin unreachable";
+let statusSnapshot = null, statusSuccess = null, statusPending = false;
+let statusExpiry = null;
+function notifyStatus(st) {
+  for (const fn of statusListeners) {
+    try { Promise.resolve(fn(st)).catch(e => console.error("Status renderer failed", e)); }
+    catch (e) { console.error("Status renderer failed", e); }
   }
 }
+function staleStatus(reason) {
+  const badge = document.getElementById("state-badge");
+  if (badge) { badge.dataset.tone = "unknown"; badge.textContent = statusSuccess ? "Status stale" : "Status unavailable"; }
+  const freshness = document.getElementById("status-freshness");
+  if (freshness) {
+    freshness.hidden = false;
+    freshness.textContent = `${reason}. ${statusSuccess ? "Last success: " + fmt.time(statusSuccess / 1000) : "No successful status check yet"}. Actions wait for a fresh check.`;
+  }
+  notifyStatus({...statusSnapshot, _fresh: false});
+}
+async function refreshStatus() {
+  if (statusPending) return;
+  statusPending = true;
+  let st;
+  try { st = await api("/api/status"); }
+  catch (e) { staleStatus(e.message); return; }
+  finally { statusPending = false; }
+  statusSuccess = Date.now();
+  statusSnapshot = {...st, _fresh: true};
+  clearTimeout(statusExpiry);
+  statusExpiry = setTimeout(() => staleStatus("Status check expired"), 15000);
+  const freshness = document.getElementById("status-freshness");
+  if (freshness) { freshness.hidden = true; freshness.textContent = ""; }
+  const badge = document.getElementById("state-badge");
+  if (badge) {
+    badge.dataset.state = st.state;
+    badge.dataset.tone = ["error", "drive-missing"].includes(st.state) ? "error" : EngineUI.tone(st);
+    badge.textContent = ["error", "drive-missing"].includes(st.state) ? STATE_LABEL[st.state] : st.engine ? EngineUI.badge(st) : STATE_LABEL[st.state] || st.state;
+  }
+  const nav = document.getElementById("nav-alerts");
+  if (nav && st.alerts) {
+    nav.hidden = !st.alerts.unacked;
+    nav.textContent = String(st.alerts.unacked);
+    nav.dataset.severity = st.alerts.worst_severity || "";
+    nav.title = `${st.alerts.unacked} unacknowledged, ${st.alerts.open} open`;
+  }
+  notifyStatus(statusSnapshot);
+}
 function onStatus(fn) { statusListeners.push(fn); }
+
+const sectionChecks = new Map();
+async function trackSection(id, update) {
+  let check = sectionChecks.get(id);
+  if (!check) { check = {pending: false, success: null}; sectionChecks.set(id, check); }
+  if (check.pending) return;
+  check.pending = true;
+  const target = document.getElementById(id);
+  const statusId = id + "-freshness";
+  let state = document.getElementById(statusId);
+  if (!state && target) { state = el("p", {id: statusId, class: "muted", role: "status"}); target.before(state); }
+  if (state) state.textContent = check.success ? "Refreshing · last success " + fmt.time(check.success / 1000) : "Loading…";
+  try {
+    await update(); check.success = Date.now();
+    if (target) target.dataset.stale = "false";
+    if (state) { state.dataset.stale = "false"; state.textContent = "Updated " + fmt.time(check.success / 1000); }
+  } catch (e) {
+    if (target) {
+      target.dataset.stale = "true";
+      for (const button of target.querySelectorAll("[data-requires-fresh]")) button.disabled = true;
+    }
+    if (state) { state.dataset.stale = "true"; state.textContent = `Update failed: ${e.message}. ${check.success ? "Stale · last success " + fmt.time(check.success / 1000) : "No successful update yet"}`; }
+  } finally { check.pending = false; }
+}
+
+function serviceEligibility(cfg) {
+  if (!cfg || cfg._fresh === false) return {ok: false, text: cfg?._error || "Service status is stale or unavailable. Waiting for a fresh check."};
+  if (cfg._blocked) return {ok: false, text: cfg._blocked};
+  if (cfg._owner) return {ok: false, text: cfg._owner + " owns the GPU. Switch engines on Models."};
+  const ok = cfg.ready === true && cfg.availability?.available !== false;
+  return {ok, text: cfg.availability?.reason || (cfg.running ? "Starting; waiting for readiness." : "Stopped. Start it on the Models page.")};
+}
+function serviceNotice(box, cfg) {
+  const gate = serviceEligibility(cfg);
+  box.hidden = gate.ok;
+  box.replaceChildren(gate.text + " ", el("a", {href: "/models", text: "Open Models"}));
+  return gate;
+}
+function watchService(path, render) {
+  let data = null, checked = 0, pending = false, statusFresh = false, owner = null, blocked = null;
+  let statusKey = null, revision = 0;
+  const show = () => render({...data, _fresh: Boolean(checked && Date.now() - checked < 15000 && statusFresh), _owner: owner, _blocked: blocked});
+  async function refresh() {
+    if (pending) return;
+    pending = true;
+    const requested = revision;
+    try {
+      const next = await api(path);
+      if (requested === revision) { data = next; checked = Date.now(); }
+    } catch (e) {
+      if (requested === revision) { data = {...data, _error: `${e.message}. Last success: ${checked ? fmt.time(checked / 1000) : "never"}`}; checked = 0; }
+    } finally {
+      pending = false; show();
+      if (requested !== revision) refresh();
+    }
+  }
+  onStatus(st => {
+    statusFresh = EngineUI.fresh(st);
+    const b = EngineUI.active(st), gate = EngineUI.lifecycle(st);
+    owner = b?.exclusive ? b.label : null;
+    blocked = gate.ok ? null : gate.text;
+    const key = JSON.stringify([st.engine?.active, b?.reference, b?.state, Boolean(st.job), Boolean(st.quality_active), statusFresh]);
+    if (key !== statusKey) { statusKey = key; revision++; checked = 0; refresh(); }
+    show();
+  });
+  setInterval(refresh, 10000);
+  refresh();
+  return refresh;
+}
 
 document.getElementById("logout-form")?.addEventListener("submit", async (ev) => {
   ev.preventDefault();
@@ -113,6 +220,16 @@ function niceMax(v) {
   return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
 }
 
+function chartData(container, rows) {
+  if (!container.id) return;
+  const id = container.id + "-data";
+  let details = document.getElementById(id);
+  if (!details) { details = el("details", {id, class: "chart-data"}); container.after(details); }
+  details.replaceChildren(el("summary", {text: "Chart data"}),
+    el("div", {class: "table-wrap"}, el("table", {}, el("tbody", {}, ...rows.map(row => el("tr", {}, ...row.map(cell => el("td", {text: cell}))))))));
+  container.setAttribute("aria-describedby", id);
+}
+
 // points: [{t: epoch s, v: number|null}]
 function lineChart(container, points, { max = null, unit = "%" } = {}) {
   const W = container.clientWidth || 300, H = container.clientHeight || 160;
@@ -133,10 +250,19 @@ function lineChart(container, points, { max = null, unit = "%" } = {}) {
       const t = svgEl("text", { x: x(tt), y: H - 4, "text-anchor": anchor }); t.textContent = fmt.clock(tt); svg.append(t);
     }
   }
-  if (pts.length > 1) {
-    const d = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
-    svg.append(svgEl("path", { class: "area", d: `${d}L${x(pts[pts.length - 1].t)},${y(0)}L${x(pts[0].t)},${y(0)}Z` }));
-    svg.append(svgEl("path", { class: "line", d }));
+  const segments = [];
+  let segment = [];
+  for (const p of points) {
+    if (p.v == null) { if (segment.length) segments.push(segment); segment = []; }
+    else segment.push(p);
+  }
+  if (segment.length) segments.push(segment);
+  for (const group of segments) {
+    const d = group.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+    if (group.length > 1) {
+      svg.append(svgEl("path", {class: "area", d: `${d}L${x(group.at(-1).t)},${y(0)}L${x(group[0].t)},${y(0)}Z`}));
+      svg.append(svgEl("path", {class: "line", d}));
+    } else svg.append(svgEl("circle", {class: "dot", cx: x(group[0].t), cy: y(group[0].v), r: 3}));
   }
   const cross = svgEl("line", { class: "cross", y1: m.t, y2: H - m.b, visibility: "hidden" });
   const dot = svgEl("circle", { class: "dot", r: 4, visibility: "hidden" });
@@ -144,6 +270,7 @@ function lineChart(container, points, { max = null, unit = "%" } = {}) {
   const hit = svgEl("rect", { class: "hit", x: m.l, y: 0, width: Math.max(0, W - m.l - m.r), height: H });
   svg.append(hit);
   container.replaceChildren(svg);
+  chartData(container, points.map(p => [fmt.time(p.t), p.v == null ? "Not observed" : `${p.v.toFixed(1)}${unit}`]));
   const tip = tooltip(container);
   hit.addEventListener("pointermove", (ev) => {
     if (!pts.length) return;
@@ -193,15 +320,22 @@ function stackedBars(container, days, { classes = ["bar-p", "bar-c", "bar-x"] } 
     if (i % every === 0) {
       const t = svgEl("text", { x: x0 + bw / 2, y: H - 6, "text-anchor": "middle" }); t.textContent = d.label.slice(5); svg.append(t);
     }
-    const hit = svgEl("rect", { class: "hit bar-hit", x: m.l + i * slot, y: m.t, width: slot, height: H - m.t - m.b });
+    const hit = svgEl("rect", { tabindex: "0", role: "img", "aria-label": d.lines.join(" · "), class: "hit bar-hit", x: m.l + i * slot, y: m.t, width: slot, height: H - m.t - m.b });
     hit.addEventListener("pointermove", (ev) => {
       const b = svg.getBoundingClientRect();
       tip.show(ev.clientX - b.left, ev.clientY - b.top, d.lines);
     });
     hit.addEventListener("pointerleave", () => tip.hide());
+    hit.addEventListener("focus", () => tip.show(x0, m.t + 36, d.lines));
+    hit.addEventListener("blur", () => tip.hide());
+    if (d.a == null || d.b == null) {
+      const missing = svgEl("text", {x: x0 + bw / 2, y: H - m.b - 4, "text-anchor": "middle"});
+      missing.textContent = "—"; svg.append(missing);
+    }
     svg.append(hit);
   });
   container.prepend(svg);
+  chartData(container, days.map(d => d.lines));
 }
 function roundTop(x, y, w, h, r) {
   if (h <= 0) return "";
@@ -225,27 +359,32 @@ async function setEngineWithForce(target, ask) {
   }
 }
 const nativeAsk = async (title, body) => window.confirm(`${title}\n\n${body}`);
-let conflictStatus = null;
+let conflictStatus = null, conflictPending = false;
 onStatus((st) => {
   const banner = document.getElementById("conflict-banner");
   if (!banner) return;
   conflictStatus = st;
   banner.hidden = st.engine?.active !== "conflict";
+  for (const button of banner.querySelectorAll("button")) button.disabled = !EngineUI.fresh(st) || conflictPending || Boolean(st.job || st.quality_active);
   const container = document.getElementById("conflict-engine-controls");
   const running = Object.values(st.engine?.backends || {}).filter(b => b.enabled && b.running);
   container?.replaceChildren(...running.map(b => {
     const ref = b.operations.includes("multi-model") ? st.selected : b.reference;
     const target = b.id + (ref ? ":" + ref : "");
-    return el("button", {"data-keep": target, text: "Keep " + b.label});
+    return el("button", {disabled: !EngineUI.fresh(st) || conflictPending || Boolean(st.job || st.quality_active), "data-keep": target, text: "Keep " + b.label});
   }));
 });
 document.getElementById("conflict-banner")?.addEventListener("click", async (ev) => {
   const target = ev.target?.dataset?.keep;
-  if (!target) return;
+  if (!target || conflictPending || !EngineUI.fresh(conflictStatus) || conflictStatus.job || conflictStatus.quality_active) return;
   const prompt = target === "off" ? "Stop every engine?"
     : "Keep " + (conflictStatus?.engine?.backends?.[target.split(":")[0]]?.label || target) + " and stop the other engines?";
   if (!window.confirm(prompt)) return;
-  try { await setEngineWithForce(target, nativeAsk); refreshStatus(); } catch (e) { alert(e.message); }
+  conflictPending = true;
+  for (const button of document.querySelectorAll("#conflict-banner button")) button.disabled = true;
+  try { await setEngineWithForce(target, nativeAsk); }
+  catch (e) { alert(e.message); }
+  finally { conflictPending = false; refreshStatus(); }
 });
 
 // ---- diagnostics (shared by the dashboard Problems card and the Alerts page) ----
@@ -292,10 +431,17 @@ function checkRow(c, done) {
       el("span", { class: "sev", "data-status": c.status, text: CHECK_LABEL[c.status] || c.status }),
       el("strong", { text: c.title }),
       c.stale ? el("span", { class: "pill", text: "stale" }) : null,
-      el("span", { class: "muted", text: `checked ${new Date(c.observed_at * 1000).toLocaleTimeString()}` })),
+      el("span", { class: "muted", text: `checked ${fmt.time(c.observed_at)}` })),
     el("div", { text: c.evidence }),
     c.fix ? el("div", { class: "muted", text: c.fix }) : null,
     act ? el("div", { class: "actions" }, status, act) : null);
+}
+
+const siteNav = document.getElementById("site-nav");
+if (siteNav) {
+  const desktopNavigation = window.matchMedia("(min-width: 761px)");
+  siteNav.open = desktopNavigation.matches;
+  desktopNavigation.addEventListener("change", ev => { siteNav.open = ev.matches; });
 }
 
 refreshStatus();

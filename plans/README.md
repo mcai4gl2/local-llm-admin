@@ -6,6 +6,9 @@
 | [backlog](backlog/README.md) | Proposed or deferred work with an explicit next decision |
 | [archive](archive/README.md) | Completed implementations and closed investigation records |
 
+The [admin website consistency implementation](archive/platform/20261030_admin-web-consistency-and-usability.md)
+records all 28 cross-backend UI findings, delivered changes and local validation.
+
 New plans use `active/YYYYMMDD_<name>.md`. Keep one active plan for a coherent change;
 update its progress instead of creating another file for every checkpoint. Move it into
 `archive/<component>/` when the change is complete. Put a concise follow-up in backlog

@@ -256,6 +256,9 @@ async def test_chat_metadata_is_resolved_once_with_live_profiles(registry, monke
     )
     result = await registry.resolve_inference(lambda name: {"top_k": 7})
     assert result.defaults == {"top_k": 7}
+    assert result.identity["engine"] == "mlx"
+    assert result.identity["reference"] == "qwen"
+    assert not any(key in result.identity for key in ("base_url", "api_key"))
     assert result.target.model == "/Volumes/Models/models/active"
     assert calls == ["/health"]
     assert is_serving(await health())
