@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "license": "Repository-authored reference text; generated raster output contains no font files.",
+  "cases": {
+    "english": {"pages": ["Public OCR reference.\nThe quick brown fox jumps over the lazy dog."], "max_cer": 0.02},
+    "simplified": {"pages": ["这是公开的文字识别测试。\n春天的阳光照在安静的花园里。"], "max_cer": 0.05},
+    "traditional": {"pages": ["這是公開的文字辨識測試。\n春天的陽光照在安靜的花園裡。"], "max_cer": 0.05},
+    "numeric": {"pages": ["Invoice 12345\nAmount: 123.45\nDate: 2026-10-30\nRate: 0.75%\nSymbols: (A+B)/2 = 3!"], "max_cer": 0.02, "numeric_fields": ["12345", "123.45", "2026-10-30", "0.75"]},
+    "rotated": {"pages": ["Rotated reference\nRead these lines in order."], "max_cer": 0.05, "rotation_degrees": 90},
+    "columns": {"pages": ["Left column one.\nLeft column two.\nRight column one.\nRight column two."], "max_cer": 0.02},
+    "table": {"pages": ["Item Qty\nTea 12\nRice 34"], "max_cer": 0.05, "numeric_fields": ["12", "34"], "table": [["Item", "Qty"], ["Tea", "12"], ["Rice", "34"]]},
+    "formula": {"pages": ["x = (a + b) / 2"], "max_cer": 0.05},
+    "blank": {"pages": [""], "max_cer": 0},
+    "scanned-pdf": {"pages": ["Page one.\nFirst public reference.", "第二页。\n公开的扫描文档测试。", "Page three.\nFinal public reference."], "max_cer": 0.05}
+  },
+  "load_thresholds": {"min_requests_each_phase": 30, "chat_p95_max_ratio": 1.25, "chat_tokens_per_second_min_ratio": 0.9, "embedding_p95_max_ratio": 1.25, "allowed_errors": 0},
+  "memory_threshold": "Normal pressure throughout; measured combined peak plus configured headroom must fit RAM and wired limit. Increase the service reservation to at least measured OCR peak before admission is qualified."
+}

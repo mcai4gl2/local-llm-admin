@@ -190,3 +190,50 @@ def test_sidecar_never_starts_beside_strata():
 def test_service_never_starts_beside_strata():
     b = service_budget(strata_running=True, mlx_running=False, mlx_name=None, mlx_gb=None)
     assert not b.ok and any("Strata is running" in r for r in b.reasons)
+
+
+# Multiple resident services share one reservation inventory.
+
+
+def test_service_budget_counts_siblings_once():
+    from dataclasses import replace
+    ocr = replace(EMBED, name="paddleocr-vl", label="OCR", footprint_gb=12.0)
+    b = service_budget(spec=ocr, services=[EMBED, ocr], sidecar=OPENJEV)
+    assert not b.ok and b.total_gb == 63.0
+    assert "embeddings 7.0 GB (running)" in b.lines
+    assert sum("OCR 12.0 GB" in line for line in b.lines) == 1
+
+
+@pytest.mark.parametrize("footprint", [0.0, -1.0, float("nan"), float("inf")])
+def test_service_budget_refuses_unknown_or_invalid_reservations(footprint):
+    from dataclasses import replace
+    unknown = replace(EMBED, name="unknown", footprint_gb=footprint)
+    b = service_budget(services=[unknown])
+    assert not b.ok and b.total_gb is None
+    assert any("memory" in reason for reason in b.reasons)
+
+
+def test_service_budget_deduplicates_siblings():
+    from dataclasses import replace
+    other = replace(EMBED, name="other", footprint_gb=3.0)
+    b = service_budget(services=[other, other, EMBED])
+    assert b.ok and b.total_gb == 34.0
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1.0])
+def test_invalid_mlx_estimate_never_admits_a_resident_or_slot(value):
+    assert not service_budget(mlx_gb=value).ok
+    assert not budget(mlx_gb=value).ok
+
+
+def test_admission_also_checks_running_sibling_compatibility():
+    from dataclasses import replace
+    incompatible = replace(EMBED, name="third", allowed_mlx=frozenset({"different"}))
+    assert not service_budget(services=[incompatible]).ok
+    assert not budget(services=[incompatible]).ok
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1.0])
+def test_invalid_ram_estimate_never_admits(value):
+    assert not service_budget(ram_gb=value).ok
+    assert not budget(ram_gb=value).ok

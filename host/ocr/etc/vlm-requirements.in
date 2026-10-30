@@ -1,0 +1,4 @@
+# Separate candidate recognition environment; existing chat/embed environments stay intact.
+mlx-vlm==0.7.3
+mlx==0.32.2
+mlx-metal==0.32.2

@@ -25,3 +25,12 @@ Rules:
 curl -s http://127.0.0.1:8084/v1/embeddings -H 'Content-Type: application/json' \
   -d '{"model":"/Volumes/Models/embed/models/Qwen3-Embedding-4B-8bit","input":["hello"]}' | head -c 300
 ```
+## Resident catalog integration
+
+Embeddings retains its service/model IDs, private settings and independent intent. The
+shared resident guard now accounts for every configured resident and the target MLX model.
+Before OCR is provisioned, legacy embedding detection remains available. Once its host
+payload is installed, a missing or mismatched private resident catalog refuses new starts.
+Generate it from the same admin settings as the [OCR runtime](../ocr/README.md). Existing
+embedding/rerank request history is read without migration or copying; logs are available
+as the `embed` source. Native embedding dependencies are not upgraded for OCR.

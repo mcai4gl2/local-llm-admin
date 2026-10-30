@@ -189,6 +189,7 @@ cmd_status() {
 
 cmd_start() {
   engine_splash_guard
+  engine_resident_guard slot "qwen-tts"
   local pid="" w=""
   if pid="$(current_pid)"; then
     echo "qwen-tts is already running (pid $pid)" >&2

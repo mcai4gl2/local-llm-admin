@@ -293,3 +293,13 @@ def test_splash_log_sources_are_feature_gated_and_allowlisted(tmp_path: Path) ->
     for value in ("splash/../../etc/splash.env", "splash:secret", "splash-native/secret"):
         with pytest.raises(KeyError):
             resolve_source(settings, value)
+def test_resident_logs_use_descriptor_paths_and_enablement(tmp_path: Path) -> None:
+    from local_llm_admin.logs import resolve_source, source_ids
+    settings = Settings(embed_enabled=True, embed_root=tmp_path / "embed",
+                        ocr_enabled=True, ocr_root=tmp_path / "ocr", ocr_port=8097, ocr_vlm_port=8098)
+    assert {"embed", "ocr", "ocr-vlm"} <= set(source_ids(settings))
+    assert resolve_source(settings, "embed") == tmp_path / "embed/logs/qwen-embed.log"
+    assert resolve_source(settings, "ocr-vlm") == tmp_path / "ocr/logs/vlm.log"
+    settings.ocr_enabled = False
+    with pytest.raises(KeyError):
+        resolve_source(settings, "ocr")

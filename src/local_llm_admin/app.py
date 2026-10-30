@@ -96,6 +96,8 @@ from .logs import (
 )
 from .metrics import Sampler, window_seconds
 from .mlx import MlxClient, parse_start_markers, validate_name
+from .ocr import OcrClient
+from .ocr_routes import install_ocr_routes
 from .performance_store import (
     PARSER,
     PERF_SOURCE,
@@ -106,6 +108,7 @@ from .performance_store import (
 from .profiles import ProfileError, ProfileService
 from .quality_runner import QualityError, QualityRunner, model_info
 from .quality_store import QualityStore
+from .service_store import ServiceStore
 from .sidecars import (
     SidecarMonitor,
     SidecarPlan,
@@ -137,6 +140,7 @@ PAGES = {
     "/decision": "decision",
     "/tts": "tts",
     "/embed": "embed",
+    "/ocr": "ocr",
 }
 REQUEST_STATES = Literal["completed", "cancelled", "error", "incomplete"]
 _PUBLIC = ("/login", "/healthz", "/static/")
@@ -277,6 +281,7 @@ def create_app(
     decision_transport: httpx.MockTransport | None = None,
     tts_transport: httpx.MockTransport | None = None,
     embed_transport: httpx.MockTransport | None = None,
+    ocr_transport: httpx.MockTransport | None = None,
     strata_transport: httpx.MockTransport | None = None,
     splash_transport: httpx.MockTransport | None = None,
     judge_transport: httpx.AsyncBaseTransport | None = None,
@@ -293,12 +298,16 @@ def create_app(
     decision = DecisionClient(settings, transport=decision_transport)
     tts = TtsClient(settings, transport=tts_transport)
     embed = EmbedClient(settings, transport=embed_transport)
+    ocr = OcrClient(settings, transport=ocr_transport)
     sidecar_registry = SidecarRegistry(
         settings,
-        {"openjev": decision_transport, "qwen-tts": tts_transport, "qwen-embed": embed_transport},
+        {"openjev": decision_transport, "qwen-tts": tts_transport, "qwen-embed": embed_transport,
+         "paddleocr-vl": ocr_transport},
     )
     sidecar_registry.set_warmup("qwen-tts", tts.warmup_sync)
     sidecar_registry.set_warmup("qwen-embed", embed.warmup_sync)
+    sidecar_registry.set_warmup("paddleocr-vl", lambda: ocr.warmup_sync(restarted=True))
+    sidecar_registry.set_activity("paddleocr-vl", lambda: ocr.busy)
     control = ControlService(
         settings,
         store,
@@ -451,6 +460,13 @@ def create_app(
     decision_keys = ClientKeys(db_path)
     tts_history = TtsStore(db_path)
     embed_history = EmbedStore(db_path)
+    service_history = ServiceStore(db_path, settings)
+
+    def ocr_reason() -> str | None:
+        reason = service_unavailable_reason(
+            sidecar_registry, store, "paddleocr-vl", control.exclusive_running,
+        )
+        return reason if reason is not None else ocr.unavailable_reason_sync()
 
     def embed_reason() -> str | None:
         return service_unavailable_reason(
@@ -465,7 +481,7 @@ def create_app(
             alerts,
             history=decision_history,
             backends=control.backends,
-            prune_extra=[tts_history.prune, embed_history.prune],
+            prune_extra=[tts_history.prune, embed_history.prune, service_history.prune],
         )
     )
     quality_store = QualityStore(db_path)
@@ -556,9 +572,13 @@ def create_app(
     app.state.embed = embed
     app.state.embed_history = embed_history
     app.state.embed_reason = embed_reason
+    app.state.ocr = ocr
+    app.state.ocr_reason = ocr_reason
+    app.state.service_history = service_history
     app.state.decision_history = decision_history
     app.state.decision_keys = decision_keys
     app.state.sampler_pressure = lambda: sampler.current().get("pressure")
+    control.memory_pressure = lambda: app.state.sampler_pressure()
     app.state.alerts = alerts
     app.state.supervisor = supervisor
     app.state.quality = quality
@@ -662,6 +682,8 @@ def create_app(
                 raise HTTPException(404, "the TTS sidecar is not enabled")
             if page == "embed" and not settings.embed_enabled:
                 raise HTTPException(404, "the embedding service is not enabled")
+            if page == "ocr" and not settings.ocr_enabled:
+                raise HTTPException(404, "the OCR service is not enabled")
             return templates.TemplateResponse(
                 request,
                 f"{page}.html",
@@ -673,6 +695,7 @@ def create_app(
                     "decision_enabled": settings.decision_enabled,
                     "tts_enabled": settings.tts_enabled,
                     "embed_enabled": settings.embed_enabled,
+                    "ocr_enabled": settings.ocr_enabled,
                 },
             )
 
@@ -1378,11 +1401,19 @@ def create_app(
     async def _service_view(spec: SidecarSpec) -> dict[str, Any]:
         proc = sidecar_registry.process(spec.name)
         st = await asyncio.to_thread(proc.status)
-        ready = st.running and await asyncio.to_thread(proc.ready_sync)
+        ready = st.running and st.owned and await asyncio.to_thread(proc.ready_sync)
         cli = await asyncio.to_thread(proc.cli_status)
-        budget = await control.service_budget(spec.name, app.state.sampler_pressure())
+        try:
+            budget = _budget_view(await control.service_budget(spec.name, app.state.sampler_pressure()))
+        except ControlError as exc:
+            budget = {"ok": False, "reasons": [exc.message], "lines": [],
+                      "total_gb": None, "limit_gb": None}
         intent = await asyncio.to_thread(read_service_intent, store, spec)
         availability = await _service_availability(st.running, ready, intent)
+        if st.running and not st.owned:
+            availability.update(available=False, state="failed", reason="Process ownership is unknown.")
+        elif st.running and not ready and not runner.running():
+            availability.update(available=False, state="failed", reason="Service or dependency is not ready; inspect logs.")
         return {
             "name": spec.name,
             "label": spec.label,
@@ -1398,21 +1429,62 @@ def create_app(
             "listen": spec.api_base,
             "weights": cli["weights"],
             "allowed_mlx": sorted(spec.allowed_mlx),
-            "models": [settings.embed_model_id, settings.rerank_model_id],
-            "budget": _budget_view(budget),
+            "models": [m.id for m in spec.models],
+            "capabilities": list(dict.fromkeys(m.capability for m in spec.models)),
+            "ui_path": spec.ui_path,
+            "log_sources": list(spec.log_sources),
+            "reservation_gb": spec.footprint_gb or None,
+            "enabled": spec.enabled,
+            "busy": sidecar_registry.busy(spec.name),
+            "history_url": f"/api/services/{spec.name}/history",
+            "budget": budget,
         }
 
     @app.get("/api/services")
     async def services_view() -> dict[str, Any]:
-        return {"services": [await _service_view(s) for s in sidecar_registry.services()]}
+        running = {s.name for s in await asyncio.to_thread(sidecar_registry.services_running)}
+        return {"services": [await _service_view(s) for s in sidecar_registry.services(enabled_only=False)
+                             if s.enabled or s.name in running]}
 
     @app.post("/api/services/{name}/start")
     async def service_start(name: str) -> JSONResponse:
         return await _control(control.service_start(name, app.state.sampler_pressure()))
 
     @app.post("/api/services/{name}/stop")
-    async def service_stop(name: str) -> JSONResponse:
-        return await _control(control.service_stop(name))
+    async def service_stop(name: str, force: bool = False) -> JSONResponse:
+        return await _control(control.service_stop(name, force=force))
+
+    @app.get("/api/services/{name}/history")
+    async def service_history_view(name: str, days: int = Query(14, ge=1, le=90)) -> dict[str, Any]:
+        try:
+            sidecar_registry.get_service(name, enabled_only=False)
+        except KeyError:
+            raise HTTPException(404, "unknown service") from None
+        now = time.time()
+        start = now - days * 86400
+        return {
+            "recent": await asyncio.to_thread(service_history.recent, name),
+            "daily": await asyncio.to_thread(
+                service_history.daily, name, start, now, settings.litellm_timezone_offset_min,
+            ),
+            "availability": await asyncio.to_thread(decision_history.availability, start, now, name),
+        }
+
+    @app.get("/api/ocr")
+    async def ocr_status() -> dict[str, Any]:
+        if not settings.ocr_enabled:
+            raise HTTPException(404, "the OCR service is not enabled")
+        return {
+            "model": settings.ocr_model_id,
+            "reason": await asyncio.to_thread(ocr_reason),
+            "admission": ocr.admission, "limits": dataclasses.asdict(ocr.limits),
+        }
+
+    if settings.ocr_enabled:
+        install_ocr_routes(
+            app, settings, ocr, ocr_reason, service_history,
+            native_path="/api/ocr/recognize", source="admin-ui",
+        )
 
     @app.get("/api/embed")
     async def embed_status() -> dict[str, Any]:

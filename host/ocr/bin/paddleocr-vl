@@ -1,0 +1,24 @@
+#!/bin/zsh
+# The logical OCR owner has its own intent and never occupies the exclusive sidecar slot.
+set -euo pipefail
+ROOT="${0:A:h:h}"
+ENGINE_GUARD="$ROOT/../bin/engine-guard.sh"
+[[ -r "$ENGINE_GUARD" ]] || { echo "Missing shared engine guard." >&2; exit 1; }
+source "$ENGINE_GUARD"
+
+ocr_start() {
+  engine_splash_guard
+  engine_resident_guard resident paddleocr-vl
+  "$ROOT/venv/bin/python" -I "$ROOT/app/lifecycle.py" "$ROOT" start "$@"
+}
+ocr_stop() {
+  "$ROOT/venv/bin/python" -I "$ROOT/app/lifecycle.py" "$ROOT" stop "$@"
+}
+action="${1:-}"
+(( $# > 0 )) && shift
+case "$action" in
+  start) engine_run ocr_start "$@" ;;
+  stop) engine_run ocr_stop "$@" ;;
+  status) "$ROOT/venv/bin/python" -I "$ROOT/app/lifecycle.py" "$ROOT" status ;;
+  *) echo "Usage: paddleocr-vl start|stop|status" >&2; exit 2 ;;
+esac

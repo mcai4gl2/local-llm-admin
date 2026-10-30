@@ -42,7 +42,7 @@ def test_v16_migration_failure_is_atomic_and_old_app_can_use_restored_backup(
         original(conn)
         raise RuntimeError("interrupted")
 
-    monkeypatch.setattr(storage, "MIGRATIONS", [*storage.MIGRATIONS[:15], broken])
+    monkeypatch.setattr(storage, "MIGRATIONS", [*storage.MIGRATIONS[:15], broken, *storage.MIGRATIONS[16:]])
     with pytest.raises(RuntimeError, match="interrupted"):
         storage.Database(path)
     with sqlite3.connect(path) as c:
@@ -68,11 +68,11 @@ def test_restore_requires_matching_version_offline_files_and_preservation(tmp_pa
     with pytest.raises(ValueError, match="version"):
         restore(snapshot, path, expected_version=1, preserve=None)
     with pytest.raises(ValueError, match="preserve"):
-        restore(snapshot, path, expected_version=16, preserve=None)
+        restore(snapshot, path, expected_version=storage.SCHEMA_VERSION, preserve=None)
     wal = Path(str(path) + "-wal")
     wal.touch()
     with pytest.raises(ValueError, match="offline"):
-        restore(snapshot, path, expected_version=16, preserve=tmp_path / "saved.sqlite")
+        restore(snapshot, path, expected_version=storage.SCHEMA_VERSION, preserve=tmp_path / "saved.sqlite")
     assert not (tmp_path / "saved.sqlite").exists()
 
 
@@ -101,7 +101,7 @@ def test_backup_cli_and_offline_restore_cli(
             "--database",
             str(target),
             "--expected-version",
-            "16",
+            str(storage.SCHEMA_VERSION),
             "--preserve-current",
             str(tmp_path / "previous.sqlite"),
             "--offline",
@@ -110,7 +110,7 @@ def test_backup_cli_and_offline_restore_cli(
     main()
     assert target.exists()
     with pytest.raises(ValueError, match="differ"):
-        restore(target, target, expected_version=16, preserve=tmp_path / "previous.sqlite")
+        restore(target, target, expected_version=storage.SCHEMA_VERSION, preserve=tmp_path / "previous.sqlite")
 
 
 def test_backup_timeout_and_integrity_validation_fail_closed(

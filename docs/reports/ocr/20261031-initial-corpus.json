@@ -1,0 +1,84 @@
+{
+  "load": {
+    "passed": false,
+    "reason": "Load evidence pending."
+  },
+  "memory": {
+    "passed": false,
+    "reason": "Native memory/pressure evidence pending."
+  },
+  "passed": false,
+  "schema_version": 1,
+  "tasks": {
+    "blank": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "columns": {
+      "cer": 0.2413793103448276,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": false,
+      "table_structure": true
+    },
+    "english": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "formula": {
+      "cer": 0.2222222222222222,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": false,
+      "table_structure": true
+    },
+    "numeric": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "rotated": {
+      "cer": 0.42105263157894735,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": false,
+      "table_structure": true
+    },
+    "scanned-pdf": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "simplified": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "table": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    },
+    "traditional": {
+      "cer": 0.0,
+      "complete": true,
+      "numeric_exact": true,
+      "passed": true,
+      "table_structure": true
+    }
+  }
+}

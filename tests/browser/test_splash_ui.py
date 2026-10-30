@@ -109,16 +109,24 @@ def ui(browser: Any) -> Iterator[Any]:
                 decision_enabled=current.get("features", False),
                 tts_enabled=current.get("features", False),
                 embed_enabled=current.get("features", False),
+                ocr_enabled=current.get("features", False),
                 ops_timezone_offset_min=current.get("ops_offset", -480),
             )
             r.fulfill(content_type="text/html", body=html)
             return
+        if path.startswith("/api/services/") and path.endswith("/history"):
+            r.fulfill(json={"recent": [], "daily": [], "availability": {"ratio": None}})
+            return
         if r.request.method != "GET":
-            mutations.append((path, r.request.post_data_json))
+            try:
+                body = r.request.post_data_json
+            except Exception:
+                body = None  # upload fixture metadata does not retain document bytes
+            mutations.append((path, body))
         data = {
             "/api/status": current,
             "/api/sidecars": {"sidecars": [{"name": "openjev", "title": "Decision", "running": False, "ready": False, "weights": "complete", "allowed_mlx": [], "budget": {"ok": False, "lines": [], "reasons": ["Synthetic memory budget unavailable"]}}], "conflict": False},
-            "/api/services": {"services": [{"name": "qwen-embed", "running": False, "ready": False, "intent": "stopped", "models": [], "allowed_mlx": [], "budget": {"ok": False, "lines": [], "reasons": ["Synthetic memory budget unavailable"]}}]},
+            "/api/services": {"services": current.get("resident_services", [{"name": "qwen-embed", "running": False, "ready": False, "intent": "stopped", "models": [], "allowed_mlx": [], "budget": {"ok": False, "lines": [], "reasons": ["Synthetic memory budget unavailable"]}}])},
             "/api/comfyui/queue": {"state": "ok", "checked_at": datetime.now(UTC).timestamp(), "running_count": 0, "pending_count": 0, "running": [], "pending": [], "capabilities": {}},
             "/api/comfyui/outputs": {"available": True, "items": [], "total": 0, "scanned_at": 100, "next_offset": None},
             "/api/usage/health": {"reachable": True, "key_ok": True},
@@ -846,9 +854,8 @@ def test_failed_service_snapshot_keeps_lifecycle_controls_disabled(ui: Any) -> N
     current["features"] = True
     page.route("**/api/services", lambda r: r.fulfill(status=503, json={"detail": "Synthetic service outage"}))
     page.goto("http://admin.test/models")
-    pw.expect(page.locator("#embed-card-freshness")).to_contain_text("Synthetic service outage")
-    pw.expect(page.locator("#embed-start")).to_be_disabled()
-    pw.expect(page.locator("#embed-stop")).to_be_disabled()
+    pw.expect(page.locator("#resident-services-freshness")).to_contain_text("Synthetic service outage")
+    assert page.locator("[data-resident-action]:enabled").count() == 0
 
 
 def test_stored_quality_context_uses_the_selected_historical_target(ui: Any) -> None:
@@ -995,11 +1002,12 @@ def test_dashboard_does_not_verify_context_from_an_unready_mlx_snapshot(ui: Any)
     pw.expect(page.locator("#st-facts")).to_contain_text("Loaded contextUnknown · Unverified")
 
 
-@pytest.mark.parametrize("service,facts", [("decision", "sidecar-facts"), ("embed", "embed-facts")])
+@pytest.mark.parametrize("service,facts", [("decision", "sidecar-facts"), ("embed", "service-qwen-embed-facts")])
 def test_models_does_not_call_failed_service_history_zero_traffic(ui: Any, service: str, facts: str) -> None:
     page, current, _, _ = ui
     current["features"] = True
-    page.route("**/api/" + service + "/history?**", lambda r: r.fulfill(status=503, json={"detail": "Synthetic daily traffic outage"}))
+    path = "**/api/services/qwen-embed/history" if service == "embed" else "**/api/" + service + "/history?**"
+    page.route(path, lambda r: r.fulfill(status=503, json={"detail": "Synthetic daily traffic outage"}))
     page.goto("http://admin.test/models")
     pw.expect(page.locator("#" + facts)).to_contain_text("Unavailable: Synthetic daily traffic outage")
 
@@ -1009,3 +1017,49 @@ def test_performance_section_timestamps_use_declared_operations_timezone(ui: Any
     page.goto("http://admin.test/performance")
     page.locator("#perf-engine").select_option("mlx")
     pw.expect(page.locator("#perf-summary-state")).to_contain_text("UTC+08:00")
+
+
+def test_resident_cards_render_third_registration_and_safe_labels(ui: Any) -> None:
+    page, current, errors, _ = ui
+    current["features"] = True
+    current["resident_services"] = [
+        {"name": name, "title": title, "enabled": True, "running": False, "ready": False,
+         "intent": "running", "models": [name + "-model"], "allowed_mlx": [],
+         "log_sources": [name + "-log"],
+         "ui_path": "/" + name, "availability": {"reason": "Suspended by Splash", "owner": "splash"},
+         "budget": {"ok": False, "lines": ["Synthetic reservation"], "reasons": ["Exclusive engine active"]}}
+        for name, title in [("qwen-embed", "Embeddings"), ("paddleocr-vl", "OCR"),
+                            ("third", "<img src=x onerror=alert(1)>")]
+    ]
+    page.goto("http://admin.test/models")
+    pw.expect(page.locator("[data-resident-service]")).to_have_count(3)
+    pw.expect(page.locator("#service-third-facts")).to_contain_text("third-model")
+    pw.expect(page.locator("#service-third-start")).to_be_disabled()
+    pw.expect(page.locator("#service-third-logs a")).to_have_attribute("href", "/logs?source=third-log")
+    assert page.locator("#resident-services img").count() == 0
+    assert errors == []
+
+
+def test_ocr_upload_escapes_results_and_downloads_each_format(ui: Any) -> None:
+    from tests.ocr_fixtures import png, result
+    page, current, errors, _ = ui
+    current["features"] = True
+    body = result()
+    body["pages"][0]["text"] = body["pages"][0]["markdown"] = "<script>window.ocrInjected=true</script>"
+    body["text"] = body["markdown"] = body["pages"][0]["text"]
+    page.route("**/api/ocr", lambda r: r.fulfill(json={
+        "model": "local-ocr", "reason": None, "admission": {"active": False, "queued": 0},
+        "limits": {"max_bytes": 10485760, "max_pages": 16}}))
+    page.route("**/api/ocr/recognize", lambda r: r.fulfill(json=body))
+    page.goto("http://admin.test/ocr")
+    page.locator("#ocr-document").set_input_files({"name": "synthetic.png", "mimeType": "image/png", "buffer": png()})
+    page.locator("#ocr-run").click()
+    pw.expect(page.locator("#ocr-results")).to_contain_text("<script>window.ocrInjected=true</script>")
+    assert page.evaluate("window.ocrInjected") is None
+    for mode in ("text", "markdown", "json"):
+        with page.expect_download() as download:
+            page.locator("#ocr-download-" + mode).click()
+        assert download.value.suggested_filename.startswith("ocr-result.")
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    assert errors == []

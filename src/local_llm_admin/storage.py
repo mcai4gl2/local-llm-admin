@@ -348,6 +348,22 @@ def _v16_engine_telemetry(conn: sqlite3.Connection) -> None:
     )
 
 
+def _v17_resident_requests(conn: sqlite3.Connection) -> None:
+    # Embeddings keeps its legacy table; generic queries adapt it without copying rows.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS service_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " ts REAL NOT NULL, service TEXT NOT NULL, model TEXT NOT NULL,"
+        " capability TEXT NOT NULL, source TEXT NOT NULL, client_id TEXT,"
+        " latency_ms REAL, status TEXT NOT NULL, error_code INTEGER,"
+        " pages INTEGER CHECK(pages >= 0), input_bytes INTEGER CHECK(input_bytes >= 0),"
+        " output_chars INTEGER CHECK(output_chars >= 0))"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS service_requests_time ON service_requests(service, ts)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS service_requests_prune ON service_requests(ts)")
+
+
 # Append only; never edit a released step. Each must be safe to re-run.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v1_base,
@@ -366,6 +382,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v14_evals,
     _v15_token_usage,
     _v16_engine_telemetry,
+    _v17_resident_requests,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

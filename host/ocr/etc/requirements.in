@@ -1,0 +1,10 @@
+# Candidate API/layout environment for CPython 3.12 on Apple Silicon.
+# Resolution is not Apple Silicon inference qualification.
+paddlepaddle==3.2.1
+paddleocr[doc-parser]==3.6.0
+pypdfium2==5.14.0
+pillow==12.3.0
+fastapi==0.141.1
+uvicorn==0.54.0
+httpx==0.28.1
+numpy==1.26.4

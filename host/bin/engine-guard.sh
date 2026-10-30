@@ -112,3 +112,10 @@ engine_native_port() {
   [[ -f "$helper" ]] || { echo "Missing native port helper." >&2; return 1; }
   /usr/bin/python3 "$helper" "$config" "$1"
 }
+
+# The catalog contains paths/identities and policy, never executable fragments.
+engine_resident_guard() {
+  local helper="/Volumes/Models/bin/resident-services"
+  [[ -r "$helper" ]] || { echo "Missing resident ownership helper." >&2; return 1; }
+  /usr/bin/python3 -I "$helper" "/Volumes/Models/etc/resident-services.json" guard "$@"
+}

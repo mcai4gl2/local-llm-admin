@@ -322,6 +322,12 @@ class Diagnostics:
                 cid, title, "fail", f"weights {cli['weights'] or 'unknown'}", spec.weights_hint
             )
         st = proc.status()
+        if st.running and not st.owned:
+            return _check(cid, title, "fail", "Process ownership is unknown.",
+                          "Inspect the service generation records and component listeners.")
+        if st.running and spec.kind == "service" and not self.control.sidecars.ready_sync(spec.name):
+            return _check(cid, title, "fail", "API or dependency is not ready; recognition warmup is required.",
+                          "Inspect the service logs, then restart from Models after active work stops.")
         if spec.kind == "service":
             meant = read_service_intent(self.control.store, spec) == "running"
         else:

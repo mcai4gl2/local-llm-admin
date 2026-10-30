@@ -12,6 +12,7 @@ import asyncio
 import logging
 import threading
 import time
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from functools import partial
@@ -153,6 +154,7 @@ class ControlService:
         self.splash = splash or SplashClient(settings)
         self.backends = backends or build_registry(settings, mlx, comfy, self.strata, self.splash)
         self.ops = SidecarOpsBinding(settings, self.sidecars)
+        self.memory_pressure: Callable[[], str | None] = lambda: None
         # set when the database cannot record an outcome; blocks automatic recovery
         # for the life of this process even though nothing could be persisted
         self._unrecorded: str | None = None
@@ -197,7 +199,7 @@ class ControlService:
         """Caller holds the state lock. A failed start was rolled back (stopped), so the
         service is meant to stay off and no down alert fires (M8)."""
         try:
-            spec = self.sidecars.get_service(str(job["name"]))
+            spec = self.sidecars.get_service(str(job["name"]), enabled_only=False)
         except KeyError:
             return
         if job["status"] == "succeeded":
@@ -392,7 +394,82 @@ class ControlService:
 
         steps, boundary = guard_steps(plan.steps, plan.rollback_after)
         rollback, _ = guard_steps(plan.rollback)
-        return replace(plan, steps=steps, rollback=rollback, rollback_after=boundary)
+        before = len(steps[:boundary])
+        steps_before = self._group_service_restores(steps[:boundary])
+        steps_after = self._group_service_restores(steps[before:])
+        return replace(plan, steps=steps_before + steps_after,
+                       rollback=self._group_service_restores(rollback),
+                       rollback_after=len(steps_before))
+
+    def _admit_service_restore(self, spec: SidecarSpec) -> None:
+        if not self.sidecars.down_sync(spec.name):
+            raise RuntimeError(f"{spec.name} acquired resources before restoration")
+        plan = self._service_plan(spec, self.memory_pressure())
+        if not plan.ok:
+            raise RuntimeError("; ".join(plan.reasons))
+
+    def _group_service_restores(self, steps: list[Step]) -> list[Step]:
+        """A refused or failed restore cannot run its remaining load/warmup steps."""
+        starts = {tuple(self.sidecars.argv(s.name, "start")): s for s in self.sidecars.services()}
+        result: list[Step] = []
+        index = 0
+        while index < len(steps):
+            step = steps[index]
+            spec = starts.get(tuple(step.argv)) if step.argv and step.optional else None
+            if spec is None:
+                result.append(step)
+                index += 1
+                continue
+            children = [Step(f"admit {spec.name}", call=partial(self._admit_service_restore, spec))]
+            token = uuid.uuid4().hex if spec.generation_checked else None
+            argv = [*step.argv, "--owner-token", token] if token and step.argv else step.argv
+            children.append(replace(step, optional=False, argv=argv))
+            index += 1
+            while index < len(steps) and steps[index].optional and (
+                steps[index].label == f"wait for :{spec.port} to be ready"
+                or steps[index].label == f"warm up {spec.name}"
+            ):
+                children.append(replace(steps[index], optional=False))
+                index += 1
+            result.append(Step(
+                f"restore {spec.name}", steps=tuple(children), optional=True,
+                cleanup=tuple(self._sidecar_stop_steps(spec, owner_token=token)),
+                cleanup_after=1 if token else 2,
+            ))
+        return result
+
+    def _target_mlx_estimate(self, name: str | None) -> float | None:
+        model = next((m for m in self.mlx.list_models() if m["name"] == name), None)
+        if model is None or model["size_bytes"] is None:
+            return None
+        cfg = sidecars_mod.read_json(Path(model["dir"]) / "config.json") or {}
+        profile = sidecars_mod.read_json(self.settings.mlx_root / "etc/profiles" / f"{name}.json")
+        return sidecars_mod.mlx_estimate_gb(
+            model["size_bytes"], cfg, sidecars_mod.context_tokens(cfg, profile),
+        )
+
+    def _check_target_budget(
+        self, target: EngineTarget, services: Sequence[SidecarSpec],
+        sidecar: SidecarSpec | None,
+    ) -> None:
+        if target.kind not in ("mlx", "off") or not services and sidecar is None:
+            return
+        args: dict[str, Any] = dict(
+            comfy_running=False, mlx_running=target.kind == "mlx", mlx_name=target.name,
+            mlx_gb=self._target_mlx_estimate(target.name) if target.kind == "mlx" else None,
+            headroom_gb=self.settings.decision_headroom_gb,
+            ram_gb=sidecars_mod.system_ram_gb(), wired_limit_gb=sidecars_mod.wired_limit_gb(),
+            pressure=self.memory_pressure(),
+        )
+        if services:
+            budget = plan_service_start(
+                spec=services[0], services=services, sidecar=sidecar, **args,
+            )
+        else:
+            assert sidecar is not None
+            budget = plan_sidecar_start(spec=sidecar, other=None, confirm=False, **args)
+        if not budget.ok:
+            raise ControlError(409, "; ".join(budget.reasons))
 
     # --- startup -----------------------------------------------------------
     def reconcile(self) -> list[dict[str, Any]]:
@@ -530,7 +607,12 @@ class ControlService:
                 await self._known_name(name)
             if action in ("switch", "start"):
                 target = name or self.mlx.active_env().get("MLX_ACTIVE_NAME")
+                await asyncio.to_thread(self._require_resident_ownership)
                 await self._check_sidecar_allows(target)
+                await asyncio.to_thread(
+                    self._check_target_budget, EngineTarget("mlx", target),
+                    self.sidecars.services_running(), self.sidecar_running(),
+                )
             observations = await asyncio.to_thread(self.backends.observe, include_disabled=True)
             if resolve_observations(observations) == "unknown":
                 raise ControlError(409, "engine ownership is unknown")
@@ -711,6 +793,7 @@ class ControlService:
     ) -> dict[str, Any]:
         claim = self._claim()
         try:
+            await asyncio.to_thread(self._require_resident_ownership)
             try:
                 target = self.backends.parse(target_raw)
             except BackendDisabled as exc:
@@ -772,6 +855,24 @@ class ControlService:
                 raise ControlError(404, str(exc)) from None
             except TransitionRefused as exc:
                 raise ControlError(exc.code, exc.message) from None
+            stopping_busy = [
+                s.name for s in services if self.sidecars.busy(s.name) and any(
+                    step.label == f"{s.name} stop" for step in plan.steps
+                )
+            ]
+            if stopping_busy and not force:
+                raise ControlError(409, f"services have active work: {', '.join(stopping_busy)}; confirm to stop")
+            if target.kind in ("mlx", "off"):
+                pending = restore if any(
+                    self.backends.get(o.backend).spec.exclusive and o.running for o in observations
+                ) else []
+                retained = [s for s in [*services, *pending]
+                            if s.name not in (*plan.forced_stops, *plan.unrestored)]
+                retained_sidecar = sidecar if sidecar and not any(
+                    step.label == f"{sidecar.name} stop" for step in plan.steps
+                ) else None
+                if target.kind == "mlx" or pending:
+                    await asyncio.to_thread(self._check_target_budget, target, retained, retained_sidecar)
             plan = self._guard_transition(plan, observations, target)
             job = self._submitted(
                 lambda: self.runner.submit_sequence(
@@ -796,7 +897,7 @@ class ControlService:
             # a confirmed switch to a model the service excludes: it is meant to stay off
             with self._state_lock:
                 for name in (*plan.forced_stops, *plan.unrestored):
-                    spec = self.sidecars.get_service(name)
+                    spec = self.sidecars.get_service(name, enabled_only=False)
                     sidecars_mod.write_service_intent(self.store, spec, "stopped", job)
         log.info("job %s: engine %s -> %s (%s)", job["id"], plan.from_label, plan.to_label, source)
         return job
@@ -825,12 +926,20 @@ class ControlService:
         tokens = sidecars_mod.context_tokens(cfg, profile)
         return sidecars_mod.mlx_estimate_gb(self.mlx.dir_size(Path(path)), cfg, tokens)
 
+    def _require_resident_ownership(self) -> None:
+        if error := self.sidecars.catalog_error():
+            raise ControlError(409, error)
+        conflicts = self.sidecars.ownership_conflicts()
+        if conflicts:
+            raise ControlError(409, f"service ownership is unknown: {', '.join(conflicts)}")
+
     def _sidecar_plan(
         self, spec: SidecarSpec, other: SidecarSpec | None, confirm: bool, pressure: str | None
     ) -> SidecarPlan:
+        self._require_resident_ownership()
         observations = self.backends.observe(include_disabled=True)
-        if resolve_observations(observations) == "unknown":
-            raise ControlError(409, "engine ownership is unknown")
+        if resolve_observations(observations) in ("unknown", "conflict"):
+            raise ControlError(409, "engine ownership is unknown or conflicting")
         mlx_running = any(o.backend == "mlx" and o.running for o in observations)
         name = next((o.reference for o in observations if o.backend == "mlx" and o.running), None)
         return plan_sidecar_start(
@@ -849,9 +958,13 @@ class ControlService:
             services=self.sidecars.services_running(),
         )
 
-    def _sidecar_start_steps(self, spec: SidecarSpec) -> list[Step]:
+    def _sidecar_start_steps(self, spec: SidecarSpec, *, owner_token: str | None = None) -> list[Step]:
+        argv = self.sidecars.argv(spec.name, "start")
+        if owner_token:
+            argv = [*argv, "--owner-token", owner_token]
         steps = [
-            Step(f"{spec.name} start", argv=self.sidecars.argv(spec.name, "start"), timeout_s=60.0),
+            Step(f"{spec.name} start", argv=argv,
+                 timeout_s=max(60.0, spec.ready_timeout_s) if spec.generation_checked else 60.0),
             Step(
                 f"wait for :{spec.port} to be ready",
                 wait=lambda: self.sidecars.ready_sync(spec.name),
@@ -864,11 +977,16 @@ class ControlService:
             steps.append(Step(f"warm up {spec.name}", wait=warm, timeout_s=spec.ready_timeout_s))
         return steps
 
-    def _sidecar_stop_steps(self, spec: SidecarSpec, optional: bool = False) -> list[Step]:
+    def _sidecar_stop_steps(
+        self, spec: SidecarSpec, optional: bool = False, *, owner_token: str | None = None,
+    ) -> list[Step]:
+        argv = self.sidecars.argv(spec.name, "stop")
+        if owner_token:
+            argv = [*argv, "--if-owner-token", owner_token]
         return [
             Step(
                 f"{spec.name} stop",
-                argv=self.sidecars.argv(spec.name, "stop"),
+                argv=argv,
                 timeout_s=60.0,
                 optional=optional,
             ),
@@ -953,22 +1071,26 @@ class ControlService:
         return job
 
     # --- always-on services (M8) ------------------------------------------------------
-    def _require_service(self, name: str) -> SidecarSpec:
+    def _require_service(self, name: str, enabled_only: bool = True) -> SidecarSpec:
         try:
-            return self.sidecars.get_service(name)
+            return self.sidecars.get_service(name, enabled_only=enabled_only)
         except KeyError:
             raise ControlError(404, f"the {name} service is not enabled") from None
 
     def _service_plan(self, spec: SidecarSpec, pressure: str | None) -> SidecarPlan:
+        self._require_resident_ownership()
         observations = self.backends.observe(include_disabled=True)
-        if resolve_observations(observations) == "unknown":
-            raise ControlError(409, "engine ownership is unknown")
+        if resolve_observations(observations) in ("unknown", "conflict"):
+            raise ControlError(409, "engine ownership is unknown or conflicting")
         mlx_running = any(o.backend == "mlx" and o.running for o in observations)
         name = next((o.reference for o in observations if o.backend == "mlx" and o.running), None)
         slot = self.sidecars.running()
+        if len(slot) > 1:
+            raise self._conflict(slot)
         return plan_service_start(
             spec=spec,
             sidecar=slot[0] if slot else None,
+            services=self.sidecars.services_running(),
             comfy_running=False,
             exclusive_engines=self.backends.exclusive_labels(observations),
             mlx_running=mlx_running,
@@ -982,7 +1104,7 @@ class ControlService:
 
     async def service_budget(self, name: str, pressure: str | None) -> SidecarPlan:
         """Read-only: whether a start would pass now."""
-        spec = self._require_service(name)
+        spec = self._require_service(name, enabled_only=False)
         return await asyncio.to_thread(self._service_plan, spec, pressure)
 
     async def service_start(self, name: str, pressure: str | None) -> dict[str, Any]:
@@ -997,15 +1119,16 @@ class ControlService:
             plan = await asyncio.to_thread(self._service_plan, spec, pressure)
             if not plan.ok:
                 raise ControlError(409, "; ".join(plan.reasons))
+            token = uuid.uuid4().hex if spec.generation_checked else None
             job = self._submitted(
                 lambda: self.runner.submit_sequence(
                     "service",
                     name=spec.name,
                     from_name=None,
                     to_name="running",
-                    steps=self._sidecar_start_steps(spec),
-                    rollback=self._sidecar_stop_steps(spec, optional=True),
-                    rollback_after=0,
+                    steps=self._sidecar_start_steps(spec, owner_token=token),
+                    rollback=self._sidecar_stop_steps(spec, optional=True, owner_token=token),
+                    rollback_after=0 if token else 1,
                     claim=claim,
                 )
             )
@@ -1014,12 +1137,15 @@ class ControlService:
         log.info("job %s: service start %s (%s)", job["id"], spec.name, "; ".join(plan.lines))
         return job
 
-    async def service_stop(self, name: str) -> dict[str, Any]:
-        spec = self._require_service(name)
+    async def service_stop(self, name: str, force: bool = False) -> dict[str, Any]:
+        spec = self._require_service(name, enabled_only=False)
         claim = self._claim()
         try:
+            if self.sidecars.busy(spec.name) and not force:
+                raise ControlError(409, f"{spec.noun} has active work; confirm to stop")
             await asyncio.to_thread(self._preflight, False)
-            if await asyncio.to_thread(self.sidecars.down_sync, spec.name):
+            down = await asyncio.to_thread(self.sidecars.down_sync, spec.name)
+            if down and not spec.generation_checked and sidecars_mod.read_service_intent(self.store, spec) != "running":
                 raise ControlError(409, f"{spec.noun} is not running")
             job = self._submitted(
                 lambda: self.runner.submit_sequence(
@@ -1027,7 +1153,7 @@ class ControlService:
                     name=spec.name,
                     from_name=None,
                     to_name="stopped",
-                    steps=self._sidecar_stop_steps(spec),
+                    steps=[] if down and not spec.generation_checked else self._sidecar_stop_steps(spec),
                     claim=claim,
                 )
             )

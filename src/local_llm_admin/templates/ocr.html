@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}OCR{% endblock %}
+{% block content %}
+<p class="muted">Recognize a PNG, JPEG or PDF. Uploads share the service queue with gateway clients. Documents and recognized text are returned to this page and are not stored in request history.</p>
+<section class="card">
+  <div id="ocr-state" role="status">Checking OCR availability…</div>
+  <form id="ocr-form">
+    <label for="ocr-document">Document</label>
+    <input id="ocr-document" name="document" type="file" accept="image/png,image/jpeg,application/pdf" required>
+    <p class="muted" id="ocr-limits"></p>
+    <div class="actions">
+      <button id="ocr-run" type="submit" class="primary" disabled>Recognize</button>
+      <button id="ocr-cancel" type="button" hidden>Cancel request</button>
+      <button id="ocr-clear" type="button">Clear results</button>
+    </div>
+  </form>
+  <progress id="ocr-progress" aria-label="OCR recognition in progress" hidden></progress>
+  <p id="ocr-progress-text" role="status"></p>
+  <div id="ocr-error" class="error" role="alert" hidden></div>
+</section>
+<section class="card" id="ocr-output" hidden>
+  <div class="card-head"><h2>Results</h2>
+    <div class="actions">
+      <button id="ocr-download-text" type="button">Download text</button>
+      <button id="ocr-download-markdown" type="button">Download Markdown</button>
+      <button id="ocr-download-json" type="button">Download JSON</button>
+    </div>
+  </div>
+  <p id="ocr-result-meta" class="muted"></p>
+  <div id="ocr-results"></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/ocr.js"></script>{% endblock %}

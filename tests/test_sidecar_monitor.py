@@ -92,3 +92,27 @@ async def test_embed_availability_samples(fake_embed):
     await mon(_snap(wall=now + 3600), None)
     counts = hist.availability(now - 1, now + 3601, "qwen-embed")["counts"]
     assert counts["stopped"] == 1 and counts["ready"] == 1 and counts["down"] == 0
+
+
+async def test_resident_readiness_loss_alerts_even_if_api_process_lives(fake_embed, monkeypatch):
+    mon, store, alerts, hist = _mon(fake_embed, history=True)
+    fake_embed.start()
+    write_service_intent(store, embed_spec(fake_embed.settings), "running")
+    monkeypatch.setattr(mon.registry, "ready_sync", lambda _: False)
+    now = time.time()
+    await mon(_snap(wall=now), None)
+    assert alerts.open_condition_keys("embed_down") == ["embed_down"]
+    assert hist.availability(now - 1, now + 1, "qwen-embed")["counts"]["down"] == 1
+
+
+async def test_unknown_owner_is_never_recorded_as_ready(fake_embed, monkeypatch):
+    from local_llm_admin.sidecars import SidecarProcess, SidecarStatus
+    mon, store, alerts, hist = _mon(fake_embed, history=True)
+    write_service_intent(store, embed_spec(fake_embed.settings), "running")
+    monkeypatch.setattr(SidecarProcess, "status", lambda self: SidecarStatus(
+        self.spec.name == "qwen-embed", None, owned=False))
+    monkeypatch.setattr(mon.registry, "ready_sync", lambda _: True)
+    now = time.time()
+    await mon(_snap(wall=now), None)
+    assert alerts.open_condition_keys("embed_down") == ["embed_down"]
+    assert hist.availability(now - 1, now + 1, "qwen-embed")["counts"]["ready"] == 0

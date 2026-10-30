@@ -269,6 +269,7 @@ def test_start_validates_before_fork_and_bounds_owned_cleanup(
     host_control: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str
 ) -> None:
     from .test_splash import catalog, write
+    monkeypatch.setattr(host_control, "_resident_guard", lambda _: None)
 
     root = tmp_path / "splash"
     catalog(root)

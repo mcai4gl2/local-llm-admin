@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import os
 import re
 import subprocess
 import time
@@ -111,6 +113,24 @@ def read_json(path: Path) -> dict[str, Any] | None:
 
 
 @dataclass(frozen=True)
+class ServiceModel:
+    id: str
+    capability: str
+    revision: str | None = None
+    precision: str | None = None
+
+
+@dataclass(frozen=True)
+class ServiceComponent:
+    """Owned dependency; lifecycle belongs to the logical service's fixed CLI."""
+    name: str
+    port: int | None
+    pid_file: Path
+    cmdline_marker: str
+    requires: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class SidecarSpec:
     name: str  # CLI, job and step name: "openjev", "qwen-tts"
     label: str  # in messages: "the <label> sidecar"
@@ -130,6 +150,13 @@ class SidecarSpec:
     kind: str = "sidecar"  # "sidecar" (the one-at-a-time slot) or "service" (always on, M8)
     intent_key: str = ""  # services keep their own kv intent; slot sidecars share INTENT_KEY
 
+    models: tuple[ServiceModel, ...] = ()
+    ui_path: str = ""
+    log_sources: tuple[str, ...] = ()
+    log_paths: tuple[Path, ...] = ()
+    components: tuple[ServiceComponent, ...] = ()
+    generation_checked: bool = False
+
     @property
     def noun(self) -> str:
         return f"the {self.label} {self.kind}"
@@ -146,6 +173,7 @@ class SidecarSpec:
 class SidecarStatus:
     running: bool
     pid: int | None
+    owned: bool = True  # a listener alone never proves process ownership
 
 
 def _names(csv: str) -> frozenset[str]:
@@ -189,6 +217,7 @@ def tts_spec(s: Settings) -> SidecarSpec:
         footprint_gb=s.tts_footprint_gb,
         down_alert_key="tts_down",
         weights_hint="Finish the Qwen3-TTS download under tts/models/.",
+        models=(ServiceModel(s.tts_model_id, "speech"),),
     )
 
 
@@ -234,12 +263,91 @@ def embed_spec(s: Settings) -> SidecarSpec:
         weights_hint="Finish the Qwen3-Embedding and Qwen3-Reranker downloads under embed/models/.",
         kind="service",
         intent_key="embed_intent",
+        models=(ServiceModel(s.embed_model_id, "embeddings"), ServiceModel(s.rerank_model_id, "rerank")),
+        ui_path="/embed",
+        log_sources=("embed",), log_paths=(s.embed_root / "logs/qwen-embed.log",),
+    )
+
+
+def ocr_spec(s: Settings) -> SidecarSpec:
+    return SidecarSpec(
+        name="paddleocr-vl", label="OCR", title="OCR service", port=s.ocr_port,
+        allowed_mlx=_names(s.ocr_allowed_mlx), enabled=s.ocr_enabled,
+        cli_path=s.ocr_path, pid_file=s.ocr_root / "run/paddleocr-vl.pid",
+        cmdline_marker=str(s.ocr_root / "app/server.py"), api_base=s.ocr_api_base,
+        ready_path="/ready", ready_timeout_s=s.ocr_ready_timeout_s,
+        footprint_gb=s.ocr_footprint_gb, down_alert_key="ocr_down",
+        weights_hint="Provision the pinned OCR pipeline and VLM runtime under ocr/.",
+        kind="service", intent_key="ocr_intent",
+        models=(ServiceModel(s.ocr_model_id, "ocr", s.ocr_model_revision, s.ocr_precision),), ui_path="/ocr",
+        log_sources=("ocr", "ocr-vlm"),
+        log_paths=(s.ocr_root / "logs/ocr.log", s.ocr_root / "logs/vlm.log"),
+        generation_checked=True,
+        components=(
+            ServiceComponent("vlm", s.ocr_vlm_port, s.ocr_root / "run/vlm.pid", "mlx_vlm.server"),
+            ServiceComponent("pipeline", None, s.ocr_root / "run/pipeline.pid",
+                             str(s.ocr_root / "app/worker.py"), requires=("vlm",)),
+        ),
     )
 
 
 # Always-on services (M8): never slot occupants; they run next to whichever sidecar holds
 # the slot, stop for ComfyUI, and keep their own intent ({"value", "job_id", "ts"}).
-SERVICE_BUILDERS: list[Callable[[Settings], SidecarSpec]] = [embed_spec]
+SERVICE_BUILDERS: list[Callable[[Settings], SidecarSpec]] = [embed_spec, ocr_spec]
+
+
+def _validate_components(items: Sequence[ServiceComponent]) -> None:
+    components = {c.name: c for c in items}
+    if len(components) != len(items):
+        raise ValueError("duplicate resident component")
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name not in components or name in visiting:
+            raise ValueError("malformed resident dependency graph")
+        if name in visited:
+            return
+        visiting.add(name)
+        component = components[name]
+        if not component.cmdline_marker or not component.pid_file.is_absolute():
+            raise ValueError("invalid resident component ownership")
+        for dependency in component.requires:
+            visit(dependency)
+        visiting.remove(name)
+        visited.add(name)
+
+    for component in items:
+        visit(component.name)
+
+
+def validate_services(specs: Sequence[SidecarSpec]) -> None:
+    """Reject ambiguous routing/ownership, including disabled services' configured ports."""
+    seen: dict[str, set[str | int]] = {key: set() for key in ("id", "model", "intent", "port")}
+    def claim(kind: str, value: str | int) -> None:
+        if value in seen[kind]:
+            raise ValueError(f"duplicate resident {kind}: {value}")
+        seen[kind].add(value)
+
+    for spec in specs:
+        if not re.fullmatch(r"[a-z][a-z0-9-]*", spec.name) or spec.kind != "service":
+            raise ValueError("invalid resident service identity")
+        claim("id", spec.name)
+        if not spec.intent_key or not spec.models:
+            raise ValueError("resident service needs intent and public models")
+        claim("intent", spec.intent_key)
+        for model in spec.models:
+            if not model.id or not model.capability:
+                raise ValueError("invalid resident model metadata")
+            claim("model", model.id)
+        _validate_components(spec.components)
+        for port in [spec.port, *(c.port for c in spec.components)]:
+            if port is None:
+                continue
+            if not 0 <= port <= 65535 or (spec.enabled and port == 0):
+                raise ValueError("configure resident ports before enabling the service")
+            if port:
+                claim("port", port)
 
 
 def read_service_intent(store: Any, spec: SidecarSpec) -> str | None:
@@ -290,10 +398,34 @@ class SidecarProcess:
         if pid is not None:
             try:
                 if spec.cmdline_marker in " ".join(psutil.Process(pid).cmdline()):
-                    return SidecarStatus(True, pid)
+                    return SidecarStatus(True, pid, owned=self._generation_matches(pid))
             except (psutil.Error, OSError):
                 pass
-        return SidecarStatus(MlxClient.port_listening(spec.port), None)
+        # Dependencies still own resources when the pipeline process has died.
+        for component in spec.components:
+            try:
+                child = int(component.pid_file.read_text().strip())
+                if component.cmdline_marker in " ".join(psutil.Process(child).cmdline()):
+                    return SidecarStatus(True, None, owned=False)
+            except (OSError, ValueError, psutil.Error):
+                pass
+        ports = [spec.port, *(c.port for c in spec.components)]
+        return SidecarStatus(
+            any(p is not None and p > 0 and MlxClient.port_listening(p) for p in ports), None, owned=False,
+        )
+
+    def _generation_matches(self, pid: int) -> bool:
+        if not self.spec.generation_checked:
+            return True
+        try:
+            record = json.loads(self.spec.pid_file.with_suffix(".json").read_text())
+            proc = psutil.Process(pid)
+            started = time.mktime(time.strptime(record["started"], "%a %b %d %H:%M:%S %Y"))
+            return (record["pid"] == pid and record["pgid"] == os.getpgid(pid)
+                    and abs(proc.create_time() - started) < 1
+                    and record["command"] == " ".join(proc.cmdline()))
+        except (OSError, ValueError, KeyError, TypeError, psutil.Error):
+            return False
 
     def down_sync(self) -> bool:
         return not self.status().running
@@ -344,6 +476,8 @@ class SidecarRegistry:
         self.settings = settings
         self._transports = transports or {}
         self._warmups: dict[str, Callable[[], bool]] = {}
+        self._activity: dict[str, Callable[[], bool]] = {}
+        self.services(enabled_only=False)  # validate configuration before lifecycle use
 
     def specs(self, enabled_only: bool = True) -> list[SidecarSpec]:
         out = [build(self.settings) for build in BUILDERS]
@@ -357,16 +491,34 @@ class SidecarRegistry:
 
     def services(self, enabled_only: bool = True) -> list[SidecarSpec]:
         out = [build(self.settings) for build in SERVICE_BUILDERS]
+        validate_services(out)
+        slots = [build(self.settings) for build in BUILDERS]
+        reserved_ids = {slot.name for slot in slots}
+        reserved_models = {model.id for slot in slots for model in slot.models}
+        reserved_ports = {
+            self.settings.mlx_port, self.settings.chat_ui_port, self.settings.comfyui_port,
+            self.settings.strata_port, self.settings.splash_port, self.settings.decision_gateway_port,
+            *(slot.port for slot in slots),
+        }
+        if self.settings.inference_api_key.get_secret_value():
+            reserved_ports.add(self.settings.inference_port)
+        for service in out:
+            if service.name in reserved_ids or any(model.id in reserved_models for model in service.models):
+                raise ValueError("duplicate service and sidecar identity")
+            if any(port and port in reserved_ports for port in [
+                service.port, *(c.port for c in service.components),
+            ]):
+                raise ValueError("resident port conflicts with another listener")
         return [s for s in out if s.enabled or not enabled_only]
 
-    def get_service(self, name: str) -> SidecarSpec:
-        for spec in self.services():
+    def get_service(self, name: str, enabled_only: bool = True) -> SidecarSpec:
+        for spec in self.services(enabled_only=enabled_only):
             if spec.name == name:
                 return spec
         raise KeyError(name)
 
     def services_running(self) -> list[SidecarSpec]:
-        return [s for s in self.services() if self.process(s.name).status().running]
+        return [s for s in self.services(enabled_only=False) if self.process(s.name).status().running]
 
     def _any(self, name: str) -> SidecarSpec:
         for spec in self.specs(enabled_only=False) + self.services(enabled_only=False):
@@ -382,6 +534,30 @@ class SidecarRegistry:
             self.settings.probe_timeout_s * 3,
         )
 
+    def ownership_conflicts(self) -> list[str]:
+        result = []
+        for spec in [*self.specs(enabled_only=False), *self.services(enabled_only=False)]:
+            status = self.process(spec.name).status()
+            if status.running and (not status.owned or spec.kind == "sidecar" and not spec.enabled):
+                result.append(spec.name)
+        return result
+
+    def catalog_error(self) -> str | None:
+        from .resident_manifest import build_manifest
+
+        path = self.settings.mlx_root / "etc/resident-services.json"
+        installed = (self.settings.ocr_root / "bin/paddleocr-vl").exists()
+        if not path.exists() and not installed:
+            return None  # legacy embeddings before catalog provisioning
+        try:
+            if path.is_symlink() or path.stat().st_mode & 0o022:
+                return "Resident host catalog has unsafe permissions."
+            if json.loads(path.read_text()) != build_manifest(self.settings, self):
+                return "Resident host catalog differs from the admin configuration."
+        except (OSError, ValueError):
+            return "Resident host catalog is missing or unreadable."
+        return None
+
     def running(self) -> list[SidecarSpec]:
         return [s for s in self.specs() if self.process(s.name).status().running]
 
@@ -389,13 +565,22 @@ class SidecarRegistry:
         return self.process(name).argv(action)
 
     def down_sync(self, name: str) -> bool:
-        enabled = {s.name for s in self.specs()} | {s.name for s in self.services()}
-        if name not in enabled:
-            return True
         return self.process(name).down_sync()
 
     def ready_sync(self, name: str) -> bool:
         return self.process(name).ready_sync()
+
+    def owned_ready_sync(self, name: str) -> bool:
+        status = self.process(name).status()
+        return status.running and status.owned and self.ready_sync(name)
+
+    def set_activity(self, name: str, busy: Callable[[], bool]) -> None:
+        self._any(name)
+        self._activity[name] = busy
+
+    def busy(self, name: str) -> bool:
+        hook = self._activity.get(name)
+        return hook() if hook else False
 
     def set_warmup(self, name: str, fn: Callable[[], bool]) -> None:
         self._warmups[name] = fn
@@ -414,8 +599,9 @@ def service_unavailable_reason(
         spec = registry.get_service(name)
     except KeyError:
         return "stopped"
-    if registry.process(name).status().running:
-        return None
+    status = registry.process(name).status()
+    if status.running:
+        return None if status.owned else "ownership_unknown"
     engine = exclusive()
     if engine:
         return f"{engine}_active"
@@ -437,12 +623,34 @@ class SidecarPlan:
 
 def budget_limit(ram_gb: float, headroom_gb: float, wired_limit_gb: float | None) -> tuple[float, str]:
     """Physical RAM less the headroom, or the GPU wired limit when one is set and lower."""
+    if (not math.isfinite(ram_gb) or ram_gb <= 0
+            or not math.isfinite(headroom_gb) or headroom_gb < 0
+            or wired_limit_gb is not None and (
+                not math.isfinite(wired_limit_gb) or wired_limit_gb < 0
+            )):
+        return 0.0, "memory limit unavailable"
     limit = ram_gb - headroom_gb
     if wired_limit_gb:
         limit = min(limit, wired_limit_gb)
     wired_binds = bool(wired_limit_gb) and limit < ram_gb - headroom_gb
     note = "(GPU wired limit)" if wired_binds else f"(RAM {ram_gb:.0f} - headroom {headroom_gb:.0f})"
     return limit, f"limit {limit:.1f} GB {note}"
+
+
+def reservation_inventory(
+    specs: Sequence[SidecarSpec],
+) -> tuple[list[SidecarSpec], list[str]]:
+    """Count each owner once; disagreement or an unknown reservation refuses admission."""
+    inventory: dict[str, SidecarSpec] = {}
+    reasons: list[str] = []
+    for spec in specs:
+        previous = inventory.get(spec.name)
+        if previous is not None and previous != spec:
+            reasons.append(f"conflicting memory reservation for {spec.name}")
+        inventory[spec.name] = spec
+        if not math.isfinite(spec.footprint_gb) or spec.footprint_gb <= 0:
+            reasons.append(f"cannot estimate {spec.name} memory reservation")
+    return list(inventory.values()), list(dict.fromkeys(reasons))
 
 
 def plan_sidecar_start(
@@ -486,14 +694,22 @@ def plan_sidecar_start(
             f"MLX model {mlx_name or '(unknown)'} is not allowed with the sidecar"
             f" (allowed: {listed})"
         )
+    if mlx_gb is not None and (not math.isfinite(mlx_gb) or mlx_gb < 0):
+        mlx_gb = None
     if mlx_running and mlx_gb is None:
         reasons.append("cannot estimate the MLX model's memory (config.json unreadable)")
     if pressure != "normal":
         reasons.append(f"memory pressure is {pressure or 'unavailable'}, not normal")
     limit, limit_line = budget_limit(ram_gb, headroom_gb, wired_limit_gb)
     used = (mlx_gb or 0.0) if mlx_running else 0.0
+    inventory, invalid = reservation_inventory([*services, spec])
+    reasons += invalid
+    services = [s for s in inventory if s.name != spec.name]
+    if mlx_running:
+        reasons += [f"MLX model {mlx_name or '(unknown)'} is not allowed with {s.noun}"
+                    for s in services if not s.allows(mlx_name)]
     services_gb = sum(s.footprint_gb for s in services)
-    total = None if (mlx_running and mlx_gb is None) else used + services_gb + spec.footprint_gb
+    total = None if invalid or (mlx_running and mlx_gb is None) else used + services_gb + spec.footprint_gb
     if total is not None and total > limit:
         reasons.append(f"estimated {total:.1f} GB exceeds the {limit:.1f} GB limit")
     mlx_line = f"{used:.1f} GB" if total is not None else "unknown"
@@ -531,11 +747,13 @@ def plan_service_start(
     ram_gb: float,
     wired_limit_gb: float | None,
     pressure: str | None,
+    services: Sequence[SidecarSpec] = (),
     strata_running: bool = False,
     exclusive_engines: Sequence[str] = (),
 ) -> SidecarPlan:
     """Whether the always-on service ``spec`` may start now (M8, D-E7). It counts MLX, the
-    slot sidecar that is running, and itself. With the engine off it may run (MLX = 0 GB)."""
+    slot sidecar, every sibling service, and itself exactly once. With the engine off
+    it may run (MLX = 0 GB)."""
     reasons: list[str] = []
     labels = [*exclusive_engines, *(["ComfyUI"] if comfy_running else []),
               *(["Strata"] if strata_running else [])]
@@ -546,6 +764,8 @@ def plan_service_start(
             f"MLX model {mlx_name or '(unknown)'} is not allowed with {spec.noun}"
             f" (allowed: {listed})"
         )
+    if mlx_gb is not None and (not math.isfinite(mlx_gb) or mlx_gb < 0):
+        mlx_gb = None
     if mlx_running and mlx_gb is None:
         reasons.append("cannot estimate the MLX model's memory (config.json unreadable)")
     if pressure != "normal":
@@ -553,13 +773,20 @@ def plan_service_start(
     limit, limit_line = budget_limit(ram_gb, headroom_gb, wired_limit_gb)
     used = (mlx_gb or 0.0) if mlx_running else 0.0
     side = sidecar.footprint_gb if sidecar else 0.0
-    total = None if (mlx_running and mlx_gb is None) else used + side + spec.footprint_gb
+    inventory, invalid = reservation_inventory([*services, *([sidecar] if sidecar else []), spec])
+    reasons += invalid
+    siblings = [s for s in inventory if s.name not in {spec.name, sidecar.name if sidecar else ""}]
+    if mlx_running:
+        reasons += [f"MLX model {mlx_name or '(unknown)'} is not allowed with {s.noun}"
+                    for s in inventory if s.name != spec.name and not s.allows(mlx_name)]
+    total = None if invalid or (mlx_running and mlx_gb is None) else used + sum(s.footprint_gb for s in inventory)
     if total is not None and total > limit:
         reasons.append(f"estimated {total:.1f} GB exceeds the {limit:.1f} GB limit")
     mlx_line = f"{used:.1f} GB" if total is not None else "unknown"
     lines = [
         f"MLX {mlx_line} ({mlx_name})" if mlx_running else "MLX stopped",
         *([f"{sidecar.label} {side:.1f} GB (running)"] if sidecar else []),
+        *(f"{s.label} {s.footprint_gb:.1f} GB (running)" for s in siblings),
         f"{spec.label} {spec.footprint_gb:.1f} GB",
         limit_line,
     ]
@@ -637,13 +864,14 @@ class SidecarMonitor:
             else:
                 self.alerts.resolve_condition(spec.down_alert_key, snap.wall)
         for spec in services:
-            if spec.name in svc_meant and spec.name not in svc_up and not paused:
+            ready = (spec.name in svc_up and await asyncio.to_thread(self.registry.owned_ready_sync, spec.name))
+            if spec.name in svc_meant and not ready and not paused:
                 self.alerts.raise_condition(
                     spec.down_alert_key,
                     "warning",
                     f"{spec.title} is down",
-                    "It is meant to run and is no longer running. It is not restarted"
-                    " automatically; start it again from the Models page (Embeddings card).",
+                    "It is meant to run and is no longer ready. It is not restarted"
+                    f" automatically; start it again from the Models page ({spec.title}).",
                     snap.wall,
                 )
             else:
@@ -690,8 +918,8 @@ class SidecarMonitor:
             return
         for spec in services:
             if spec.name in up:
-                ready = await asyncio.to_thread(self.registry.ready_sync, spec.name)
-                state = "ready" if ready else "loading"
+                ready = await asyncio.to_thread(self.registry.owned_ready_sync, spec.name)
+                state = "ready" if ready else "loading" if snap.job_running else "down"
             elif paused:
                 state = "stopped"  # stopped for ComfyUI on purpose: excluded from the ratio
             elif snap.job_running and spec.name in meant:

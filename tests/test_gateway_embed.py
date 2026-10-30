@@ -134,3 +134,36 @@ async def test_keys_required_when_configured(gw, fake_embed):
     fake_embed.start()
     r = await gw.post("/v1/embeddings", json=EMB, headers={"Authorization": "Bearer nope"})
     assert r.status_code == 401
+
+
+async def test_openjev_discovery_keeps_ready_resident_models(gw, fake_embed, fake_decision):
+    fake_embed.start()
+    fake_decision.start()
+    body = (await gw.get("/v1/models")).json()
+    assert body["models"] == [{"name": "openjev-latest"}]
+    assert {m["id"] for m in body["data"]} >= {"qwen3-embed", "qwen3-rerank"}
+
+
+async def test_openjev_discovery_failure_does_not_hide_embeddings(gw, fake_embed, fake_decision):
+    fake_embed.start()
+    fake_decision.start()
+    (fake_decision.state / "decision_ready").unlink()
+    response = await gw.get("/v1/models")
+    assert response.status_code == 200
+    assert [m["id"] for m in response.json()["data"]] == ["qwen3-embed", "qwen3-rerank"]
+
+
+async def test_discovery_uses_third_service_registration(gw, fake_embed, monkeypatch):
+    from dataclasses import replace
+
+    from local_llm_admin import sidecars
+    from local_llm_admin.sidecars import ServiceModel
+    def third(settings):
+        return replace(embed_spec(settings), name="third", port=8099, intent_key="third_intent",
+                       models=(ServiceModel("third-model", "classification"),))
+    monkeypatch.setattr(sidecars, "SERVICE_BUILDERS", [embed_spec, third])
+    monkeypatch.setattr(sidecars.SidecarProcess, "status", lambda self: sidecars.SidecarStatus(True, 123))
+    monkeypatch.setattr(sidecars.SidecarProcess, "ready_sync", lambda self: True)
+    response = await gw.get("/v1/models")
+    assert response.status_code == 200
+    assert "third-model" in [m["id"] for m in response.json()["data"]]

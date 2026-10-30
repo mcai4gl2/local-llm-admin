@@ -206,7 +206,7 @@ def test_comfyui_start_refuses_while_embed_runs(emb):
     cli = _comfy(emb.host)
     assert emb.run("start").returncode == 0
     r = emb.host.run("start", cli=cli)
-    assert r.returncode == 1 and "embedding service is running" in r.stderr
+    assert r.returncode == 1 and "qwen-embed" in r.stderr
 
 
 def test_comfyui_status_mentions_embed_but_not_as_mlx(emb):

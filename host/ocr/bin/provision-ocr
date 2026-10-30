@@ -1,0 +1,11 @@
+#!/bin/zsh
+# Explicit isolated provisioning; all mutations share the engine lifecycle lock.
+set -euo pipefail
+ROOT="${0:A:h:h}"
+case " ${*} " in
+  *" --apply "*|*" --rollback "*)
+    source "$ROOT/../bin/engine-guard.sh"
+    engine_run /usr/bin/python3 -I "$ROOT/app/provision.py" "$ROOT" "$@"
+    ;;
+  *) /usr/bin/python3 -I "$ROOT/app/provision.py" "$ROOT" "$@" ;;
+esac

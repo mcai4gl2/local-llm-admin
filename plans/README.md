@@ -9,6 +9,11 @@
 The [admin website consistency implementation](archive/platform/20261030_admin-web-consistency-and-usability.md)
 records all 28 cross-backend UI findings, delivered changes and local validation.
 
+The [PaddleOCR-VL and generic resident-services implementation](archive/platform/20261030_paddleocr-resident-services.md)
+records completed local code and tests. [Live rollout and qualification](archive/platform/20261030_paddleocr-rollout-qualification.md)
+completed the approved native release and bounded qualification. Broader sharing and
+long-running memory behavior are [deferred](backlog/platform/20261031_resident-sharing-followup.md).
+
 New plans use `active/YYYYMMDD_<name>.md`. Keep one active plan for a coherent change;
 update its progress instead of creating another file for every checkpoint. Move it into
 `archive/<component>/` when the change is complete. Put a concise follow-up in backlog

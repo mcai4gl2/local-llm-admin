@@ -415,3 +415,13 @@ curl -s http://mac-mini.local:8082/v1/rerank -H 'Content-Type: application/json'
 
 [Operations](ops/README.md) · [Experiments](experiments/README.md) · [Plans](plans/README.md) ·
 [Splash rollout evidence](docs/reports/splash/INDEX.md) · [Shared LiteLLM endpoint](docs/shared-inference.md).
+## Resident OCR
+
+The optional [PaddleOCR-VL service](docs/ocr.md) recognizes images and PDFs through the
+existing authenticated sidecar gateway and a `local-ocr` LiteLLM route. Models manages
+embeddings and OCR independently; the OCR page offers escaped results and downloads.
+Defaults keep OCR disabled. The [native rollout](docs/reports/ocr/20261031-native-rollout.md)
+qualified a bounded operating point with one chat model; new hardware/settings require their
+own measurements. Review
+[runtime provisioning](host/ocr/README.md) and [qualification evidence](docs/reports/ocr/INDEX.md)
+before enabling it. The admin and existing embedding runtime gain no native OCR dependencies.

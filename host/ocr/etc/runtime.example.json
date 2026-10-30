@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "revision": "c5630abae1d940eafe0697512a0325494b02ab42",
+  "layout_revision": "241f8bdfc77a7c7bee915a5057aaee58c235a8d3",
+  "precision": "bf16",
+  "orientation_revision": "d3b95a6dff5fe8a94f2748e12b61cb26818a0df8"
+}
