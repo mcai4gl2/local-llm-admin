@@ -78,6 +78,7 @@ from .eval_suites import (
     messages_for,
     parse_jsonl,
 )
+from .gateway_timeline import GatewayTimeline
 from .inference_gateway import create_inference_app
 from .ingestion import HostLogs, IngestStore
 from .inventory import InventoryStore, build_inventory
@@ -337,6 +338,9 @@ def create_app(
     sampler = Sampler(settings, mlx_pid=engine_pid, engine_observation=metric_observation)
     usage = LiteLLMUsage(settings)
     db_path = settings.admin_data_dir / "admin.sqlite"
+    gateway_timeline = GatewayTimeline(
+        db_path, queue_size=settings.inference_timeline_queue_size,
+    )
     events = IngestStore(db_path)
     alerts = AlertStore(db_path)
     probes = ProbeRunner()
@@ -551,6 +555,15 @@ def create_app(
         # observation touches the drive, so it never blocks startup either
         startup_task = asyncio.create_task(asyncio.to_thread(control.adopt_initial))
         app.state.startup_task = startup_task
+        async def prune_gateway_timeline() -> None:
+            while True:
+                await asyncio.to_thread(
+                    gateway_timeline.prune, now=time.time(),
+                    retention_days=settings.inference_timeline_retention_days,
+                )
+                await asyncio.sleep(60)
+
+        timeline_prune_task = asyncio.create_task(prune_gateway_timeline())
         if start_background:
             sampler.start()
             splash_monitor.start()
@@ -560,6 +573,8 @@ def create_app(
         await splash_monitor.stop()
         await supervisor.stop()
         await sampler.stop()
+        timeline_prune_task.cancel()
+        await asyncio.to_thread(gateway_timeline.close)
         probes.shutdown()  # never waits for a hung probe thread
         for task in (backfill_task, startup_task):
             if not task.done():
@@ -605,6 +620,8 @@ def create_app(
     app.state.profiles = profiles
     app.state.outputs = outputs
     app.state.admission = control.admission
+    app.state.gateway_timeline = gateway_timeline
+    app.state.timeline_retention_days = settings.inference_timeline_retention_days
     app.state.follow_interval_s = 1.0
     app.state.follow_max_s = 1800.0
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -615,6 +632,7 @@ def create_app(
         transport=chat_transport,
         busy=lambda: runner.running() is not None,
         admission=control.admission,
+        timeline=gateway_timeline,
     )
     app.state.inference = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.inference.mount("/v1", inference)
@@ -2173,6 +2191,40 @@ def create_app(
         lo = datetime.combine(start, datetime.min.time(), tz).timestamp()
         hi = datetime.combine(end + timedelta(days=1), datetime.min.time(), tz).timestamp()
         return start, end, lo, hi
+
+    @app.get("/api/inference/timeline/health")
+    async def gateway_timeline_health() -> dict[str, Any]:
+        health = await asyncio.to_thread(gateway_timeline.health)
+        health["retention_days"] = settings.inference_timeline_retention_days
+        return health
+
+    @app.get("/api/inference/timeline")
+    async def gateway_timeline_list(
+        frm: str | None = Query(None, alias="from"),
+        to: str | None = None,
+        backend: Literal["mlx", "strata", "splash"] | None = None,
+        outcome: Literal[
+            "running", "rejected", "completed", "upstream_error", "timeout",
+            "disconnected", "interrupted",
+        ] | None = None,
+        request_id: str | None = Query(None, max_length=64),
+        limit: int = Query(50, ge=1, le=200),
+        before: int | None = Query(None, ge=1),
+    ) -> dict[str, Any]:
+        _start, _end, lo, hi = _epoch_range(frm, to)
+        return await asyncio.to_thread(
+            gateway_timeline.list_requests, lo, hi, backend=backend, outcome=outcome,
+            request_id=request_id, limit=limit, before=before,
+        )
+
+    @app.get("/api/inference/timeline/{request_id}")
+    async def gateway_timeline_detail(request_id: str) -> dict[str, Any]:
+        if len(request_id) > 64:
+            raise HTTPException(404, "unknown gateway request")
+        row = await asyncio.to_thread(gateway_timeline.get, request_id)
+        if row is None:
+            raise HTTPException(404, "unknown gateway request")
+        return row
 
     @app.get("/api/performance/summary")
     async def performance_summary(

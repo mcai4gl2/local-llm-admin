@@ -79,6 +79,66 @@ requests receive 429. Bodies/non-streaming responses are limited to 8 MiB and an
 individual streamed event to 2 MiB. No per-token database writes or duplicated billed
 usage records are introduced.
 
+## Shared gateway request timeline
+
+The Performance page has a separate Shared gateway timeline. It records metadata for
+`POST /v1/chat/completions` and `POST /v1/completions`, including rejected requests.
+This population excludes direct native requests, admin chat and quality runs. A missing
+row is never evidence that the native engine was idle. The page displays the durable
+coverage start and current-process pending, dropped and failed write counts. The
+authenticated APIs are `GET /api/inference/timeline`,
+`GET /api/inference/timeline/{request_id}` and
+`GET /api/inference/timeline/health`. The list accepts operations-calendar `from` and
+`to` dates, exact `request_id`, `backend`, `outcome`, `limit` (1–200) and integer `before`
+cursor. Rows are ordered by insertion ID, so later inserts cannot shift an older page.
+
+The gateway assigns a random internal request ID and returns it as `X-Request-ID` on
+completion responses, including refusals. Incoming request-ID headers are ignored.
+Resolution captures the backend, a safe model label, profile fingerprint and a digest
+of the verified generation once. The ledger stores no prompts, output, image/document
+bodies, credentials, caller identifiers, raw headers, client addresses or arbitrary
+upstream error text. The requested model is stored only after it matches a served public
+ID. Path-shaped model IDs are reduced to their final name. No raw native model path or
+process generation is stored.
+
+`started`, `admitted_at`, `dispatched_at`, `headers_at`, `first_event_at`,
+`first_content_at` and `ended_at` are wall-clock timestamps. Durations use a monotonic
+clock. The UI shows time from dispatch to upstream headers, first parsed SSE data event
+and first nonempty text delta.
+The last is a first-content observation, not a tokenizer-level timing. Reasoning,
+tool-call and empty deltas leave it null; non-streaming responses cannot expose this
+timing. Usage contains only nonnegative integer prompt/completion counts supplied by the
+upstream response. `usage_source=upstream_response` and `usage_completeness` distinguish
+complete from partial counts. These figures are diagnostic and are never added to LiteLLM
+billing or the existing native token rollups. A failing response with usage remains an
+error. A request left running at admin startup is marked `interrupted`, without inventing
+an end time or success.
+
+The writer queues only a start and terminal snapshot per request, with a bounded default
+capacity of 256. Full or failed writes increment health counters and do not block
+inference. Set `INFERENCE_TIMELINE_QUEUE_SIZE` (16–4096) and
+`INFERENCE_TIMELINE_RETENTION_DAYS` (7–365, default 90) in the private admin environment
+if needed. Terminal records older than retention are pruned in batches of at most 500;
+active rows are retained. The health counters reset when the admin restarts. Check the
+health API and correlate the returned `X-Request-ID` with the detail API when diagnosing
+a request. If dropped or failed writes rise, expect gaps and inspect the admin log and
+SQLite disk state; the timeline never proves full native quiescence.
+
+The additive schema is migration 18 in `admin.sqlite`. Before deploying over a v17 app,
+use the installed admin environment's `python -m local_llm_admin.db_snapshot backup`
+with explicit `--database` and a new private `--output` path. This online backup includes
+committed WAL pages and verifies integrity. The existing `ops/rollback-mac.sh` restores
+application code, not the database: a v17 app refuses a v18 database. For rollback,
+boot out the admin LaunchAgent and wait for all database writers to stop. Run
+`python -m local_llm_admin.db_snapshot restore --expected-version 17 --offline` with
+explicit `--snapshot`, `--database` and a new private `--preserve-current` path. Restore
+the previous application source and bootstrap its LaunchAgent, then verify `/healthz`,
+gateway inference and native ownership. The code-only rollback script assumes a loaded
+LaunchAgent, so use the manual source/bootstrap steps for this offline schema rollback.
+Restoring the snapshot discards later database writes from the active copy; retain the
+preserved v18 database separately for investigation or history recovery. Never present a
+code-only rollback as complete when the matching database has not been restored.
+
 ## Drain before engine changes
 
 Manual model start, stop and switch, engine selection, and quality-run entry reserve the
@@ -165,6 +225,10 @@ smoke tests. Its installed-module check does not establish live Strata image sup
 The [drain-before-switch rollout record](reports/drain-before-switch-20261101.md) documents
 the deployed barrier and bounded live streaming, cancellation, drain-timeout and
 failed-readiness rollback checks. Its gateway-only coverage limit still applies.
+
+The [shared gateway timeline rollout record](reports/shared-request-timeline-20261101.md)
+documents the schema backup, paired workload, correlation checks and persistence health.
+Its client latency comparison does not isolate tracing overhead.
 
 
 ## Strata request troubleshooting

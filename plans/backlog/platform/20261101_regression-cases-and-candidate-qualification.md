@@ -25,7 +25,7 @@ default. Reuse existing quality machinery and comparability rules.
   cancellation/restoration, runtime fingerprints and benchmark evidence.
 - `chat.py`, `app.py` and Chat/Quality templates: explicit capture and report workflow.
 - [Current eval behavior](../../../README.md#evals-m10).
-- [Request timeline](20261101_shared-request-timeline.md): optional correlation only;
+- [Request timeline](../../archive/platform/20261101_shared-request-timeline.md): optional correlation only;
   a metadata-only ledger cannot reconstruct prompts or responses.
 
 ## V1 scope

@@ -101,5 +101,26 @@
 </div>
 </details>
 
+
+<section class="card" id="gateway-timeline">
+  <div class="card-head"><h2>Shared gateway timeline</h2><span class="pill">Gateway metadata</span></div>
+  <p class="muted">Requests through the shared <code>/v1</code> gateway only. Direct native,
+    admin chat and quality traffic are outside this ledger. Missing rows do not mean an
+    engine was idle. Usage here is diagnostic and is never added to billed totals.</p>
+  <p id="gateway-coverage" class="muted" role="status">Loading coverage…</p>
+  <div class="toolbar">
+    <label>Range <select id="gateway-days"><option value="1">Today</option><option value="7" selected>7 days</option><option value="30">30 days</option><option value="90">90 days</option></select></label>
+    <label>Backend <select id="gateway-backend"><option value="">All</option><option value="mlx">MLX</option><option value="strata">Strata</option><option value="splash">Splash</option></select></label>
+    <label>Outcome <select id="gateway-outcome"><option value="">All</option><option value="running">Running</option><option value="completed">Completed</option><option value="rejected">Rejected</option><option value="upstream_error">Upstream error</option><option value="timeout">Timeout</option><option value="disconnected">Disconnected</option><option value="interrupted">Interrupted</option></select></label>
+    <label>Request ID <input id="gateway-request-id" maxlength="64" autocomplete="off" placeholder="Exact ID"></label>
+    <button id="gateway-apply" type="button">Apply</button>
+  </div>
+  <p id="gateway-state" class="muted" role="status"></p>
+  <div class="table-wrap"><table id="gateway-table"><thead><tr><th>Started</th><th>Request ID</th><th>Backend / model</th><th>Outcome</th><th class="num">Headers</th><th class="num">First event</th><th class="num">First content</th><th class="num">Total</th><th></th></tr></thead><tbody></tbody></table></div>
+  <div class="pager"><button id="gateway-more" hidden disabled>Older ›</button></div>
+  <pre class="log wrap" id="gateway-detail" hidden></pre>
+  <p class="muted">Timings are measured from dispatch for headers, first upstream data event and first nonempty text content. Reasoning, tool calls and empty chunks do not count as text. A missing measurement stays blank.</p>
+</section>
+
 {% endblock %}
-{% block scripts %}<script src="/static/performance.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/performance.js"></script><script src="/static/gateway_timeline.js"></script>{% endblock %}

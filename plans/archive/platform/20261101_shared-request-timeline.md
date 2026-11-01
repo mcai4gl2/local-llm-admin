@@ -1,10 +1,15 @@
+Overall Progress: 100%
+
 # Shared inference request timeline
 
 Date: 2026-11-01
-Status: Proposed; implementation not started.
+Status: Implemented, deployed and qualified for the bounded shared-gateway workload.
 Component: Platform / inference observability
-Next decision: Confirm the metadata-only v1 scope and retention policy; implement before
-drain-before-switch so both features can share admission and request identity primitives.
+Next decision: No further rollout step; direct native capture is outside this scope.
+
+The deployed drain barrier already supplies the shared admission registry. This change
+adds request identity to its leases without changing drain policy. Retention defaults to
+90 days, matching existing observability settings, and remains configurable.
 
 ## Problem and goal
 
@@ -51,18 +56,39 @@ An absent ledger row must never imply that the native engine had no work.
 
 ## Implementation sequence
 
-- [ ] Inspect gateway tests, migrations, runtime identity and performance UI patterns.
-- [ ] Define typed lifecycle events, terminal outcomes, timing semantics and coverage.
-- [ ] Write failing tests for completion, rejection, timeout, malformed stream, disconnect,
+- [x] Inspect gateway tests, migrations, runtime identity and performance UI patterns.
+- [x] Define typed lifecycle events, terminal outcomes, timing semantics and coverage.
+- [x] Write failing tests for completion, rejection, timeout, malformed stream, disconnect,
   backend changes and duplicate cleanup before implementing instrumentation.
-- [ ] Introduce a minimal shared admission/request registry suitable for a later drain
-  barrier, without adding switching policy or queueing in this change.
-- [ ] Add an additive metadata store, bounded writer, startup reconciliation for unfinished
+- [x] Attach request identity to the deployed shared admission registry without changing
+  switching policy or queueing.
+- [x] Add an additive metadata store, bounded writer, startup reconciliation for unfinished
   rows, retention and explicit persistence-health counters.
-- [ ] Instrument both streaming and non-streaming paths with idempotent finalization.
+- [x] Instrument both streaming and non-streaming paths with idempotent finalization.
   Restart leftovers become interrupted/unknown, never inferred successes.
-- [ ] Add paginated APIs and UI that preserve existing source-specific performance views.
-- [ ] Document coverage, limits, schema rollback and operating checks.
+- [x] Add paginated APIs and UI that preserve existing source-specific performance views.
+- [x] Document coverage, limits, schema rollback and operating checks.
+
+## Rollout checkpoint
+
+The fixed off/on workload and comparison live in
+[`experiments/gateway_timeline`](../../../experiments/gateway_timeline/README.md).
+The separately approved live window completed the off phase, verified schema 17
+snapshot, deployment, on phase, native-idle checks and authenticated API/UI checks.
+The [sanitized report](../../../docs/reports/shared-request-timeline-20261101.md)
+records observed latency, correlation and persistence results. Migration 18 requires
+restoring the matching pre-upgrade database backup if the previous app is rolled back.
+
+The original devcontainer host-diff attempt did not establish host drift because SSH
+authentication was denied. Host SSH later completed the read-only check before
+deployment: all versioned code files matched, with expected model-registry state drift.
+
+The final devcontainer gate passed with 3,889 tests, 4 skipped and 97.19% total
+coverage. Gateway timeline and inference gateway each had 100% statement coverage.
+The browser suite passed 117 tests. Ruff, strict mypy, the private-pattern scan and
+`git diff --check` passed. The final repository gate after the rollout report again
+passed 3,889 tests, 4 skipped and 97.19% total coverage. Live qualification and the
+deployed API/UI checks are documented in the rollout report.
 
 ## Acceptance and validation
 
@@ -80,7 +106,7 @@ An absent ledger row must never imply that the native engine had no work.
 
 ## Dependencies and boundaries
 
-The [drain plan](../../archive/platform/20261101_drain-before-switch.md) consumes the shared registry, not the
+The [drain plan](20261101_drain-before-switch.md) consumes the shared registry, not the
 asynchronous database writer. Billing reconciliation, native all-client capture,
 OpenTelemetry export and prompt capture are deferred. LiteLLM remains the accounting source.
 

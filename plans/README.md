@@ -17,6 +17,11 @@ long-running memory behavior are [deferred](backlog/platform/20261031_resident-s
 The [drain-before-switch implementation](archive/platform/20261101_drain-before-switch.md)
 records the shared admission barrier, deployment and bounded live qualification.
 
+The [shared request timeline implementation](archive/platform/20261101_shared-request-timeline.md)
+passed local gates. Its approved [live rollout](archive/platform/20261101_shared-request-timeline-rollout.md)
+qualified the bounded shared-gateway workload; the
+[sanitized report](../docs/reports/shared-request-timeline-20261101.md) records the evidence.
+
 New plans use `active/YYYYMMDD_<name>.md`. Keep one active plan for a coherent change;
 update its progress instead of creating another file for every checkpoint. Move it into
 `archive/<component>/` when the change is complete. Put a concise follow-up in backlog

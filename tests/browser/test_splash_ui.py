@@ -125,6 +125,8 @@ def ui(browser: Any) -> Iterator[Any]:
             mutations.append((path, body))
         data = {
             "/api/status": current,
+            "/api/inference/drain": {"state": "accepting", "active": 0,
+                                      "unverified_native_cleanup": 0},
             "/api/sidecars": {"sidecars": [{"name": "openjev", "title": "Decision", "running": False, "ready": False, "weights": "complete", "allowed_mlx": [], "budget": {"ok": False, "lines": [], "reasons": ["Synthetic memory budget unavailable"]}}], "conflict": False},
             "/api/services": {"services": current.get("resident_services", [{"name": "qwen-embed", "running": False, "ready": False, "intent": "stopped", "models": [], "allowed_mlx": [], "budget": {"ok": False, "lines": [], "reasons": ["Synthetic memory budget unavailable"]}}])},
             "/api/comfyui/queue": {"state": "ok", "checked_at": datetime.now(UTC).timestamp(), "running_count": 0, "pending_count": 0, "running": [], "pending": [], "capabilities": {}},
@@ -225,12 +227,28 @@ def ui(browser: Any) -> Iterator[Any]:
                 "readings": current.get("native_readings", []),
             },
             "/api/performance/requests": {"requests": [], "next": None},
+            "/api/inference/timeline/health": {
+                "coverage_start": 1790000000, "population": "shared gateway requests only",
+                "retention_days": 90, "pending_writes": 0, "queue_capacity": 256,
+                "dropped_writes": 0, "failed_writes": 0,
+            },
+            "/api/inference/timeline": {"requests": current.get("gateway_rows", []), "next": None},
             "/api/availability": {"from": "2026-10-28", "days": [], "segments": [], "totals": {}},
             "/api/maintenance/log-rotation": {"hour": 4, "max_mib": 50, "keep": 8},
             "/api/logs": {"sources": [{"id": "mlx-server", "exists": True}, {"id": "splash", "exists": True}]},
             "/api/logs/mlx-server": {"exists": True, "size": 10, "lines": ["Synthetic MLX log"]},
             "/api/logs/splash": {"exists": True, "size": 10, "lines": ["Synthetic Splash log"]},
         }.get(path)
+        if path.startswith("/api/inference/timeline/") and path != "/api/inference/timeline/health":
+            data = next((row for row in current.get("gateway_rows", [])
+                         if row["request_id"] == path.rsplit("/", 1)[-1]), None)
+        if path == "/api/inference/timeline" and data is not None:
+            query = parse_qs(urlsplit(r.request.url).query)
+            rows = data["requests"]
+            for key in ("backend", "outcome", "request_id"):
+                if query.get(key):
+                    rows = [row for row in rows if row.get(key) == query[key][0]]
+            data["requests"] = rows
         if path == "/api/performance/engines" and data is not None:
             query = parse_qs(urlsplit(r.request.url).query)
             all_rows = [{"id": i + 1, **row} for i, row in enumerate(data["readings"])]
@@ -363,6 +381,35 @@ def test_performance_displays_coverage_gap_separately_from_historical_totals(
     pw.expect(gap).to_contain_text("Complete request history is unsupported")
     pw.expect(page.locator("#tokens")).to_be_hidden()
     pw.expect(page.locator("#perf-error")).to_be_hidden()
+
+
+def test_gateway_timeline_filters_and_detail_without_mixing_native_views(ui: Any) -> None:
+    page, current, _, _ = ui
+    current["gateway_rows"] = [
+        {"request_id": "trace-mlx", "started": 1790000000, "backend": "mlx",
+         "resolved_model": "model-a", "outcome": "completed", "dispatched_at": 1790000000,
+         "headers_at": 1790000000.1, "first_event_at": None,
+         "first_content_at": None, "ended_at": 1790000001,
+         "time_to_headers_s": 0.1, "time_to_first_event_s": None,
+         "time_to_first_content_s": None, "elapsed_s": 1.0},
+        {"request_id": "trace-splash", "started": 1790000001, "backend": "splash",
+         "resolved_model": "model-b", "outcome": "timeout", "dispatched_at": 1790000001,
+         "headers_at": 1790000001.1, "first_event_at": 1790000001.2,
+         "first_content_at": None, "ended_at": 1790000002,
+         "time_to_headers_s": 0.1, "time_to_first_event_s": 0.2,
+         "time_to_first_content_s": None, "elapsed_s": 1.0},
+    ]
+    page.goto("http://admin.test/performance")
+    pw.expect(page.locator("#gateway-coverage")).to_contain_text("shared gateway requests only")
+    pw.expect(page.locator("#gateway-table tbody tr")).to_have_count(2)
+    page.locator("#gateway-backend").select_option("splash")
+    page.locator("#gateway-apply").click()
+    pw.expect(page.locator("#gateway-table tbody tr")).to_have_count(1)
+    pw.expect(page.locator("#gateway-table")).to_contain_text("trace-splash")
+    pw.expect(page.locator("#gateway-table")).to_contain_text("—")
+    page.locator("#gateway-table button").click()
+    pw.expect(page.locator("#gateway-detail")).to_contain_text('"outcome": "timeout"')
+    pw.expect(page.locator("#splash-coverage")).to_be_visible()
 
 
 def test_native_snapshot_history_and_profile_filter_in_real_dom(ui: Any) -> None:
