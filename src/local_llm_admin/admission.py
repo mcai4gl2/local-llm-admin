@@ -53,13 +53,15 @@ class Admission:
         self._cancelled = False
         self._unverified_native_cleanup = 0
 
-    def acquire(self, *, busy: bool = False) -> str:
+    def acquire(self, *, busy: bool = False, request_id: str | None = None) -> str:
         with self._lock:
             if self._state != "accepting" or busy:
                 raise AdmissionRefused(503, "Inference is temporarily unavailable during an engine operation")
             if len(self._leases) >= max(self._limits.values()):
                 raise AdmissionRefused(429, "Shared inference is busy")
-            lease = uuid.uuid4().hex
+            lease = request_id or uuid.uuid4().hex
+            if lease in self._leases:
+                raise AdmissionRefused(429, "Shared inference is busy")
             self._leases[lease] = _Lease()
             return lease
 

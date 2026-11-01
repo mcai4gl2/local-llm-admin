@@ -23,7 +23,7 @@ before restoration.
 - `control.py`, `jobs.py`, `engines.py`: lifecycle reservation, execution and rollback.
 - `backend_types.py`, `backends.py`: readiness and generation ownership.
 - [Shared inference contract](../../../docs/shared-inference.md).
-- [Request timeline proposal](../../backlog/platform/20261101_shared-request-timeline.md): shared admission
+- [Request timeline implementation](20261101_shared-request-timeline.md): shared admission
   registry prerequisite; persistence must not participate in the barrier.
 
 ## Scope and invariants

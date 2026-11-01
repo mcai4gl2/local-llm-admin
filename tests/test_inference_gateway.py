@@ -719,12 +719,13 @@ async def live_server() -> Any:
 
 
 async def test_real_socket_streams_arrive_before_completion_and_disconnect_frees_slots(
-    live_server: Any,
+    live_server: Any, tmp_path: Any,
 ) -> None:
     from contextlib import AsyncExitStack
 
     from fastapi.responses import JSONResponse, StreamingResponse
 
+    from local_llm_admin.gateway_timeline import GatewayTimeline
     from local_llm_admin.inference_gateway import MAX_INFLIGHT
 
     native = FastAPI()
@@ -746,13 +747,15 @@ async def test_real_socket_streams_arrive_before_completion_and_disconnect_frees
 
         return StreamingResponse(stream(), media_type="text/event-stream")
 
+    timeline = GatewayTimeline(tmp_path / "gateway.sqlite")
     async with live_server(native) as upstream:
         registry = SimpleNamespace(
             resolve_inference=AsyncMock(
                 return_value=InferenceDescriptor(ChatTarget(upstream, "example/stock"))
             )
         )
-        proxy = create_inference_app(Settings(inference_api_key=KEY), registry)
+        proxy = create_inference_app(Settings(inference_api_key=KEY), registry,
+                                     timeline=timeline)
         edge = FastAPI()
         edge.mount("/v1", proxy)
         async with live_server(edge) as url, httpx.AsyncClient(base_url=url, timeout=3) as client:
@@ -785,3 +788,9 @@ async def test_real_socket_streams_arrive_before_completion_and_disconnect_frees
                     "/v1/chat/completions", headers=AUTH, json={"model": "local-model"}
                 )
             ).status_code == 200
+    assert timeline.flush()
+    rows = timeline.list_requests(0, 9999999999)["requests"]
+    assert sorted(row["outcome"] for row in rows) == [
+        "completed", "disconnected", "disconnected", "rejected",
+    ]
+    timeline.close()

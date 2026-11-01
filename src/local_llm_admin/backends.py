@@ -7,6 +7,8 @@ sidecars and execution. Properties read the current Settings rather than freezin
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -852,10 +854,16 @@ class BackendRegistry:
         # A public reply identity contains no endpoint, credential or deployment path.
         if model and model.startswith("/"):
             model = model.rsplit("/", 1)[-1]
+        generation = observation.generation
+        generation_fingerprint = (
+            hashlib.sha256(json.dumps(generation, sort_keys=True, default=str).encode()).hexdigest()
+            if generation else None
+        )
         return replace(descriptor, identity={
             **descriptor.identity, "engine": active, "engine_label": backend.spec.label,
             "reference": reference, "target_value": active + (":" + reference if reference else ""),
             "model": model, "profile_fingerprint": descriptor.profile_fingerprint,
+            "generation_fingerprint": generation_fingerprint,
         })
 
     def exclusive_labels(self, observations: Sequence[EngineObservation]) -> list[str]:

@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     inference_max_inflight_strata: Annotated[int, Field(ge=1, le=16)] = 2
     inference_max_inflight_splash: Annotated[int, Field(ge=1, le=16)] = 2
     inference_drain_timeout_s: Annotated[float, Field(gt=0, le=3600)] = 120.0
+    inference_timeline_retention_days: Annotated[int, Field(ge=7, le=365)] = 90
+    inference_timeline_queue_size: Annotated[int, Field(ge=16, le=4096)] = 256
 
     # Admin
     admin_password_hash: SecretStr = SecretStr("")

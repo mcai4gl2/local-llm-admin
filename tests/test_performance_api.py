@@ -21,6 +21,36 @@ FIX = Path(__file__).parent / "fixtures"
 HKT = timezone(timedelta(hours=8))
 
 
+async def test_gateway_timeline_api_is_session_protected_and_pageable(app: Any, client: Any) -> None:
+    timeline = app.state.gateway_timeline
+    now = time.time()
+    for i, backend in enumerate(("mlx", "strata", "mlx")):
+        row = {"request_id": f"timeline-{i}", "started": now - i,
+               "route": "chat_completions", "backend": backend,
+               "outcome": "completed", "ended_at": now}
+        timeline.begin(row)
+        timeline.finish(row)
+    assert timeline.flush()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://admin.test") as anonymous:
+        assert (await anonymous.get("/api/inference/timeline")).status_code == 401
+        assert (await anonymous.get("/api/inference/timeline/health")).status_code == 401
+    first = (await client.get("/api/inference/timeline", params={"limit": 2})).json()
+    assert len(first["requests"]) == 2 and first["next"] is not None
+    second = (await client.get("/api/inference/timeline", params={
+        "limit": 2, "before": first["next"]})).json()
+    assert len(second["requests"]) == 1
+    filtered = (await client.get("/api/inference/timeline", params={"backend": "strata"})).json()
+    assert [r["request_id"] for r in filtered["requests"]] == ["timeline-1"]
+    detail = (await client.get("/api/inference/timeline/timeline-1")).json()
+    assert detail["backend"] == "strata"
+    assert (await client.get("/api/inference/timeline/missing")).status_code == 404
+    assert (await client.get("/api/inference/timeline", params={"limit": 201})).status_code == 422
+    health = (await client.get("/api/inference/timeline/health")).json()
+    assert health["population"] == "shared gateway requests only"
+    assert health["retention_days"] == app.state.timeline_retention_days
+
+
 @pytest.fixture
 def settings(fake_comfy):
     s = fake_comfy.settings
@@ -240,6 +270,9 @@ async def test_performance_page_renders_with_nav(client):
     assert r.status_code == 200
     assert 'href="/performance"' in r.text and "/static/performance.js" in r.text
     assert (await client.get("/static/performance.js")).status_code == 200
+    assert 'id="gateway-timeline"' in r.text
+    assert "/static/gateway_timeline.js" in r.text
+    assert (await client.get("/static/gateway_timeline.js")).status_code == 200
 
 
 async def test_a_monitor_tick_ingests_requests_and_samples_availability(app, client, settings):

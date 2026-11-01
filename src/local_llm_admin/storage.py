@@ -364,6 +364,29 @@ def _v17_resident_requests(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS service_requests_prune ON service_requests(ts)")
 
 
+def _v18_gateway_timeline(conn: sqlite3.Connection) -> None:
+    # Separate diagnostic ledger. No body, caller identifier, headers or billed usage.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS gateway_requests ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL UNIQUE,"
+        "started REAL NOT NULL, route TEXT NOT NULL, admitted_at REAL, dispatched_at REAL,"
+        "headers_at REAL, first_event_at REAL, first_content_at REAL, ended_at REAL,"
+        "time_to_headers_s REAL, time_to_first_event_s REAL,"
+        "time_to_first_content_s REAL, elapsed_s REAL,"
+        "requested_model TEXT, backend TEXT, resolved_model TEXT,"
+        "profile_fingerprint TEXT, generation_fingerprint TEXT,"
+        "outcome TEXT NOT NULL DEFAULT 'running', http_status INTEGER,"
+        "prompt_tokens INTEGER, completion_tokens INTEGER,"
+        "usage_source TEXT, usage_completeness TEXT)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS gateway_requests_started ON gateway_requests(started,id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS gateway_requests_backend ON gateway_requests(backend,id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS gateway_requests_outcome ON gateway_requests(outcome,id)")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS gateway_timeline_meta (key TEXT PRIMARY KEY, value REAL NOT NULL)"
+    )
+
+
 # Append only; never edit a released step. Each must be safe to re-run.
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v1_base,
@@ -383,6 +406,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _v15_token_usage,
     _v16_engine_telemetry,
     _v17_resident_requests,
+    _v18_gateway_timeline,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

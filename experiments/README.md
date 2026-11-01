@@ -10,6 +10,7 @@ maintenance remain in [ops](../ops/README.md).
 | [Strata](strata/README.md) | Original engine benchmark and sandbox capture tools |
 | [Embeddings](embed/reference.py) | Original embedding/rerank reference capture |
 | [Decision](decision/README.md) | Original decision-sidecar qualification tools |
+| [Gateway timeline](gateway_timeline/README.md) | Fixed off/on client latency and cancellation workload for an approved rollout |
 
 Old reports retain their pass/fail/inconclusive outcomes and original measurement scope.
 Moving a bundle does not authorize new live experiments. Any tool that changes a running
