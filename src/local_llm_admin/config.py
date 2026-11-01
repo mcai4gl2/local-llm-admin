@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     inference_host: str = "0.0.0.0"
     inference_port: Annotated[int, Field(ge=1, le=65535)] = 8080
     inference_model_id: Annotated[str, Field(min_length=1, max_length=512)] = "local-model"
+    inference_max_inflight_mlx: Annotated[int, Field(ge=1, le=16)] = 2
+    inference_max_inflight_strata: Annotated[int, Field(ge=1, le=16)] = 2
+    inference_max_inflight_splash: Annotated[int, Field(ge=1, le=16)] = 2
+    inference_drain_timeout_s: Annotated[float, Field(gt=0, le=3600)] = 120.0
 
     # Admin
     admin_password_hash: SecretStr = SecretStr("")

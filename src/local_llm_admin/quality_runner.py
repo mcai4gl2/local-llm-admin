@@ -256,6 +256,10 @@ class QualityRunner:
             plan.suite, plan.thinking = loaded, thinking
             self._check_judge(plan)
             try:
+                drain_owner = await self.control._drain("quality")
+            except ControlError as exc:
+                raise QualityError(exc.code, exc.message) from None
+            try:
                 job = runner.begin(
                     "quality",
                     name=model,
@@ -264,8 +268,11 @@ class QualityRunner:
                     source="benchmark",
                     claim=claim,
                 )
-            except JobStorageError:
-                raise QualityError(503, "the admin database could not record the job") from None
+            except BaseException as exc:
+                self.control._abandon_drain(drain_owner)
+                if isinstance(exc, JobStorageError):
+                    raise QualityError(503, "the admin database could not record the job") from None
+                raise
         finally:
             runner.release(claim)
         plan.job_id = job["id"]

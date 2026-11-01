@@ -80,7 +80,7 @@ An absent ledger row must never imply that the native engine had no work.
 
 ## Dependencies and boundaries
 
-The [drain plan](20261101_drain-before-switch.md) consumes the shared registry, not the
+The [drain plan](../../archive/platform/20261101_drain-before-switch.md) consumes the shared registry, not the
 asynchronous database writer. Billing reconciliation, native all-client capture,
 OpenTelemetry export and prompt capture are deferred. LiteLLM remains the accounting source.
 

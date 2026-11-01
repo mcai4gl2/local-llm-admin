@@ -10,6 +10,11 @@
   </div>
   <a id="engine-logs" hidden>Open engine logs</a>
   <p id="engine-action-reason" class="muted" role="status"></p>
+  <div id="inference-drain" role="status" aria-live="polite">
+    <span id="inference-drain-state">Checking inference admission…</span>
+    <button id="inference-drain-cancel" type="button" hidden>Cancel drain</button>
+  </div>
+  <p class="muted">Drain counts shared-gateway requests only. Direct native requests and admin chat are outside this count.</p>
 </section>
 <section class="card" id="job-card" tabindex="-1" aria-label="Current job" hidden>
   <div class="card-head"><h2>Job <span id="job-title"></span></h2><span class="badge" id="job-status" role="status"></span></div>

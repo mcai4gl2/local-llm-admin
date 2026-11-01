@@ -2,6 +2,32 @@
 let pollTimer = null;
 let lifecyclePending = false;
 
+async function loadInferenceDrain() {
+  const view = await api("/api/inference/drain");
+  const state = document.getElementById("inference-drain-state");
+  const cancel = document.getElementById("inference-drain-cancel");
+  if (view.state === "draining") {
+    const remaining = Math.max(0, Math.ceil(view.deadline - Date.now() / 1000));
+    state.textContent = `Draining for ${view.action}: ${view.active} admitted request(s), ${view.elapsed_s}s elapsed, deadline in ${remaining}s${view.cancelled ? "; cancellation requested" : ""}. New inference receives a temporary refusal.`;
+  } else if (view.state === "transitioning") {
+    state.textContent = `Engine transition in progress; ${view.active} gateway requests active.`;
+  } else if (view.state === "unavailable") {
+    state.textContent = "Inference admission is unavailable after an uncertain engine transition. Inspect the job and engine state.";
+  } else {
+    state.textContent = `Inference admission open; ${view.active} shared-gateway request(s) active.`;
+  }
+  if (view.unverified_native_cleanup) state.textContent += ` ${view.unverified_native_cleanup} cancelled transport(s) have unverified native cleanup.`;
+  cancel.hidden = view.state !== "draining";
+  cancel.disabled = view.cancelled;
+}
+
+document.getElementById("inference-drain-cancel").addEventListener("click", async () => {
+  try { await api("/api/inference/drain/cancel", { method: "POST" }); await loadInferenceDrain(); }
+  catch (e) { alert(e.message); }
+});
+loadInferenceDrain().catch(() => {});
+setInterval(() => loadInferenceDrain().catch(() => {}), 1000);
+
 const DEFAULT_CONFIRM = document.getElementById("confirm-body").textContent;
 
 function confirmAction(title, body = DEFAULT_CONFIRM) {

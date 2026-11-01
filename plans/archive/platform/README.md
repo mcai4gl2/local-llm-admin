@@ -15,3 +15,4 @@ in [docs](../../../docs/DESIGN.md) and [host guides](../../../host/README.md).
 - [Explain Strata request refusals](20261029_strata-request-errors.md): correction deployed; client investigation deferred.
 
 - [Admin website consistency and usability](20261030_admin-web-consistency-and-usability.md): all 28 findings implemented, locally verified and deployed with the native engine preserved.
+- [Drain-before-switch and configurable inference admission](20261101_drain-before-switch.md): deployed with bounded live stream, cancellation, timeout and failed-readiness rollback checks.

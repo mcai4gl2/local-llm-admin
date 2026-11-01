@@ -13,6 +13,7 @@ import httpx
 import pytest
 from fastapi import FastAPI, Request
 
+from local_llm_admin.admission import Admission
 from local_llm_admin.backend_types import InferenceDescriptor
 from local_llm_admin.backends import BackendUnavailable
 from local_llm_admin.chat import ACTIVE_MODEL_ID, ChatTarget
@@ -182,6 +183,163 @@ async def test_models_lists_the_stable_id_and_only_the_active_native_model() -> 
             ACTIVE_MODEL_ID,
             "example/stock",
         }
+
+
+async def test_backend_resolution_is_counted_before_drain_and_later_request_is_refused() -> None:
+    resolving = asyncio.Event()
+    release_resolution = asyncio.Event()
+    upstream = []
+    registry = SimpleNamespace()
+
+    async def resolve() -> InferenceDescriptor:
+        resolving.set()
+        await release_resolution.wait()
+        return InferenceDescriptor(ChatTarget("http://mlx.test", ACTIVE_MODEL_ID), identity={"engine": "mlx"})
+
+    registry.resolve_inference = resolve
+    gate = Admission({"mlx": 2})
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        upstream.append(request)
+        return httpx.Response(200, json={"model": ACTIVE_MODEL_ID})
+
+    app = create_inference_app(
+        Settings(inference_api_key=KEY), registry, transport=httpx.MockTransport(serve),
+        admission=gate,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://shared.test"
+    ) as client:
+        first = asyncio.create_task(client.post(
+            "/chat/completions", headers=AUTH, json={"model": ACTIVE_MODEL_ID}
+        ))
+        await resolving.wait()
+        owner = gate.reserve("switch", 1)
+        assert gate.snapshot()["active"] == 1
+        refused = await client.post(
+            "/chat/completions", headers=AUTH, json={"model": ACTIVE_MODEL_ID}
+        )
+        assert refused.status_code == 503 and refused.headers["Retry-After"] == "1" and not upstream
+        models = await client.get("/models", headers=AUTH)
+        assert models.status_code == 503 and models.headers["Retry-After"] == "1"
+        waiting = asyncio.create_task(gate.wait(owner))
+        assert not waiting.done()
+        release_resolution.set()
+        assert (await first).status_code == 200
+        await waiting
+        gate.transition(owner)
+        gate.finish(owner, safe=True)
+    assert len(upstream) == 1
+
+
+async def test_admitted_stream_finishes_before_drain_can_transition() -> None:
+    entered = asyncio.Event()
+    finish = asyncio.Event()
+    gate = Admission({"mlx": 2})
+
+    class ControlledStream(httpx.AsyncByteStream):
+        closed = False
+
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            entered.set()
+            yield b'data: {"model":"native","choices":[]}\n\n'
+            await finish.wait()
+            yield b"data: [DONE]\n\n"
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    stream = ControlledStream()
+    registry = SimpleNamespace(resolve_inference=AsyncMock(return_value=InferenceDescriptor(
+        ChatTarget("http://mlx.test", ACTIVE_MODEL_ID), identity={"engine": "mlx"}
+    )))
+    app = create_inference_app(
+        Settings(inference_api_key=KEY), registry,
+        transport=httpx.MockTransport(lambda r: httpx.Response(
+            200, stream=stream, headers={"content-type": "text/event-stream"}
+        )),
+        admission=gate,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://shared.test"
+    ) as client:
+        request = asyncio.create_task(client.post(
+            "/chat/completions", headers=AUTH,
+            json={"model": ACTIVE_MODEL_ID, "stream": True},
+        ))
+        await entered.wait()
+        owner = gate.reserve("stop", 1)
+        waiting = asyncio.create_task(gate.wait(owner))
+        await asyncio.sleep(0)
+        assert not waiting.done() and gate.snapshot()["active"] == 1
+        finish.set()
+        response = await request
+        assert response.status_code == 200 and b"data: [DONE]" in response.content
+        await waiting
+        assert stream.closed
+        gate.transition(owner)
+        gate.finish(owner, safe=True)
+
+
+async def test_backend_limit_is_checked_after_resolution() -> None:
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def serve(request: httpx.Request) -> httpx.Response:
+        entered.set()
+        await release.wait()
+        return httpx.Response(200, json={"model": ACTIVE_MODEL_ID})
+
+    registry = SimpleNamespace(resolve_inference=AsyncMock(return_value=InferenceDescriptor(
+        ChatTarget("http://mlx.test", ACTIVE_MODEL_ID), identity={"engine": "mlx"}
+    )))
+    app = create_inference_app(
+        Settings(inference_api_key=KEY, inference_max_inflight_mlx=1), registry,
+        transport=httpx.MockTransport(serve),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://shared.test"
+    ) as client:
+        first = asyncio.create_task(client.post(
+            "/chat/completions", headers=AUTH, json={"model": ACTIVE_MODEL_ID}
+        ))
+        await entered.wait()
+        refused = await client.post(
+            "/chat/completions", headers=AUTH, json={"model": ACTIVE_MODEL_ID}
+        )
+        assert refused.status_code == 429
+        release.set()
+        assert (await first).status_code == 200
+
+
+async def test_cancelled_nonstream_marks_native_cleanup_unverified() -> None:
+    entered = asyncio.Event()
+    gate = Admission({"mlx": 2})
+
+    async def slow(request: httpx.Request) -> httpx.Response:
+        entered.set()
+        await asyncio.Event().wait()
+        return httpx.Response(200, json={"model": ACTIVE_MODEL_ID})
+
+    registry = SimpleNamespace(resolve_inference=AsyncMock(return_value=InferenceDescriptor(
+        ChatTarget("http://mlx.test", ACTIVE_MODEL_ID), identity={"engine": "mlx"}
+    )))
+    app = create_inference_app(
+        Settings(inference_api_key=KEY), registry, transport=httpx.MockTransport(slow),
+        admission=gate,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://shared.test"
+    ) as client:
+        task = asyncio.create_task(client.post(
+            "/chat/completions", headers=AUTH, json={"model": ACTIVE_MODEL_ID}
+        ))
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert gate.snapshot()["active"] == 0
+    assert gate.snapshot()["unverified_native_cleanup"] == 1
 
 
 async def test_stream_keeps_usage_reasoning_tools_and_finish_with_public_model() -> None:

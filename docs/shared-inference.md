@@ -72,10 +72,62 @@ No ready engine, unknown ownership, conflicting engines, a disabled backend or a
 engine operation returns 503. There is no engine start, fallback, replay or automatic
 retry. Native errors retain their HTTP status with sanitized text. Streamed model fields
 are translated incrementally; the response is never collected before streaming begins.
-Disconnect closes upstream and releases admission. At most two requests are admitted;
-excess requests receive 429. Bodies/non-streaming responses are limited to 8 MiB and an
+Disconnect closes upstream and releases admission. Each backend has a configurable
+concurrency limit (`INFERENCE_MAX_INFLIGHT_MLX`, `INFERENCE_MAX_INFLIGHT_STRATA`,
+`INFERENCE_MAX_INFLIGHT_SPLASH`); the compatibility default is two for each. Excess
+requests receive 429. Bodies/non-streaming responses are limited to 8 MiB and an
 individual streamed event to 2 MiB. No per-token database writes or duplicated billed
 usage records are introduced.
+
+## Drain before engine changes
+
+Manual model start, stop and switch, engine selection, and quality-run entry reserve the
+job slot, then close shared inference admission. Already admitted requests count through
+backend resolution, upstream opening, response streaming and upstream cleanup. The job
+waits up to `INFERENCE_DRAIN_TIMEOUT_S` (120 seconds by default) before starting any
+engine-changing step. New requests receive HTTP 503 with a bounded `Retry-After` hint;
+the hint is a retry interval, not a promised switch completion time. A full backend
+concurrency pool still receives 429.
+
+The Models page shows the admission state, active gateway count, elapsed wait and
+deadline. `POST /api/inference/drain/cancel` cancels only a pending drain. A timeout or
+cancel before transition leaves the source engine and intent intact. After a job begins,
+its existing rollback and quality cancellation rules apply. Failed or unrecorded
+restoration holds admission unavailable until a later verified engine action succeeds.
+An unavailable marker is persisted before an engine-changing job is submitted and
+cleared only after a verified result. It is restored after an admin restart;
+interrupted engine jobs also start with admission unavailable.
+The Engine selector's existing `force` flag is for backend queue policy; it does not
+bypass this gateway drain.
+An operator can inspect `/api/inference/drain`, the job record, observed ownership and
+native metrics before retrying. Restarting the admin does not clear a recorded
+unavailable state and cannot prove that native work has ended.
+
+This barrier covers only requests entering the shared `/v1` gateway. The admin chat and
+quality runner call native APIs directly; quality takes the barrier before its own run.
+Resident services use separate APIs and policies. Direct native callers bypass the
+gateway and cannot be counted. A zero gateway count therefore means only that registered
+gateway transport cleanup completed. A disconnected or malformed native stream may keep
+computing after transport close; the Models page counts such unverified cleanups, but the
+admin cannot establish native quiescence across MLX, Strata and Splash from that count.
+For MLX, inspect `/metrics` `summary.in_flight`, server queue depth, and the native
+log's cancellation markers. For
+Strata, inspect `/metrics` live state and queued work; its exposed fields do not prove
+that a cancelled decode stopped. Splash currently has no comparable authoritative
+per-request idle signal in the admin. Check native process state during a live
+qualification or incident, and treat missing evidence as unknown. The watchdog uses
+the same bounded drain for a restart; a failed drain leaves the existing engine alone
+and reports the refusal through the watchdog job path. It does not force a stop.
+
+For a drain-only rollout, inspect `/api/inference/drain` and native activity before
+`ops/deploy-mac.sh`. Deploy the admin with its existing private listener settings, then
+check `/healthz`, gateway inference, Models progress and job history. Qualify a held
+stream against a planned same-engine restart, a cancelled wait, a deadline refusal and
+a target-readiness failure in a controlled window. Record which native metrics could
+confirm cleanup and which traffic bypassed the listener. If the new admin fails to
+start or cannot route inference, use `ops/rollback-mac.sh` with the saved prior app;
+verify the original engine and the shared listener afterward. Rollback cannot undo an
+engine transition that already ran, so inspect current ownership before retrying.
 
 ## Migration and rollback
 
@@ -109,6 +161,10 @@ its pinned revision, not a substitute for a later deployment preflight.
 The [latest-code maintenance record](reports/latest-code-deployment-20261030.md) documents
 the subsequent vision-error correction deployment, payload verification and current MLX
 smoke tests. Its installed-module check does not establish live Strata image support.
+
+The [drain-before-switch rollout record](reports/drain-before-switch-20261101.md) documents
+the deployed barrier and bounded live streaming, cancellation, drain-timeout and
+failed-readiness rollback checks. Its gateway-only coverage limit still applies.
 
 
 ## Strata request troubleshooting

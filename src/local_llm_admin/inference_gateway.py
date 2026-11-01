@@ -13,16 +13,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
+from .admission import Admission, AdmissionRefused
 from .backends import BackendRegistry, BackendUnavailable
 from .chat import ACTIVE_MODEL_ID
 from .config import Settings
 
 MAX_BODY_BYTES = 8 * 1024 * 1024
 MAX_EVENT_BYTES = 2 * 1024 * 1024
-MAX_INFLIGHT = 2
+MAX_INFLIGHT = 2  # compatibility default; configured per backend in Settings
 
 
-def _error(status: int, code: str, message: str) -> JSONResponse:
+def _error(status: int, code: str, message: str, *, retry_after: bool = False) -> JSONResponse:
     return JSONResponse(
         {
             "error": {
@@ -32,6 +33,7 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
             }
         },
         status_code=status,
+        headers={"Retry-After": "1"} if retry_after else None,
     )
 
 
@@ -110,9 +112,14 @@ def create_inference_app(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
     busy: Callable[[], bool] = lambda: False,
+    admission: Admission | None = None,
 ) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    inflight = 0
+    gate = admission or Admission({
+        "mlx": settings.inference_max_inflight_mlx,
+        "strata": settings.inference_max_inflight_strata,
+        "splash": settings.inference_max_inflight_splash,
+    })
 
     def authorized(request: Request) -> Response | None:
         key = settings.inference_api_key.get_secret_value()
@@ -131,6 +138,8 @@ def create_inference_app(
     async def models(request: Request) -> Response:
         if (refusal := authorized(request)) is not None:
             return refusal
+        if gate.snapshot()["state"] != "accepting":
+            return _error(503, "unavailable", "An engine operation is in progress", retry_after=True)
         if await unavailable():
             return _error(503, "unavailable", "An engine operation is in progress")
         try:
@@ -148,7 +157,6 @@ def create_inference_app(
     @app.post("/chat/completions")
     @app.post("/completions")
     async def completion(request: Request) -> Response:
-        nonlocal inflight
         if (refusal := authorized(request)) is not None:
             return refusal
         body = bytearray()
@@ -167,17 +175,17 @@ def create_inference_app(
                 raise ValueError("invalid body")
         except (ValueError, UnicodeError):
             return _error(400, "invalid_request", "Expected an OpenAI request with a model ID")
-        if await unavailable():
-            return _error(503, "unavailable", "An engine operation is in progress")
-        if inflight >= MAX_INFLIGHT:
-            return _error(429, "busy", "Shared inference is busy")
-        inflight += 1
+        try:
+            lease = gate.acquire(busy=await unavailable())
+        except AdmissionRefused as exc:
+            return _error(exc.status, "busy" if exc.status == 429 else "unavailable", exc.message,
+                          retry_after=exc.status == 503)
         client: httpx.AsyncClient | None = None
         response: httpx.Response | None = None
         released = False
 
         async def close() -> None:
-            nonlocal inflight, released
+            nonlocal released
             if released:
                 return
             released = True
@@ -191,7 +199,7 @@ def create_inference_app(
                         if client is not None:
                             await client.aclose()
                     finally:
-                        inflight -= 1
+                        gate.release(lease)
 
         streaming = False
         try:
@@ -199,6 +207,10 @@ def create_inference_app(
                 descriptor = await registry.resolve_inference()
             except (BackendUnavailable, ValueError, OSError):
                 return _error(503, "unavailable", "No verified ready engine is available")
+            try:
+                gate.bind(lease, str(descriptor.identity.get("engine", "mlx")))
+            except AdmissionRefused as exc:
+                return _error(exc.status, "busy", exc.message)
             model = payload["model"]
             if model not in {settings.inference_model_id, ACTIVE_MODEL_ID, descriptor.target.model}:
                 return _error(404, "model_not_found", "Model is not served by the selected engine")
@@ -239,7 +251,11 @@ def create_inference_app(
                     try:
                         async for event in _events(response, model):
                             yield event
+                    except (asyncio.CancelledError, GeneratorExit):
+                        gate.mark_native_cleanup_unverified()
+                        raise
                     except (httpx.HTTPError, ValueError):
+                        gate.mark_native_cleanup_unverified()
                         yield (
                             b"data: "
                             + json.dumps(
@@ -274,6 +290,9 @@ def create_inference_app(
             if "model" in document:
                 document["model"] = model
             return JSONResponse(document)
+        except asyncio.CancelledError:
+            gate.mark_native_cleanup_unverified()
+            raise
         except (httpx.HTTPError, ValueError):
             return _error(502, "upstream_error", "Selected engine is unavailable")
         finally:

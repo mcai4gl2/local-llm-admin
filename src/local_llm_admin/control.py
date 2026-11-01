@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from . import sidecars as sidecars_mod
+from .admission import Admission, AdmissionRefused, DrainCancelled, DrainTimeout
 from .backend_types import EngineObservation, EngineTarget, generation_record, resolve_observations
 from .backends import BackendDisabled, BackendRegistry, build_registry
 from .backends import process_generation as process_generation
@@ -50,6 +51,7 @@ INTENT_KEY = "intent"
 SUSPENDED_KEY = "recovery_suspended"
 CRASHES_KEY = "watchdog_crashes"  # wall-clock times of crashes the watchdog acted on
 UNKNOWN = "unknown"
+ADMISSION_BLOCKED_KEY = "inference_admission_unavailable"
 # jobs that never start or stop an engine: interrupting one leaves the intent known
 MAINTENANCE_ACTIONS = ("rotate-logs", "remove", "profile", "decision", "sidecar", "service")
 
@@ -140,6 +142,7 @@ class ControlService:
         strata: StrataClient | None = None,
         splash: SplashClient | None = None,
         backends: BackendRegistry | None = None,
+        admission: Admission | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
@@ -153,6 +156,12 @@ class ControlService:
         self.strata = strata or StrataClient(settings)
         self.splash = splash or SplashClient(settings)
         self.backends = backends or build_registry(settings, mlx, comfy, self.strata, self.splash)
+        self.admission = admission or Admission({
+            "mlx": settings.inference_max_inflight_mlx,
+            "strata": settings.inference_max_inflight_strata,
+            "splash": settings.inference_max_inflight_splash,
+        })
+        self._drain_owner: str | None = None
         self.ops = SidecarOpsBinding(settings, self.sidecars)
         self.memory_pressure: Callable[[], str | None] = lambda: None
         # set when the database cannot record an outcome; blocks automatic recovery
@@ -161,6 +170,82 @@ class ControlService:
         self._state_lock = threading.Lock()
         runner.observe = self.observe
         runner.add_hook(self.on_job_complete)
+        runner.add_hook(self._on_drain_complete)
+
+    async def _drain(self, action: str) -> str:
+        try:
+            owner = self.admission.reserve(action, self.settings.inference_drain_timeout_s)
+        except AdmissionRefused:
+            raise ControlError(409, "another engine drain is in progress") from None
+        try:
+            await self.admission.wait(owner)
+            self.admission.transition(owner)
+            try:
+                self.store.set_kv(ADMISSION_BLOCKED_KEY, {
+                    "reason": "engine transition pending", "ts": time.time(),
+                })
+            except Exception:
+                raise ControlError(503, "the admin database could not reserve the drain") from None
+        except (DrainTimeout, DrainCancelled) as exc:
+            self.admission.finish(owner, safe=True, restore=True)
+            message = "inference drain timed out; the serving engine was not changed"
+            if isinstance(exc, DrainCancelled):
+                message = "inference drain cancelled; the serving engine was not changed"
+            raise ControlError(409, message) from None
+        except BaseException:
+            self.admission.finish(owner, safe=True, restore=True)
+            raise
+        self._drain_owner = owner
+        return owner
+
+    def _abandon_drain(self, owner: str) -> None:
+        """No job started; restore the gate only when the safety marker is removed."""
+        try:
+            self.store.delete_kv(ADMISSION_BLOCKED_KEY)
+        except Exception:
+            log.exception("could not clear unused inference drain reservation")
+            self.admission.finish(owner, safe=False)
+        else:
+            self.admission.finish(owner, safe=True, restore=True)
+        if self._drain_owner == owner:
+            self._drain_owner = None
+
+    async def _submit_drained(self, action: str, submit: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+        owner = await self._drain(action)
+        try:
+            return self._submitted(submit)
+        except BaseException:
+            self._abandon_drain(owner)
+            raise
+
+    def _on_drain_complete(self, job: dict[str, Any]) -> None:
+        owner = self._drain_owner
+        if owner is None:
+            return
+        safe = (
+            job["recorded"]
+            and self.recovery_blocked() is None
+            and job["status"] != "interrupted"
+            and (job["status"] == "succeeded" or job["rolled_back"] is True)
+        )
+        try:
+            observation = self.observe()
+            safe = safe and observation["engine"] not in (UNKNOWN, "conflict")
+        except Exception:
+            safe = False
+        try:
+            if safe:
+                self.store.delete_kv(ADMISSION_BLOCKED_KEY)
+            else:
+                self.store.set_kv(ADMISSION_BLOCKED_KEY, {
+                    "job_id": job["id"], "reason": "engine transition not verified",
+                    "ts": time.time(),
+                })
+        except Exception:
+            log.exception("job %s: could not persist inference admission state", job["id"])
+            safe = False
+        self.admission.finish(owner, safe=safe)
+        self._drain_owner = None
 
     # --- state -------------------------------------------------------------
     def intent(self) -> dict[str, Any] | None:
@@ -626,7 +711,7 @@ class ControlService:
                 observations,
                 EngineTarget("mlx", name),
             )
-            job = self._submitted(
+            job = await self._submit_drained(action,
                 lambda: self.runner.submit_sequence(
                     action,
                     name=name,
@@ -874,7 +959,7 @@ class ControlService:
                 if target.kind == "mlx" or pending:
                     await asyncio.to_thread(self._check_target_budget, target, retained, retained_sidecar)
             plan = self._guard_transition(plan, observations, target)
-            job = self._submitted(
+            job = await self._submit_drained("engine",
                 lambda: self.runner.submit_sequence(
                     "engine",
                     name=target.name,

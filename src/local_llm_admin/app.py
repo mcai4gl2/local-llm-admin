@@ -52,7 +52,7 @@ from .comfy_outputs import (
 )
 from .comfy_queue import ComfyQueue, QueueError, public_view
 from .config import Settings
-from .control import ControlError, ControlService
+from .control import ADMISSION_BLOCKED_KEY, MAINTENANCE_ACTIONS, ControlError, ControlService
 from .decision import DecisionClient, DecisionError
 from .decision_keys import ClientKeys, KeyError_
 from .decision_store import DecisionStore, request_summary
@@ -319,6 +319,9 @@ def create_app(
         strata=strata,
         splash=splash,
     )
+    # The inference listener starts concurrently with admin lifespan; it must stay
+    # closed until reconciliation has checked interrupted jobs and the persisted gate.
+    control.admission.mark_unavailable()
 
     # The process tile follows the same unambiguous generation as lifecycle control.
     def engine_pid() -> int | None:
@@ -526,7 +529,14 @@ def create_app(
         log.info("admin %s starting", __version__)
         # before any request can submit a job: a row still "running" belongs to a
         # previous process
-        control.reconcile()
+        interrupted = control.reconcile()
+        if store.get_kv(ADMISSION_BLOCKED_KEY) or any(
+            job["action"] not in MAINTENANCE_ACTIONS
+            for job in interrupted
+        ):
+            control.admission.mark_unavailable()
+        else:
+            control.admission.open_after_startup_reconciliation()
         quality.reconcile()
         evals.sync_builtins(builtin_suites())  # refuses an edited builtin suite version
 
@@ -594,6 +604,7 @@ def create_app(
     app.state.downloads = downloads_svc
     app.state.profiles = profiles
     app.state.outputs = outputs
+    app.state.admission = control.admission
     app.state.follow_interval_s = 1.0
     app.state.follow_max_s = 1800.0
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -603,6 +614,7 @@ def create_app(
         control.backends,
         transport=chat_transport,
         busy=lambda: runner.running() is not None,
+        admission=control.admission,
     )
     app.state.inference = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.inference.mount("/v1", inference)
@@ -912,6 +924,16 @@ def create_app(
         return {"window": window, "points": sampler.history(window)}
 
     # --- models & jobs ----------------------------------------------------
+    @app.get("/api/inference/drain")
+    async def inference_drain() -> dict[str, Any]:
+        return control.admission.snapshot()
+
+    @app.post("/api/inference/drain/cancel")
+    async def inference_drain_cancel() -> JSONResponse:
+        if not control.admission.cancel():
+            raise HTTPException(409, "no cancellable inference drain is waiting")
+        return JSONResponse(control.admission.snapshot(), status_code=202)
+
     def _models_and_disk() -> dict[str, Any]:
         registered = mlx.list_models()
         fps = profiles.fingerprints()

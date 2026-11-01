@@ -94,6 +94,13 @@ async def test_healthz_is_public(anon):
     assert r.status_code == 200 and r.json() == {"ok": True}
 
 
+async def test_inference_stays_closed_until_startup_reconciliation(settings, fake_llm):
+    starting = create_app(settings, start_background=False, chat_transport=fake_llm.transport)
+    assert starting.state.admission.snapshot()["state"] == "unavailable"
+    async with starting.router.lifespan_context(starting):
+        assert starting.state.admission.snapshot()["state"] == "accepting"
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -194,6 +201,67 @@ async def test_switch_runs_job_and_records_history(client, fake_mlx):
     hist = (await client.get("/api/history")).json()["history"]
     assert hist[0]["action"] == "switch" and hist[0]["to_name"] == "gemma"
     assert {h["source"] for h in hist} == {"admin", "log"}  # log markers backfilled at startup
+
+
+async def test_switch_waits_for_admitted_request_before_stopping_source(client, app, fake_mlx):
+    lease = app.state.admission.acquire()
+    task = asyncio.create_task(client.post("/api/models/switch", json={"name": "gemma"}))
+    for _ in range(100):
+        state = (await client.get("/api/inference/drain")).json()
+        if state["state"] == "draining":
+            break
+        await asyncio.sleep(0.01)
+    assert state["state"] == "draining" and state["active"] == 1
+    assert not [c for c in fake_mlx.calls() if c.startswith("switch")]
+    assert not task.done()
+    app.state.admission.release(lease)
+    response = await task
+    assert response.status_code == 202
+    job = await _wait_job(client, response.json()["id"])
+    assert job["status"] == "succeeded"
+    assert (await client.get("/api/inference/drain")).json()["state"] == "accepting"
+
+
+async def test_drain_timeout_and_cancel_preserve_source(client, app, settings, fake_mlx):
+    lease = app.state.admission.acquire()
+    settings.inference_drain_timeout_s = 0.05
+    response = await client.post("/api/models/switch", json={"name": "gemma"})
+    assert response.status_code == 409 and "timed out" in response.json()["detail"]
+    assert (await client.get("/api/inference/drain")).json()["state"] == "accepting"
+    assert not [c for c in fake_mlx.calls() if c.startswith("switch")]
+    settings.inference_drain_timeout_s = 5
+    task = asyncio.create_task(client.post("/api/models/stop"))
+    for _ in range(100):
+        state = (await client.get("/api/inference/drain")).json()
+        if state["state"] == "draining":
+            break
+        await asyncio.sleep(0.01)
+    assert state["state"] == "draining"
+    assert (await client.post("/api/inference/drain/cancel")).status_code == 202
+    assert (await task).status_code == 409
+    assert "stop" not in fake_mlx.calls()
+    app.state.admission.release(lease)
+
+
+async def test_failed_transition_holds_admission_until_verified_recovery(
+    client, fake_mlx, settings, fake_llm
+):
+    fake_mlx.set_exit(1)
+    response = await client.post("/api/models/switch", json={"name": "gemma"})
+    assert response.status_code == 202
+    assert (await _wait_job(client, response.json()["id"]))["status"] == "failed"
+    assert (await client.get("/api/inference/drain")).json()["state"] == "unavailable"
+    restarted = create_app(settings, start_background=False, chat_transport=fake_llm.transport)
+    async with restarted.router.lifespan_context(restarted):
+        assert restarted.state.admission.snapshot()["state"] == "unavailable"
+    fake_mlx.set_exit(0)
+    recovery = await client.post("/api/models/switch", json={"name": "gemma"})
+    assert recovery.status_code == 202
+    assert (await _wait_job(client, recovery.json()["id"]))["status"] == "succeeded"
+    assert (await client.get("/api/inference/drain")).json()["state"] == "accepting"
+    recovered = create_app(settings, start_background=False, chat_transport=fake_llm.transport)
+    async with recovered.router.lifespan_context(recovered):
+        assert recovered.state.admission.snapshot()["state"] == "accepting"
 
 
 @pytest.mark.parametrize(("name", "code"), [("x;rm -rf /", 400), ("$(id)", 400), ("nosuch", 404)])

@@ -14,6 +14,9 @@ records completed local code and tests. [Live rollout and qualification](archive
 completed the approved native release and bounded qualification. Broader sharing and
 long-running memory behavior are [deferred](backlog/platform/20261031_resident-sharing-followup.md).
 
+The [drain-before-switch implementation](archive/platform/20261101_drain-before-switch.md)
+records the shared admission barrier, deployment and bounded live qualification.
+
 New plans use `active/YYYYMMDD_<name>.md`. Keep one active plan for a coherent change;
 update its progress instead of creating another file for every checkpoint. Move it into
 `archive/<component>/` when the change is complete. Put a concise follow-up in backlog

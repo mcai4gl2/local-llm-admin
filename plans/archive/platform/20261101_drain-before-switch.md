@@ -1,10 +1,10 @@
 # Drain-before-switch and configurable inference admission
 
 Date: 2026-11-01
-Status: Proposed; implementation not started.
+Status: Completed and archived; admin deployed and bounded live qualification passed.
 Component: Platform / engine lifecycle
-Next decision: Confirm timeout behavior and gateway-only coverage. Default proposal:
-a drain timeout aborts the switch and preserves the serving engine.
+Decision: A drain timeout aborts the switch and preserves the serving engine. V1
+guarantees registered shared-gateway traffic; native bypass remains explicitly unobserved.
 
 ## Problem and goal
 
@@ -17,13 +17,13 @@ admission, await admitted work, execute the existing guarded transition, verify 
 and reopen admission only when safe. Preserve ownership checks and mandatory target exit
 before restoration.
 
-## Existing integration points
+## Pre-implementation integration points
 
-- `inference_gateway.py`: current `MAX_INFLIGHT = 2`, busy checks and idempotent cleanup.
+- `inference_gateway.py`: previously fixed `MAX_INFLIGHT = 2`, busy checks and idempotent cleanup.
 - `control.py`, `jobs.py`, `engines.py`: lifecycle reservation, execution and rollback.
 - `backend_types.py`, `backends.py`: readiness and generation ownership.
 - [Shared inference contract](../../../docs/shared-inference.md).
-- [Request timeline proposal](20261101_shared-request-timeline.md): shared admission
+- [Request timeline proposal](../../backlog/platform/20261101_shared-request-timeline.md): shared admission
   registry prerequisite; persistence must not participate in the barrier.
 
 ## Scope and invariants
@@ -60,18 +60,48 @@ quiescence from a zero gateway count.
 
 ## Implementation sequence
 
-- [ ] Map every lifecycle entry point and inference caller; specify lock ordering and the
+- [x] Map every lifecycle entry point and inference caller; specify lock ordering and the
   state machine for accepting, draining, transitioning and unavailable states.
-- [ ] Add failing race tests: request versus drain, backend resolution versus reservation,
+- [x] Add failing race tests: request versus drain, backend resolution versus reservation,
   last-request cleanup versus timeout, and two competing lifecycle operations.
-- [ ] Implement the shared barrier and configurable limits using the request registry.
-- [ ] Apply it to manual switches, stops/restarts and quality-run entry as appropriate;
+- [x] Implement the shared barrier and configurable limits using the request registry.
+- [x] Apply it to manual switches, stops/restarts and quality-run entry as appropriate;
   explicitly document recovery/watchdog behavior to avoid blocking emergency recovery.
-- [ ] Add cancellation and deadline handling with bounded cleanup and no silent force-stop.
-- [ ] Add Models progress and API refusal details, preserving existing job history.
-- [ ] Update operating instructions, rollout and rollback guidance.
+- [x] Add cancellation and deadline handling with bounded cleanup and no silent force-stop.
+- [x] Add Models progress and API refusal details, preserving existing job history.
+- [x] Update operating instructions, rollout and rollback guidance.
+
+### Integration and lock order
+
+`JobRunner.claim` reserves lifecycle ownership before preflight. Gateway admission checks
+runner busy state, then changes the `Admission` registry under its own short lock. Control
+closes the registry only after preflight and before job submission; requests admitted
+earlier keep leases through resolution, upstream open and close. Control awaits an empty
+registry without holding either synchronous lock. The job completion hook first records
+intent and ownership, then reopens admission only for a recorded, stable successful job
+or verified rollback. The runner releases its slot afterward. A failed/uncertain outcome
+sets `unavailable`; a later manual or watchdog recovery job can still reserve the gate.
+An unavailable marker is written after the drain empties but before the job is submitted,
+closing the crash window between job persistence and its completion hook. The concurrent
+inference listener begins closed and opens only after startup reconciliation.
+
+Covered entry points: Models start/stop/switch, Engine selection, quality-run entry and
+watchdog `start` through `ControlService.lifecycle`. Quality keeps the gateway closed for
+its full held job while its direct-native requests run. Admin chat, resident APIs,
+ComfyUI and external direct-native callers bypass this registry; their activity cannot
+be inferred from its count. No asynchronous request-timeline writer participates in admission.
 
 ## Acceptance and validation
+
+Local implementation and repository gates passed. The admin was deployed and bounded live
+stream-before-switch, cancel, drain-timeout and failed target-readiness rollback checks
+passed. The [rollout record](../../../docs/reports/drain-before-switch-20261101.md)
+preserves the initial resource-policy refusal and final live outcomes. The failed target
+readiness job timed out, reported successful rollback, restored MLX and both residents,
+and reopened admission. The private override was restored, and post-restore gateway and
+native-idle checks passed. The final devcontainer gate passed with 3,864 tests, 4 skipped,
+97.20% coverage, Ruff and strict mypy. The private-pattern scan passed. Direct native
+callers remain outside gateway admission scope.
 
 - No newly admitted request reaches an engine after its drain barrier closes.
 - An admitted stream finishes normally before a planned stop in the controlled case.

@@ -6,9 +6,14 @@ import time
 import pytest
 
 from local_llm_admin import jobs as jobs_mod
-from local_llm_admin.control import ControlError, ControlService, process_generation
+from local_llm_admin.control import (
+    ADMISSION_BLOCKED_KEY,
+    ControlError,
+    ControlService,
+    process_generation,
+)
 from local_llm_admin.engines import ComfyClient
-from local_llm_admin.jobs import JobConflict, JobRunner, JobStore, Step
+from local_llm_admin.jobs import JobConflict, JobRunner, JobStorageError, JobStore, Step
 from local_llm_admin.mlx import MlxClient
 
 
@@ -62,6 +67,45 @@ async def test_stop_sets_intent_off(svc):
     svc.store.set_kv("intent", {"value": "mlx:qwen"})
     _wait(svc, (await svc.lifecycle("stop", None))["id"])
     assert _intent(svc) == "off"
+
+
+async def test_transition_marks_admission_unavailable_before_job_submission(svc):
+    claim = svc.runner.claim()
+    try:
+        owner = await svc._drain("switch")
+        assert svc.store.get_kv(ADMISSION_BLOCKED_KEY)["reason"] == "engine transition pending"
+        svc._abandon_drain(owner)
+    finally:
+        svc.runner.release(claim)
+
+
+async def test_drain_reservation_storage_failure_does_not_start_transition(svc, monkeypatch):
+    def fail(*args, **kwargs):
+        raise OSError("database unavailable")
+
+    monkeypatch.setattr(svc.store, "set_kv", fail)
+    claim = svc.runner.claim()
+    try:
+        with pytest.raises(ControlError) as error:
+            await svc._drain("switch")
+        assert error.value.code == 503
+        assert svc.admission.snapshot()["state"] == "accepting"
+    finally:
+        svc.runner.release(claim)
+
+
+async def test_failed_job_submission_clears_pending_drain_marker(svc):
+    claim = svc.runner.claim()
+    try:
+        def fail():
+            raise JobStorageError("database unavailable")
+
+        with pytest.raises(ControlError):
+            await svc._submit_drained("switch", fail)
+        assert svc.store.get_kv(ADMISSION_BLOCKED_KEY) is None
+        assert svc.admission.snapshot()["state"] == "accepting"
+    finally:
+        svc.runner.release(claim)
 
 
 async def test_switch_and_bare_start_set_mlx_intent(svc):
