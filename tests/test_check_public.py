@@ -146,6 +146,31 @@ def test_author_identity_is_scanned(repo, capsys):
     assert rc == 1 and "author/committer: pattern #1" in capsys.readouterr().out
 
 
+def test_published_merge_identity_exception_keeps_other_history_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    published = "2741862829e3193bfff9a8fa2b99d003075770da"
+    later = "a" * 40
+
+    def fake_git(_repo: Path, *args: str) -> str:
+        if args == ("rev-list", "HEAD"):
+            return f"{later}\n{published}\n"
+        if args[:3] == ("show", "-s", "--format=%an <%ae>%n%cn <%ce>"):
+            return f"person <{SECRET}@example.com>\nperson <{SECRET}@example.com>\n"
+        if args[:3] == ("show", "-s", "--format=%B"):
+            return SECRET if args[3] == published else "clean"
+        if args[:2] == ("show", "--format="):
+            return f"+++ b/example.txt\n+{SECRET}\n" if args[-1] == published else ""
+        raise AssertionError(args)
+
+    monkeypatch.setattr(cp, "_git", fake_git)
+    report = cp.scan_commits(Path("."), "HEAD", cp.load_patterns(PATTERNS))
+    assert not any("commit 2741862 author/committer" in line for line in report)
+    assert any("commit aaaaaaa author/committer" in line for line in report)
+    assert any("commit 2741862 message line 1" in line for line in report)
+    assert any("commit 2741862 example.txt (added line)" in line for line in report)
+
+
 def test_script_runs_as_a_cli(tmp_path):
     (tmp_path / "f").write_text(SECRET)
     r = subprocess.run(

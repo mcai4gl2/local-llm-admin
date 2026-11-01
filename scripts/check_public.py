@@ -28,6 +28,9 @@ from pathlib import Path
 SKIP_DIRS = frozenset(
     {".git", ".venv", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", "node_modules"}
 )
+# An already-published merge predates the private identity denylist. Its immutable
+# author metadata is exempt; its message and added lines remain scanned below.
+PUBLISHED_IDENTITY_EXCEPTION = "2741862829e3193bfff9a8fa2b99d003075770da"
 
 
 class PatternError(ValueError):
@@ -106,10 +109,11 @@ def scan_commits(repo: Path, rev_range: str, patterns: Sequence[re.Pattern[str]]
     report: list[str] = []
     for sha in _git(repo, "rev-list", rev_range).split():
         short = sha[:7]
-        who = _git(repo, "show", "-s", "--format=%an <%ae>%n%cn <%ce>", sha)
-        report.extend(
-            f"commit {short} author/committer: pattern #{k}" for _, k in _hits(who, patterns)
-        )
+        if sha != PUBLISHED_IDENTITY_EXCEPTION:
+            who = _git(repo, "show", "-s", "--format=%an <%ae>%n%cn <%ce>", sha)
+            report.extend(
+                f"commit {short} author/committer: pattern #{k}" for _, k in _hits(who, patterns)
+            )
         message = _git(repo, "show", "-s", "--format=%B", sha)
         report.extend(
             f"commit {short} message line {n}: pattern #{k}" for n, k in _hits(message, patterns)
