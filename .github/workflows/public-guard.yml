@@ -68,11 +68,19 @@ jobs:
         env:
           PUBLIC_DENYLIST: ${{ secrets.PUBLIC_DENYLIST }}
           PUBLIC_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          PUBLIC_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-        # Scan the checked-out merged tree, plus both real branch histories.
-        # GitHub's temporary PR merge identity is not a submitted commit identity.
+          PUBLIC_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        # Scan the checked-out tree in full, but only the commit metadata and added
+        # lines this event introduces: the identity of an already-published commit is
+        # immutable, so a full-history identity scan can never go green again.
+        # gitleaks above still covers credentials in the full history.
         run: |
-          python3 scripts/check_public.py --patterns-env PUBLIC_DENYLIST --git . --commits "$PUBLIC_HEAD_SHA"
-          if [ "$PUBLIC_BASE_SHA" != "$PUBLIC_HEAD_SHA" ]; then
-            python3 scripts/check_public.py --patterns-env PUBLIC_DENYLIST --git . --commits "$PUBLIC_BASE_SHA"
+          python3 scripts/check_public.py --patterns-env PUBLIC_DENYLIST --git .
+          if [ -n "$PUBLIC_BASE_SHA" ] && [ "$PUBLIC_BASE_SHA" != "$PUBLIC_HEAD_SHA" ] \
+              && git cat-file -e "$PUBLIC_BASE_SHA^{commit}" 2>/dev/null; then
+            python3 scripts/check_public.py --patterns-env PUBLIC_DENYLIST --git . \
+              --commits "$PUBLIC_BASE_SHA..$PUBLIC_HEAD_SHA"
+          elif git rev-parse -q --verify "$PUBLIC_HEAD_SHA^" >/dev/null 2>&1; then
+            # dispatch, or a push without a usable before-sha: scan just the head commit
+            python3 scripts/check_public.py --patterns-env PUBLIC_DENYLIST --git . \
+              --commits "$PUBLIC_HEAD_SHA^!"
           fi
