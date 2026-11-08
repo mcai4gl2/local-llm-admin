@@ -533,6 +533,8 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _setup_logging(settings)
         log.info("admin %s starting", __version__)
+        if not settings.admin_auth_enabled:
+            log.warning("admin auth is disabled (ADMIN_AUTH_ENABLED=false): every request is trusted")
         # before any request can submit a job: a row still "running" belongs to a
         # previous process
         interrupted = control.reconcile()
@@ -646,6 +648,11 @@ def create_app(
         path = request.url.path
         if path == "/healthz" or path.startswith(_PUBLIC):
             return await call_next(request)
+        if not settings.admin_auth_enabled:
+            # trusted-LAN mode: no login and no CSRF check; the synthetic session
+            # keeps the page templates and /api/session working
+            request.state.session = {"csrf": ""}
+            return await call_next(request)
         session = sessions.load(request.cookies.get(COOKIE_NAME))
         if session is None:
             if path.startswith("/api/"):
@@ -665,10 +672,14 @@ def create_app(
 
     @app.get("/login")
     async def login_page(request: Request) -> Response:
+        if not settings.admin_auth_enabled:
+            return RedirectResponse("/", status_code=303)
         return templates.TemplateResponse(request, "login.html", {"error": None})
 
     @app.post("/login")
     async def login(request: Request) -> Response:
+        if not settings.admin_auth_enabled:
+            return RedirectResponse("/", status_code=303)
         ip = request.client.host if request.client else "?"
         if not limiter.allowed(ip):
             log.warning("login rate-limited for %s", ip)
@@ -702,7 +713,7 @@ def create_app(
 
     @app.post("/logout")
     async def logout() -> Response:
-        resp = RedirectResponse("/login", status_code=303)
+        resp = RedirectResponse("/" if not settings.admin_auth_enabled else "/login", status_code=303)
         resp.delete_cookie(COOKIE_NAME)
         return resp
 
@@ -722,6 +733,7 @@ def create_app(
                 {
                     "page": page,
                     "csrf": request.state.session["csrf"],
+                    "auth_enabled": settings.admin_auth_enabled,
                     "version": __version__,
                     "ops_timezone_offset_min": settings.litellm_timezone_offset_min,
                     "decision_enabled": settings.decision_enabled,

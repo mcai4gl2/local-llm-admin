@@ -77,6 +77,17 @@ async def client(app):
         yield c
 
 
+@pytest.fixture
+async def noauth_client(settings, fake_llm):
+    settings.admin_auth_enabled = False
+    app = create_app(settings, start_background=False, chat_transport=fake_llm.transport)
+    async with app.router.lifespan_context(app):
+        await app.state.startup_task
+        await app.state.backfill_task
+        async with _client(app) as c:
+            yield c
+
+
 async def _wait_job(client, job_id):
     for _ in range(200):
         job = (await client.get(f"/api/jobs/{job_id}")).json()
@@ -157,6 +168,36 @@ async def test_logout(client):
     assert r.status_code == 303
     client.cookies.clear()
     assert (await client.get("/api/status")).status_code == 401
+
+
+# --- auth disabled (trusted LAN) --------------------------------------------
+
+
+async def test_auth_disabled_pages_render_without_login(noauth_client):
+    for path in ("/", "/models", "/chat", "/logs", "/usage"):
+        r = await noauth_client.get(path)
+        assert r.status_code == 200, path
+        assert 'name="csrf-token"' in r.text
+        assert "logout-form" not in r.text
+
+
+async def test_auth_disabled_api_and_session_without_cookie(noauth_client):
+    assert (await noauth_client.get("/api/session")).json() == {"csrf": ""}
+    assert (await noauth_client.get("/api/models")).status_code == 200
+
+
+async def test_auth_disabled_post_needs_no_csrf(noauth_client):
+    r = await noauth_client.post("/api/models/stop")
+    assert r.status_code != 403  # whatever the engine answer, the CSRF gate is gone
+
+
+async def test_auth_disabled_login_redirects_home(noauth_client):
+    r = await noauth_client.get("/login")
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    r = await noauth_client.post("/login", data={"password": "pw"})
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    r = await noauth_client.post("/logout")
+    assert r.status_code == 303 and r.headers["location"] == "/"
 
 
 async def test_pages_render(client, mlx_health):

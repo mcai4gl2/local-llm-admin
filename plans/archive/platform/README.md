@@ -19,3 +19,4 @@ in [docs](../../../docs/DESIGN.md) and [host guides](../../../host/README.md).
 - [Shared gateway request timeline](20261101_shared-request-timeline.md): implemented and deployed; [bounded live rollout](20261101_shared-request-timeline-rollout.md) qualified the shared gateway workload.
 - [ComfyUI + Qwen-Image-2.1-Turbo](20261107_comfyui-qwen-image-2-1-turbo.md): int8 and GGUF turbo text-to-image plus a single-reference edit qualified on ComfyUI 0.37.0; engine restored to MLX. Follow-up is deferred.
 - [Image studio](20261107_image-studio.md): template page (Turbo t2i/edit, Anima anime) with the admin's engine switching; enhancer encoders downloaded; 3-reference edit qualified; MFLUX 4-bit Turbo image produced.
+- [Optional admin login](20261108_admin-auth-toggle.md): `ADMIN_AUTH_ENABLED=false` trusted-LAN mode; deployed and live-verified with auth disabled.

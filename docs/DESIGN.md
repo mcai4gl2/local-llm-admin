@@ -311,7 +311,7 @@ tokens per ops day and per model, from the engines' own counts.
 ## 6. Security
 
 - LAN only: bind `0.0.0.0:8090` on the Mac. Never port-forward. Tailscale is fine later.
-- **Admin login is required.** The page can stop the GPU server and offers a chat, so it must not be as open as `:8080`. There is a single admin password, stored as an argon2 hash in `~/.config/local-llm-admin/env` (0600), and a signed, HttpOnly, SameSite=Strict session cookie that lasts 7 days. There is a CSRF token on every POST, and login is rate-limited.
+- **Admin login is required by default.** The page can stop the GPU server and offers a chat, so it must not be as open as `:8080`. There is a single admin password, stored as an argon2 hash in `~/.config/local-llm-admin/env` (0600), and a signed, HttpOnly, SameSite=Strict session cookie that lasts 7 days. There is a CSRF token on every POST, and login is rate-limited. `ADMIN_AUTH_ENABLED=false` turns all of this off for a trusted LAN: every request is trusted, there is no login page, no session cookie and no CSRF check, and the Log out button is hidden. A startup warning in `admin.log` records the choice.
 - Subprocesses use fixed argv only; there is no `shell=True`. Log sources and model names are allow-listed.
 - The Mac holds only `LITELLM_ADMIN_KEY`: read-only, no model access, and revocable in the LiteLLM UI. It never holds the master key, Postgres credentials, or provider keys. The key is sent only to `litellm.example.com:4000` and never to the browser, logs, or error messages.
 - The admin runs as the Mac's login user.
@@ -420,7 +420,7 @@ Decisions made during implementation (each is cheap to reverse):
 - **Switch-history timestamps** from log markers are read in the ops timezone (`LITELLM_TIMEZONE_OFFSET_MIN`). The "model active that day" label counts `start`/`switch` events that succeeded or were observed.
 - **Log follow SSE** ends after 30 min. The browser's EventSource reconnects, and the follow resumes from the end of the file.
 - **Download summary** (§5.5) is per run (start, finish, failures, files requested) plus the latest curl progress line, because parallel downloads interleave their meters. `GET /api/downloads`; shown on the logs page for the download source.
-- **Login** needs `ADMIN_PASSWORD_HASH`, generated with `local-llm-admin-hash`. With no hash set, every login fails. With no `ADMIN_SESSION_SECRET`, sessions last only until the admin restarts.
+- **Login** needs `ADMIN_PASSWORD_HASH`, generated with `local-llm-admin-hash`. With no hash set, every login fails. With no `ADMIN_SESSION_SECRET`, sessions last only until the admin restarts. `ADMIN_AUTH_ENABLED=false` skips login entirely: `/login` redirects to `/` and every page and API request is trusted without a cookie or CSRF token.
 
 ## 13. Shared backend contract (2026-10-27)
 

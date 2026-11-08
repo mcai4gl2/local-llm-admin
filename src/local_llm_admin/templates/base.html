@@ -35,7 +35,9 @@
         <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
       </select>
     </label>
+    {% if auth_enabled is not defined or auth_enabled %}
     <form method="post" action="/logout" id="logout-form"><button type="submit" class="link">Log out</button></form>
+    {% endif %}
   </div>
 </header>
 <main id="main-content" tabindex="-1">

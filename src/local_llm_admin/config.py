@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     inference_timeline_queue_size: Annotated[int, Field(ge=16, le=4096)] = 256
 
     # Admin
+    # false trusts every request (trusted LAN): no login page, no session, no CSRF check
+    admin_auth_enabled: bool = True
     admin_password_hash: SecretStr = SecretStr("")
     admin_session_secret: SecretStr = SecretStr("")
     admin_session_max_age_s: int = 7 * 24 * 3600
