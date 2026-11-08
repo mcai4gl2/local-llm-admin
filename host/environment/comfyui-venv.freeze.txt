@@ -1,4 +1,4 @@
-# Recorded 2026-09-30 from the Mac mini with `uv pip freeze --python /Volumes/Models/comfyui/venv/bin/python` (read-only).
+# Recorded 2026-11-07 from the Mac mini with `uv pip freeze --python /Volumes/Models/comfyui/venv/bin/python` (read-only).
 # Reference for rebuilding the venv; not yet consumed by a setup script.
 Using Python 3.12.14 environment at: /Volumes/Models/comfyui/venv
 aiohappyeyeballs==2.7.1
@@ -19,12 +19,12 @@ comfy-angle==0.1.1
 comfy-kitchen==0.2.36
 comfyui-embedded-docs==0.5.12
 comfyui-frontend-package==1.53.6
-comfyui-workflow-templates==0.11.70
-comfyui-workflow-templates-core==0.3.361
-comfyui-workflow-templates-json==0.1.96
+comfyui-workflow-templates==0.11.103
+comfyui-workflow-templates-core==0.3.394
+comfyui-workflow-templates-json==0.1.129
 comfyui-workflow-templates-media-api==0.3.84
 comfyui-workflow-templates-media-assets-01==0.1.48
-comfyui-workflow-templates-media-assets-02==0.1.6
+comfyui-workflow-templates-media-assets-02==0.1.29
 comfyui-workflow-templates-media-image==0.3.160
 comfyui-workflow-templates-media-other==0.3.229
 comfyui-workflow-templates-media-video==0.3.101
@@ -32,6 +32,7 @@ einops==0.8.2
 filelock==4.0.6
 frozenlist==1.8.0
 fsspec==2026.9.0
+gguf==0.19.0
 h11==0.16.0
 hf-xet==1.6.0
 httpcore==1.0.9
@@ -53,6 +54,7 @@ packaging==26.3
 pillow==12.3.0
 pip==25.0.1
 propcache==0.5.4
+protobuf==7.36.2
 psutil==7.2.2
 pydantic==2.13.5
 pydantic-core==2.46.5

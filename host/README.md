@@ -53,7 +53,8 @@ No setup script exists yet; everything was installed by hand. The recorded versi
 
 - **Python:** uv 0.12.19 (Homebrew) with `UV_PYTHON_INSTALL_DIR=/Volumes/Models/python` → CPython 3.12.14.
 - **MLX venv:** `uv venv /Volumes/Models/venvs/mlx --python 3.12`, then `uv pip install -r environment/mlx-venv.freeze.txt`.
-- **ComfyUI:** clone the repo at the recorded commit into `/Volumes/Models/comfyui/app`, then `uv venv /Volumes/Models/comfyui/venv --python 3.12` and `uv pip install -r environment/comfyui-venv.freeze.txt`. Needs Homebrew `ffmpeg`.
+- **ComfyUI:** clone the repo at the recorded commit into `/Volumes/Models/comfyui/app`, then `uv venv /Volumes/Models/comfyui/venv --python 3.12` and `uv pip install -r environment/comfyui-venv.freeze.txt`. Needs Homebrew `ffmpeg`. The launcher passes `--base-directory /Volumes/Models/comfyui`, so custom nodes live in `/Volumes/Models/comfyui/custom_nodes` (not `app/custom_nodes`) and weights live in `/Volumes/Models/comfyui/models`. `environment/comfyui-app.txt` records the checkout and the `ComfyUI-GGUF` node; `environment/comfyui-venv.freeze.txt` records the venv, including `gguf`.
+- **MFLUX:** `uv venv /Volumes/Models/venvs/mflux --python 3.12`, then `uv pip install mflux==0.24.0`. It is not an admin engine. See `environment/mflux.txt`.
 
 
 ## Optional Splash integration

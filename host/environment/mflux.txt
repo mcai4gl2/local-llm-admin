@@ -1,0 +1,9 @@
+# MFLUX at /Volumes/Models/venvs/mflux (recorded 2026-11-07)
+# Not an admin engine. Stop MLX and ComfyUI before a generation; it uses the GPU.
+repo: https://github.com/mflux-community/mflux
+version: 0.24.0
+python: 3.12.14
+command: /Volumes/Models/venvs/mflux/bin/mflux-generate-qwen-2.1
+turbo: --model qwen-image-2.1-turbo --steps 8 --quantize 4|6|8
+output: /Volumes/Models/mflux/output
+cache: /Volumes/Models/cache/hf

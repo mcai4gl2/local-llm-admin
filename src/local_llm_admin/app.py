@@ -79,6 +79,7 @@ from .eval_suites import (
     parse_jsonl,
 )
 from .gateway_timeline import GatewayTimeline
+from .image_jobs import ImageJobError, build_workflow, catalog, history_images
 from .inference_gateway import create_inference_app
 from .ingestion import HostLogs, IngestStore
 from .inventory import InventoryStore, build_inventory
@@ -138,6 +139,7 @@ PAGES = {
     "/quality": "quality",
     "/performance": "performance",
     "/outputs": "outputs",
+    "/images": "images",
     "/decision": "decision",
     "/tts": "tts",
     "/embed": "embed",
@@ -822,6 +824,75 @@ def create_app(
     @app.post("/api/comfyui/interrupt")
     async def comfyui_interrupt(body: InterruptRequest) -> dict[str, Any]:
         return await _queue(comfy_queue.interrupt(body.expected_running, body.session))
+
+    # --- image studio ------------------------------------------------------------
+    @app.get("/api/images/catalog")
+    async def image_catalog() -> dict[str, Any]:
+        ready = await asyncio.to_thread(comfy.ready_sync)
+        return catalog() | {"comfyui_ready": ready}
+
+    @app.post("/api/images/upload")
+    async def image_upload(file: UploadFile = File(...)) -> dict[str, str]:  # noqa: B008
+        if not await asyncio.to_thread(comfy.ready_sync):
+            raise HTTPException(409, "ComfyUI is not running. Switch the engine to ComfyUI first.")
+        name = Path(file.filename or "reference.png").name
+        if not name or name.startswith("."):
+            raise HTTPException(400, "image name is invalid")
+        data = await file.read(15_000_001)
+        if len(data) > 15_000_000:
+            raise HTTPException(400, "image is larger than 15 MB")
+        if not data:
+            raise HTTPException(400, "image is empty")
+        try:
+            stored = await comfy.upload_image(name, data)
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(502, "ComfyUI rejected the image") from exc
+        return {"name": stored}
+
+    @app.post("/api/images/generate")
+    async def image_generate(body: dict[str, Any]) -> dict[str, str]:
+        try:
+            prompt = build_workflow(body)
+        except ImageJobError as exc:
+            raise HTTPException(400, str(exc)) from None
+        if not await asyncio.to_thread(comfy.ready_sync):
+            raise HTTPException(409, "ComfyUI is not running. Switch the engine to ComfyUI first.")
+        try:
+            prompt_id = await comfy.submit_prompt(prompt, timeout_s=30.0)
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:300]
+            raise HTTPException(502, f"ComfyUI rejected the workflow: {detail}") from exc
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(502, "ComfyUI did not accept the workflow") from exc
+        return {"prompt_id": prompt_id}
+
+    @app.get("/api/images/jobs/{prompt_id}")
+    async def image_job(prompt_id: str) -> dict[str, Any]:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", prompt_id):
+            raise HTTPException(400, "invalid prompt id")
+        entry = await comfy.prompt_history(prompt_id)
+        if entry is None:
+            return {"state": "pending", "images": []}
+        raw_status = entry.get("status")
+        status: dict[str, Any] = raw_status if isinstance(raw_status, dict) else {}
+        if status.get("status_str") == "error":
+            return {"state": "error", "images": [], "message": "generation failed"}
+        images = history_images(entry)
+        if status.get("completed") or status.get("status_str") == "success" or images:
+            return {"state": "done", "images": images}
+        return {"state": "pending", "images": []}
+
+    @app.get("/api/images/view")
+    async def image_view(filename: str, subfolder: str = "", kind: str = "output") -> Response:
+        if Path(filename).name != filename or kind not in ("output", "temp", "input"):
+            raise HTTPException(400, "invalid image")
+        if subfolder and (Path(subfolder).name != subfolder or subfolder.startswith(".")):
+            raise HTTPException(400, "invalid image")
+        viewed = await comfy.view_image(filename, subfolder, kind)
+        if viewed is None:
+            raise HTTPException(404, "image not found")
+        body, media = viewed
+        return Response(body, media_type=media.split(";", 1)[0])
 
     # --- ComfyUI outputs (M5, read-only) -------------------------------------------
     async def _output_scan(refresh: bool) -> Any:

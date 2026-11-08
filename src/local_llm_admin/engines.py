@@ -278,6 +278,59 @@ class ComfyClient:
         resp.raise_for_status()
         return resp
 
+    async def upload_image(self, filename: str, data: bytes, timeout_s: float = 60.0) -> str:
+        """Store a reference image in ComfyUI's input folder. Returns the stored name."""
+        async with httpx.AsyncClient(
+            base_url=self.settings.comfyui_api_base, timeout=timeout_s, transport=self._transport
+        ) as http:
+            resp = await http.post(
+                "/upload/image",
+                files={"image": (filename, data, "application/octet-stream")},
+                data={"overwrite": "true"},
+            )
+        resp.raise_for_status()
+        name = resp.json().get("name")
+        if not isinstance(name, str) or not name:
+            raise ValueError("ComfyUI did not return an image name")
+        return name
+
+    async def submit_prompt(self, prompt: dict[str, Any], timeout_s: float = 60.0) -> str:
+        resp = await self.post("/prompt", {"prompt": prompt}, timeout_s=timeout_s)
+        prompt_id = resp.json().get("prompt_id")
+        if not isinstance(prompt_id, str) or not prompt_id:
+            raise ValueError("ComfyUI did not return a prompt id")
+        return prompt_id
+
+    async def prompt_history(self, prompt_id: str, timeout_s: float = 10.0) -> dict[str, Any] | None:
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.settings.comfyui_api_base, timeout=timeout_s, transport=self._transport
+            ) as http:
+                resp = await http.get(f"/history/{prompt_id}")
+            data = resp.json() if resp.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        entry = data.get(prompt_id)
+        return entry if isinstance(entry, dict) else None
+
+    async def view_image(
+        self, filename: str, subfolder: str = "", kind: str = "output", timeout_s: float = 60.0
+    ) -> tuple[bytes, str] | None:
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.settings.comfyui_api_base, timeout=timeout_s, transport=self._transport
+            ) as http:
+                resp = await http.get(
+                    "/view", params={"filename": filename, "subfolder": subfolder, "type": kind}
+                )
+        except httpx.HTTPError:
+            return None
+        if resp.status_code != 200:
+            return None
+        return resp.content, resp.headers.get("content-type", "image/png")
+
     async def history(self, max_items: int, timeout_s: float = 5.0) -> dict[str, Any] | None:
         """``GET /history?max_items=N`` (newest entries), or None when it cannot be read."""
         try:

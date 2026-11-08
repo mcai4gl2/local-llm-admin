@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Images{% endblock %}
+{% block content %}
+<section class="card" id="image-studio">
+  <div class="card-head">
+    <h2>Generate</h2>
+    <span class="muted" id="img-engine">Checking the image engine…</span>
+  </div>
+  <p class="muted" id="img-note"></p>
+  <p class="bad" id="img-error" hidden></p>
+  <form id="img-form">
+    <label>Template <select id="img-template" name="template"></select></label>
+    <p class="muted" id="img-template-note"></p>
+    <label>Example
+      <select id="img-example">
+        <option value="">Blank prompt</option>
+        <option value="hanfu">Blog example: misty hanfu garden</option>
+        <option value="gown">Blog example: black evening portrait</option>
+        <option value="shrine">Anime: shrine maiden</option>
+        <option value="city">Anime: city pop</option>
+        <option value="pilot">Anime: mecha pilot</option>
+        <option value="lantern">Anime: evening kimono</option>
+      </select>
+    </label>
+    <label>Prompt <textarea id="img-prompt" name="prompt" rows="8" required></textarea></label>
+    <label>Model <select id="img-model" name="model"></select></label>
+    <label>Size <select id="img-size"></select></label>
+    <label>Seed <input id="img-seed" name="seed" type="number" min="0" value="20260921"></label>
+    <label><input id="img-enhancer" type="checkbox"> Rewrite the prompt with the enhancer model first</label>
+    <div id="img-refs" hidden>
+      <label>Reference images (1 to 10)
+        <input id="img-files" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+      </label>
+    </div>
+    <div class="actions">
+      <button type="button" id="img-switch">Switch to ComfyUI</button>
+      <button type="submit" id="img-go">Generate</button>
+    </div>
+  </form>
+  <p class="muted" id="img-status"></p>
+  <div id="img-result"></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/images.js"></script>{% endblock %}

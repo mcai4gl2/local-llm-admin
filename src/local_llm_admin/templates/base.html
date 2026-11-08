@@ -16,7 +16,7 @@
   <details id="site-nav" class="site-nav" open>
     <summary>Navigation</summary>
     <nav aria-label="Primary">
-      {% for href, name, label in [("/", "dashboard", "Dashboard"), ("/models", "models", "Models"), ("/chat", "chat", "Chat"), ("/performance", "performance", "Performance"), ("/quality", "quality", "Quality")] %}
+      {% for href, name, label in [("/", "dashboard", "Dashboard"), ("/models", "models", "Models"), ("/images", "images", "Images"), ("/chat", "chat", "Chat"), ("/performance", "performance", "Performance"), ("/quality", "quality", "Quality")] %}
       <a href="{{ href }}" {% if page == name %}aria-current="page"{% endif %}>{{ label }}</a>
       {% endfor %}
       <details class="secondary-nav"><summary>Services and records</summary>
