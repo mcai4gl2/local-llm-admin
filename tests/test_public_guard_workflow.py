@@ -1,4 +1,4 @@
-"""Run the workflow scanner against real branch histories and a synthetic merge."""
+"""Run the workflow scanner against the introduced commit range and a synthetic merge."""
 
 from __future__ import annotations
 
@@ -70,5 +70,8 @@ def test_public_guard_checks_real_histories_and_merged_tree(tmp_path: Path, loca
         capture_output=True,
         check=False,
     )
-    assert result.returncode == (0 if location == "synthetic_identity" else 1), result.stderr
+    # Expected hits: the tracked tree and the commits this event introduces (BASE..HEAD).
+    # Not expected: the base branch's own already-published history (its push-time scan
+    # covers it), nor the synthetic merge identity GitHub would create for a PR.
+    assert result.returncode == (0 if location in ("synthetic_identity", "base_history") else 1), result.stderr
     assert SECRET not in result.stdout + result.stderr
